@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Literal, List, Union
+from typing import Literal, List, Union, Optional
 import inspect
 import re
 
@@ -11,59 +11,136 @@ def build_system_prompt(instruction: str="", example: str="", pydantic_schema: s
         example = delimiter + example.strip()
     if schema:
         schema = delimiter + schema.strip()
-    
+
     system_prompt = instruction.strip() + schema + example
     return system_prompt
 
-class RephrasedQuestionsPrompt:
+
+# DD Section Answer Schema - Unified schema for all DD responses
+class Claim(BaseModel):
+    """Report claim with evidence linkage"""
+    id: str = Field(description="Unique claim identifier")
+    text: str = Field(description="Claim text for report")
+    evidence_ids: List[str] = Field(description="IDs of evidence supporting this claim")
+    confidence: Optional[float] = Field(description="Confidence score 0-1", default=None)
+
+
+class NumberWithEvidence(BaseModel):
+    """Number with full metadata and evidence"""
+    id: str = Field(description="Unique number identifier")
+    label: str = Field(description="What this number represents")
+    value: Union[float, int] = Field(description="Normalized numeric value")
+    as_reported: str = Field(description="Original string as in document")
+    unit: Optional[str] = Field(description="Unit of measurement")
+    currency: Optional[str] = Field(description="Currency if applicable")
+    scale: Optional[str] = Field(description="Scale factor (units/thousands/millions)")
+    period: Optional[str] = Field(description="Time period if applicable")
+    as_of_date: Optional[str] = Field(description="Date as of which value is reported")
+    evidence_ids: List[str] = Field(description="IDs of evidence supporting this number")
+
+
+class Risk(BaseModel):
+    """Risk/red flag with severity"""
+    id: str = Field(description="Unique risk identifier")
+    title: str = Field(description="Risk title")
+    severity: Literal["high", "medium", "low", "unknown"] = Field(description="Risk severity level")
+    description: str = Field(description="Detailed risk description")
+    evidence_ids: List[str] = Field(description="IDs of evidence supporting this risk")
+
+
+class Unknown(BaseModel):
+    """Unanswered question with reason"""
+    id: str = Field(description="Unique unknown identifier")
+    question: str = Field(description="Original question that couldn't be answered")
+    reason: str = Field(description="Reason why it couldn't be answered")
+
+
+class Evidence(BaseModel):
+    """Source evidence citation"""
+    id: str = Field(description="Unique evidence identifier")
+    doc_id: str = Field(description="Document identifier")
+    doc_title: Optional[str] = Field(description="Document title for display")
+    page: int = Field(description="Page number")
+    snippet: str = Field(description="Text snippet (200-400 chars max)")
+
+
+class DDSectionAnswerSchema(BaseModel):
+    """Unified schema for DD section answers"""
+    section_id: str = Field(description="Section identifier")
+    claims: List[Claim] = Field(description="List of claims for the report")
+    numbers: List[NumberWithEvidence] = Field(description="List of numbers with evidence")
+    risks: List[Risk] = Field(description="List of risks/red flags")
+    unknowns: List[Unknown] = Field(description="List of unanswered questions")
+    evidence: List[Evidence] = Field(description="List of evidence citations")
+    notes: Optional[str] = Field(description="Optional short notes (1-3 sentences)")
+
+class SectionQueryPlanningPrompt:
     instruction = """
-You are a question rephrasing system.
-Your task is to break down a comparative question into individual questions for each company mentioned.
-Each output question must be self-contained, maintain the same intent and metric as the original question, be specific to the respective company, and use consistent phrasing.
+You are a query planning system for pharmaceutical due diligence reports.
+Your task is to break down a report section into specific questions that need to be answered from regulatory, clinical, and manufacturing documents.
+Each question should be scoped to a specific jurisdiction or document type, with preference for primary sources.
+
+Supported scopes: RU_REG, EU_REG, US_REG, CLINICAL_RU, CLINICAL_US, CLINICAL_EU, PATENTS, MANUFACTURING, QUALITY
+Supported answer types: facts, numbers, table, list, boolean, narrative_summary
 """
 
-    class RephrasedQuestion(BaseModel):
-        """Individual question for a company"""
-        company_name: str = Field(description="Company name, exactly as provided in quotes in the original question")
-        question: str = Field(description="Rephrased question specific to this company")
+    class SectionQuestion(BaseModel):
+        """Individual question for a report section"""
+        scope: str = Field(description="Jurisdiction or document scope (RU_REG, EU_REG, etc.)")
+        question: str = Field(description="Specific question to answer")
+        answer_type: Literal["facts", "numbers", "table", "list", "boolean", "narrative_summary"] = Field(description="Expected answer type")
+        doc_kind_preference: Optional[str] = Field(description="Preferred document type (EPAR, SmPC, GRLS, etc.)", default=None)
 
-    class RephrasedQuestions(BaseModel):
-        """List of rephrased questions"""
-        questions: List['RephrasedQuestionsPrompt.RephrasedQuestion'] = Field(description="List of rephrased questions for each company")
+    class SectionQuestions(BaseModel):
+        """List of questions for a report section"""
+        questions: List['SectionQueryPlanningPrompt.SectionQuestion'] = Field(description="List of questions for the section")
 
     pydantic_schema = '''
-class RephrasedQuestion(BaseModel):
-    """Individual question for a company"""
-    company_name: str = Field(description="Company name, exactly as provided in quotes in the original question")
-    question: str = Field(description="Rephrased question specific to this company")
+class SectionQuestion(BaseModel):
+    """Individual question for a report section"""
+    scope: str = Field(description="Jurisdiction or document scope (RU_REG, EU_REG, etc.)")
+    question: str = Field(description="Specific question to answer")
+    answer_type: Literal["facts", "numbers", "table", "list", "boolean", "narrative_summary"] = Field(description="Expected answer type")
+    doc_kind_preference: Optional[str] = Field(description="Preferred document type (EPAR, SmPC, GRLS, etc.)", default=None)
 
-class RephrasedQuestions(BaseModel):
-    """List of rephrased questions"""
-    questions: List['RephrasedQuestionsPrompt.RephrasedQuestion'] = Field(description="List of rephrased questions for each company")
+class SectionQuestions(BaseModel):
+    """List of questions for a report section"""
+    questions: List['SectionQueryPlanningPrompt.SectionQuestion'] = Field(description="List of questions for the section")
 '''
 
     example = r"""
 Example:
 Input:
-Original comparative question: 'Which company had higher revenue in 2022, "Apple" or "Microsoft"?'
-Companies mentioned: "Apple", "Microsoft"
+Section: Regulatory Status
+INN: Rivaroxaban
+Jurisdictions: RU, EU, US
 
 Output:
 {
     "questions": [
         {
-            "company_name": "Apple",
-            "question": "What was Apple's revenue in 2022?"
+            "scope": "RU_REG",
+            "question": "What is the current GRLS registration status for Rivaroxaban?",
+            "answer_type": "facts",
+            "doc_kind_preference": "GRLS_PDF"
         },
         {
-            "company_name": "Microsoft", 
-            "question": "What was Microsoft's revenue in 2022?"
+            "scope": "EU_REG",
+            "question": "What does the EPAR state about indication and MAH for Rivaroxaban?",
+            "answer_type": "facts",
+            "doc_kind_preference": "EPAR_FULL"
+        },
+        {
+            "scope": "US_REG",
+            "question": "What is the FDA approval status and indication for Rivaroxaban?",
+            "answer_type": "facts",
+            "doc_kind_preference": "FDA_LABEL"
         }
     ]
 }
 """
 
-    user_prompt = "Original comparative question: '{question}'\n\nCompanies mentioned: {companies}"
+    user_prompt = "Section: {section_name}\nINN: {inn}\nJurisdictions: {jurisdictions}\nAdditional context: {context}"
 
     system_prompt = build_system_prompt(instruction, example)
 
@@ -72,12 +149,17 @@ Output:
 
 class AnswerWithRAGContextSharedPrompt:
     instruction = """
-You are a RAG (Retrieval-Augmented Generation) answering system.
-Your task is to answer the given question based only on information from the company's annual report, which is uploaded in the format of relevant pages extracted using RAG.
+You are a due diligence report assistant for pharmaceutical regulatory/clinical/patent/manufacturing documents.
+Your task is to answer questions based only on the provided context from paged artifacts.
 
-Before giving a final answer, carefully think out loud and step by step. Pay special attention to the wording of the question.
-- Keep in mind that the content containing the answer may be worded differently than the question.
-- The question was autogenerated from a template, so it may be meaningless or not applicable to the given company.
+Do not reveal chain-of-thought. Provide short rationale (1–3 sentences) and evidence.
+If evidence missing → put into unknowns; do not guess.
+
+Key rules:
+- Use only provided context (paged artifacts)
+- Prefer primary documents: EPAR/SmPC/PIL/Approval letters/Instructions/GRLS/CTGov/CTIS/Patent pages
+- Citations must include doc_id + page + snippet
+- Every claim must have supporting evidence
 """
 
     user_prompt = """
@@ -88,146 +170,55 @@ Here is the context:
 
 ---
 
-Here is the question:
-"{question}"
+Question: {question}
+Answer type: {answer_type}
+Scope: {scope}
 """
 
-class AnswerWithRAGContextNamePrompt:
-    instruction = AnswerWithRAGContextSharedPrompt.instruction
+class DDSectionAnswerPrompt:
+    instruction = AnswerWithRAGContextSharedPrompt.instruction + """
+
+Generate structured output for due diligence report section.
+Answer based on the specified answer_type and scope.
+Every claim, number, and risk must have supporting evidence_ids.
+If evidence is missing, move to unknowns.
+"""
+
     user_prompt = AnswerWithRAGContextSharedPrompt.user_prompt
 
-    class AnswerSchema(BaseModel):
-        step_by_step_analysis: str = Field(description="Detailed step-by-step analysis of the answer with at least 5 steps and at least 150 words. Pay special attention to the wording of the question to avoid being tricked. Sometimes it seems that there is an answer in the context, but this is might be not the requested value, but only a similar one.")
-
-        reasoning_summary: str = Field(description="Concise summary of the step-by-step reasoning process. Around 50 words.")
-
-        relevant_pages: List[int] = Field(description="""
-List of page numbers containing information directly used to answer the question. Include only:
-- Pages with direct answers or explicit statements
-- Pages with key information that strongly supports the answer
-Do not include pages with only tangentially related information or weak connections to the answer.
-At least one page should be included in the list.
-""")
-
-        final_answer: Union[str, Literal["N/A"]] = Field(description="""
-If it is a company name, should be extracted exactly as it appears in question.
-If it is a person name, it should be their full name.
-If it is a product name, it should be extracted exactly as it appears in the context.
-Without any extra information, words or comments.
-- Return 'N/A' if information is not available in the context
-""")
-
-    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(AnswerSchema), flags=re.MULTILINE)
+    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(DDSectionAnswerSchema), flags=re.MULTILINE)
 
     example = r"""
-Example:
-Question: 
-"Who was the CEO of 'Southwest Airlines Co.'?" 
-
-Answer: 
-```
-{
-  "step_by_step_analysis": "1. The question asks for the CEO of 'Southwest Airlines Co.'. The CEO is typically the highest-ranking executive responsible for the overall management of the company, sometimes referred to as the President or Managing Director.\n2. My source of information is a document that appears to be 'Southwest Airlines Co.''s annual report. This document will be used to identify the individual holding the CEO position.\n3. Within the provided document, there is a section that identifies Robert E. Jordan as the President & Chief Executive Officer of 'Southwest Airlines Co.'. The document confirms his role since February 2022.\n4. Therefore, based on the information found in the document, the CEO of 'Southwest Airlines Co.' is Robert E. Jordan.",
-  "reasoning_summary": "'Southwest Airlines Co.''s annual report explicitly names Robert E. Jordan as President & Chief Executive Officer since February 2021. This directly answers the question.",
-  "relevant_pages": [58],
-  "final_answer": "Robert E. Jordan"
-}
-```
-""" 
-
-    system_prompt = build_system_prompt(instruction, example)
-
-    system_prompt_with_schema = build_system_prompt(instruction, example, pydantic_schema)
-
-
-
-class AnswerWithRAGContextNumberPrompt:
-    instruction = AnswerWithRAGContextSharedPrompt.instruction
-    user_prompt = AnswerWithRAGContextSharedPrompt.user_prompt
-
-    class AnswerSchema(BaseModel):
-        step_by_step_analysis: str = Field(description="""
-Detailed step-by-step analysis of the answer with at least 5 steps and at least 150 words.
-**Strict Metric Matching Required:**    
-
-1. Determine the precise concept the question's metric represents. What is it actually measuring?
-2. Examine potential metrics in the context. Don't just compare names; consider what the context metric measures.
-3. Accept ONLY if: The context metric's meaning *exactly* matches the target metric. Synonyms are acceptable; conceptual differences are NOT.
-4. Reject (and use 'N/A') if:
-    - The context metric covers more or less than the question's metric.
-    - The context metric is a related concept but not the *exact* equivalent (e.g., a proxy or a broader category).
-    - Answering requires calculation, derivation, or inference.
-    - Aggregation Mismatch: The question needs a single value but the context offers only an aggregated total
-5. No Guesswork: If any doubt exists about the metric's equivalence, default to `N/A`."
-""")
-
-        reasoning_summary: str = Field(description="Concise summary of the step-by-step reasoning process. Around 50 words.")
-
-        relevant_pages: List[int] = Field(description="""
-List of page numbers containing information directly used to answer the question. Include only:
-- Pages with direct answers or explicit statements
-- Pages with key information that strongly supports the answer
-Do not include pages with only tangentially related information or weak connections to the answer.
-At least one page should be included in the list.
-""")
-
-        final_answer: Union[float, int, Literal['N/A']] = Field(description="""
-An exact metric number is expected as the answer.
-- Example for percentages:
-    Value from context: 58,3%
-    Final answer: 58.3
-
-Pay special attention to any mentions in the context about whether metrics are reported in units, thousands, or millions to adjust number in final answer with no changes, three zeroes or six zeroes accordingly.
-Pay attention if value wrapped in parentheses, it means that value is negative.
-
-- Example for negative values:
-    Value from context: (2,124,837) CHF
-    Final answer: -2124837
-
-- Example for numbers in thousands:
-    Value from context: 4970,5 (in thousands $)
-    Final answer: 4970500
-
-- Return 'N/A' if metric provided is in a different currency than mentioned in the question
-    Example of value from context: 780000 USD, but question mentions EUR
-    Final answer: 'N/A'
-
-- Return 'N/A' if metric is not directly stated in context EVEN IF it could be calculated from other metrics in the context
-    Example: Requested metric: Dividend per Share; Only available metrics from context: Total Dividends Paid ($5,000,000), and Number of Outstanding Shares (1,000,000); Calculated DPS = Total Dividends / Outstanding Shares.
-    Final answer: 'N/A'
-
-- Return 'N/A' if information is not available in the context
-""")
-
-    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(AnswerSchema), flags=re.MULTILINE)
-
-    example = r"""
-Example 1:
-Question:
-"What was the total assets of 'Waste Connections Inc.' in the fiscal year 2022?"
+Example for Regulatory Status section:
+Question: What is the current GRLS registration status?
+Answer type: facts
+Scope: RU_REG
 
 Answer:
-```
+```json
 {
-  "step_by_step_analysis": "1. **Metric Definition:** The question asks for 'total assets' for 'Waste Connections Inc.' in fiscal year 2022.  'Total assets' represents the sum of all resources owned or controlled by the company, expected to provide future economic benefits.\n2. **Context Examination:** The context includes 'Consolidated Balance Sheets' (page 78), a standard financial statement that reports a company's assets, liabilities, and equity.\n3. **Metric Matching:** On page 78, under 'December 31, 2022', a line item labeled 'Total assets' exists.  This directly matches the concept requested in the question.\n4. **Value Extraction and Adjustment:** The value for 'Total assets' is '$18,500,342'. The context indicates this is in thousands of dollars.  Therefore, the full value is 18,500,342,000.\n5. **Confirmation**: No calculation beyond unit adjustment was needed. The reported metric directly matches the question.",
-  "reasoning_summary": "The 'Total assets' value for fiscal year 2022 was directly found on the 'Consolidated Balance Sheets' (page 78). The reported value was in thousands, requiring multiplication by 1000 for the final answer.",
-  "relevant_pages": [78],
-  "final_answer": 18500342000
-}
-```
-
-
-Example 2:
-Question:
-"For Ritter Pharmaceuticals, Inc., what was the value of Research and development equipment, at cost at the end of the period listed in annual report?"
-
-Answer:
-```
-{
-  "step_by_step_analysis": "1. The question asks for 'Research and development equipment, at cost' for Ritter Pharmaceuticals, Inc. This indicates a specific value from the balance sheet, representing the *original purchase price* of equipment specifically used for R&D, *without* any accumulated depreciation.\n2. The context (page 35) shows 'Property and equipment, net' at $12,500.  This is a *net* value (after depreciation), and it's a *broader* category, encompassing all property and equipment, not just R&D equipment.\n3. The context (page 37) also mentions 'Accumulated Depreciation' of $110,000 for 'Machinery and Equipment'. This represents the total *depreciation*, not the original cost, and, importantly, it doesn't specify that this equipment is *exclusively* for R&D.\n4. Neither of these metrics *exactly* matches the requested metric. 'Property and equipment, net' is too broad and represents the depreciated value. 'Accumulated Depreciation' only shows depreciation, not cost, and lacks R&D specificity.\n5. Since the context doesn't provide the *original cost* of *only* R&D equipment, and we cannot make assumptions, perform calculations, or combine information, the answer is 'N/A'.",
-  "reasoning_summary": "The context lacks a specific line item for 'Research and development equipment, at cost.' 'Property and equipment, net' is depreciated and too broad, while 'Accumulated Depreciation' only represents depreciation, not original cost, and is not R&D-specific. Strict matching requires 'N/A'.",
-  "relevant_pages": [ 35, 37 ],
-  "final_answer": "N/A"
+  "section_id": "regulatory_status_ru",
+  "claims": [
+    {
+      "id": "grls_status",
+      "text": "Rivaroxaban is registered in Russia with marketing authorization",
+      "evidence_ids": ["ev1"],
+      "confidence": 0.95
+    }
+  ],
+  "numbers": [],
+  "risks": [],
+  "unknowns": [],
+  "evidence": [
+    {
+      "id": "ev1",
+      "doc_id": "GRLS_2024",
+      "doc_title": "State Register of Medicines",
+      "page": 45,
+      "snippet": "Rivaroxaban (Xarelto) - Marketing authorization granted 15.03.2021, registration number LP-005639"
+    }
+  ],
+  "notes": "Status confirmed in latest GRLS update"
 }
 ```
 """
@@ -238,191 +229,99 @@ Answer:
 
 
 
-class AnswerWithRAGContextBooleanPrompt:
-    instruction = AnswerWithRAGContextSharedPrompt.instruction
-    user_prompt = AnswerWithRAGContextSharedPrompt.user_prompt
+# Legacy prompts removed - replaced with unified DDSectionAnswerPrompt
 
-    class AnswerSchema(BaseModel):
-        step_by_step_analysis: str = Field(description="Detailed step-by-step analysis of the answer with at least 5 steps and at least 150 words. Pay special attention to the wording of the question to avoid being tricked. Sometimes it seems that there is an answer in the context, but this is might be not the requested value, but only a similar one.")
-
-        reasoning_summary: str = Field(description="Concise summary of the step-by-step reasoning process. Around 50 words.")
-
-        relevant_pages: List[int] = Field(description="""
-List of page numbers containing information directly used to answer the question. Include only:
-- Pages with direct answers or explicit statements
-- Pages with key information that strongly supports the answer
-Do not include pages with only tangentially related information or weak connections to the answer.
-At least one page should be included in the list.
-""")
-        
-        final_answer: Union[bool] = Field(description="""
-A boolean value (True or False) extracted from the context that precisely answers the question.
-If question ask about did something happen, and in context there is information about it, return False.
-""")
-
-    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(AnswerSchema), flags=re.MULTILINE)
-
-    example = r"""
-Question:
-"Did W. P. Carey Inc. announce any changes to its dividend policy in the annual report?"
-
-Answer:
-```
-{
-  "step_by_step_analysis": "1. The question asks whether W. P. Carey Inc. announced changes to its dividend policy.\n2. The phrase 'changes to its dividend policy' requires careful interpretation. It means any adjustment to the framework, rules, or stated intentions that dictate how the company determines and distributes dividends.\n3. The context (page 12, 18) states that the company increased its annualized dividend to $4.27 per share in the fourth quarter of 2023, compared to $4.22 per share in the same period of 2022. Page 45 mentions further details about dividend.\n4. Consistent, incremental increases throughout the year, with explicit mentions of maintaining a 'steady and growing' dividend, indicates no changes to *policy*, though the *amount* increased as planned within the existing policy.",
-  "reasoning_summary": "The context highlights consistent, small increases to the dividend throughout the year, consistent with a stated policy of providing a 'steady and growing' dividend. While the dividend *amount* changed, the *policy* governing those increases remained consistent. The question asks about *policy* changes, not amount changes.",
-  "relevant_pages": [12, 18, 45],
-  "final_answer": False
-}
-```
-"""
-
-    system_prompt = build_system_prompt(instruction, example)
-
-    system_prompt_with_schema = build_system_prompt(instruction, example, pydantic_schema)
-
-
-
-class AnswerWithRAGContextNamesPrompt:
-    instruction = AnswerWithRAGContextSharedPrompt.instruction
-    user_prompt = AnswerWithRAGContextSharedPrompt.user_prompt
-
-    class AnswerSchema(BaseModel):
-        step_by_step_analysis: str = Field(description="Detailed step-by-step analysis of the answer with at least 5 steps and at least 150 words. Pay special attention to the wording of the question to avoid being tricked. Sometimes it seems that there is an answer in the context, but this is might be not the requested entity, but only a similar one.")
-
-        reasoning_summary: str = Field(description="Concise summary of the step-by-step reasoning process. Around 50 words.")
-
-        relevant_pages: List[int] = Field(description="""
-List of page numbers containing information directly used to answer the question. Include only:
-- Pages with direct answers or explicit statements
-- Pages with key information that strongly supports the answer
-Do not include pages with only tangentially related information or weak connections to the answer.
-At least one page should be included in the list.
-""")
-
-        final_answer: Union[List[str], Literal["N/A"]] = Field(description="""
-Each entry should be extracted exactly as it appears in the context.
-
-If the question asks about positions (e.g., changes in positions), return ONLY position titles, WITHOUT names or any additional information. Appointments on new leadership positions also should be counted as changes in positions. If several changes related to position with same title are mentioned, return title of such position only once. Position title always should be in singular form.
-Example of answer ['Chief Technology Officer', 'Board Member', 'Chief Executive Officer']
-
-If the question asks about names, return ONLY the full names exactly as they are in the context.
-Example of answer ['Carly Kennedy', 'Brian Appelgate Jr.']
-
-If the question asks about new launched products, return ONLY the product names exactly as they are in the context. Candidates for new products or products in testing phase not counted as new launched products.
-Example of answer ['EcoSmart 2000', 'GreenTech Pro']
-
-- Return 'N/A' if information is not available in the context
-""")
-
-    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(AnswerSchema), flags=re.MULTILINE)
-
-    example = r"""
-Example:
-Question:
-"What are the names of all new executives that took on new leadership positions in company?"
-
-Answer:
-```
-{
-    "step_by_step_analysis": "1. The question asks for the names of all new executives who took on new leadership positions in the company.\n2. Exhibit 10.9 and 10.10, as listed in the Exhibit Index on page 89, mentions new Executive Agreements with Carly Kennedy and Brian Appelgate.\n3. Exhibit 10.9, Employment Agreement with Carly Kennedy, states her start date as April 4, 2022, and her position as Executive Vice President and General Counsel.\n4. Exhibit 10.10, Offer Letter with Brian Appelgate shows that his new role within the company is Interim Chief Operations Officer, and he was accepting the offer on November 8, 2022.\n5. Based on the documents, Carly Kennedy and Brian Appelgate are named as the new executives.",
-    "reasoning_summary": "Exhibits 10.9 and 10.10 of the annual report, described as Employment Agreement and Offer Letter, explicitly name Carly Kennedy and Brian Appelgate taking on new leadership roles within the company in 2022.",
-    "relevant_pages": [
-        89
-    ],
-    "final_answer": [
-        "Carly Kennedy",
-        "Brian Appelgate"
-    ]
-}
-```
-"""
-
-    system_prompt = build_system_prompt(instruction, example)
-
-    system_prompt_with_schema = build_system_prompt(instruction, example, pydantic_schema)
-
-class ComparativeAnswerPrompt:
+class ConflictResolverPrompt:
     instruction = """
-You are a question answering system.
-Your task is to analyze individual company answers and provide a comparative response that answers the original question.
-Base your analysis only on the provided individual answers - do not make assumptions or include external knowledge.
-Before giving a final answer, carefully think out loud and step by step.
+You are a conflict resolution system for due diligence reports.
+Your task is to analyze claims from different sources/jurisdictions and identify contradictions, conflicts, or inconsistencies.
+If conflicts exist, create appropriate risk entries. Prioritize authoritative sources.
 
-Important rules for comparison:
-- When the question asks to choose one of the companies (e.g., when comparing metrics), return the company name exactly as it appears in the original question
-- If a company's metric is in a different currency than what is asked in the question, exclude that company from comparison
-- If all companies are excluded (due to currency mismatch or other reasons), return 'N/A' as the final answer
-- If all companies except one are excluded, return the name of the remaining company (even though there is no actual comparison possible)
+Authoritative hierarchy:
+1. Primary regulatory documents (EPAR, FDA labels, SmPC)
+2. Official registers (GRLS, Orange Book)
+3. Secondary sources (CT.gov, company reports)
+4. Tertiary sources (news, analysis)
+
+Output conflicts as risks with severity levels.
 """
 
     user_prompt = """
-Here are the individual company answers:
+Here are claims from different sources:
 \"\"\"
 {context}
 \"\"\"
 
 ---
 
-Here is the original comparative question:
-"{question}"
+Analyze for conflicts and generate unified assessment.
 """
 
-    class AnswerSchema(BaseModel):
-        step_by_step_analysis: str = Field(description="Detailed step-by-step analysis of the answer with at least 5 steps and at least 150 words.")
+    class ConflictResolutionSchema(BaseModel):
+        """Schema for conflict resolution output"""
+        resolved_claims: List[Claim] = Field(description="Claims resolved from conflicts")
+        conflicts: List[Risk] = Field(description="Identified conflicts as risks")
+        unknowns: List[Unknown] = Field(description="Unresolvable conflicts moved to unknowns")
+        evidence: List[Evidence] = Field(description="Supporting evidence for resolutions")
 
-        reasoning_summary: str = Field(description="Concise summary of the step-by-step reasoning process. Around 50 words.")
-
-        relevant_pages: List[int] = Field(description="Just leave empty")
-
-        final_answer: Union[str, Literal["N/A"]] = Field(description="""
-Company name should be extracted exactly as it appears in question.
-Answer should be either a single company name or 'N/A' if no company is applicable.
-""")
-
-    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(AnswerSchema), flags=re.MULTILINE)
+    pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(ConflictResolutionSchema), flags=re.MULTILINE)
 
     example = r"""
 Example:
-Question:
-"Which of the companies had the lowest total assets in USD at the end of the period listed in the annual report: "CrossFirst Bank", "Sleep Country Canada Holdings Inc.", "Holley Inc.", "PowerFleet, Inc.", "Petra Diamonds"? If data for the company is not available, exclude it from the comparison."
+Input claims from different sources about MAH for Rivaroxaban.
 
-Answer:
-```
+Output:
+```json
 {
-  "step_by_step_analysis": "1. The question asks for the company with the lowest total assets in USD.\n2. Gather the total assets in USD for each company from the individual answers: CrossFirst Bank: $6,601,086,000; Holley Inc.: $1,249,642,000; PowerFleet, Inc.: $217,435,000; Petra Diamonds: $1,078,600,000.\n3. Sleep Country Canada Holdings Inc. is excluded because its assets are not reported in USD.\n4. Compare the total assets: PowerFleet, Inc. ($217,435,000) < Petra Diamonds ($1,078,600,000) < Holley Inc. ($1,249,642,000)  < CrossFirst Bank ($6,601,086,000).\n5. Therefore, PowerFleet, Inc. has the lowest total assets in USD.",
-  "reasoning_summary": "The individual answers provided the total assets in USD for each company except Sleep Country Canada Holdings Inc. (excluded due to currency mismatch). Direct comparison shows PowerFleet, Inc. has the lowest total assets.",
-  "relevant_pages": [],
-  "final_answer": "PowerFleet, Inc."
+  "resolved_claims": [
+    {
+      "id": "mah_resolved",
+      "text": "Bayer AG is the Marketing Authorization Holder for Rivaroxaban",
+      "evidence_ids": ["ev1", "ev2"],
+      "confidence": 0.95
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "manufacturing_conflict",
+      "title": "Manufacturing site discrepancy",
+      "severity": "medium",
+      "description": "EPAR lists Berlin site, but SmPC mentions Leverkusen",
+      "evidence_ids": ["ev3", "ev4"]
+    }
+  ],
+  "unknowns": [],
+  "evidence": [...]
 }
 ```
 """
 
     system_prompt = build_system_prompt(instruction, example)
-    
+
     system_prompt_with_schema = build_system_prompt(instruction, example, pydantic_schema)
 
 
 class AnswerSchemaFixPrompt:
     system_prompt = """
-You are a JSON formatter.
-Your task is to format raw LLM response into a valid JSON object.
-Your answer should always start with '{' and end with '}'
-Your answer should contain only json string, without any preambles, comments, or triple backticks.
+You are a DD report JSON formatter.
+Your task is to convert raw LLM responses into valid DDSectionAnswerSchema format.
+Ensure all claims have evidence_ids, no orphaned claims, and proper evidence structure.
+
+Rules:
+- Move claims without evidence to unknowns
+- Create evidence entries with doc_id/page/snippet format
+- Validate against DDSectionAnswerSchema
+- Output only valid JSON, no extra text
 """
 
     user_prompt = """
-Here is the system prompt that defines schema of the json object and provides an example of answer with valid schema:
-\"\"\"
-{system_prompt}
-\"\"\"
+Schema definition:
+{schema_definition}
 
----
-
-Here is the LLM response that not following the schema and needs to be properly formatted:
-\"\"\"
+Raw LLM response to fix:
 {response}
-\"\"\"
+
+Output only the corrected JSON object.
 """
 
 
@@ -430,61 +329,60 @@ Here is the LLM response that not following the schema and needs to be properly 
 
 class RerankingPrompt:
     system_prompt_rerank_single_block = """
-You are a RAG (Retrieval-Augmented Generation) retrievals ranker.
+You are a due diligence document reranker focused on evidence quality.
 
-You will receive a query and retrieved text block related to that query. Your task is to evaluate and score the block based on its relevance to the query provided.
+You will receive a query and retrieved text block. Score based on whether the block contains PROOF/EVIDENCE for the query, not just semantic similarity.
 
 Instructions:
 
-1. Reasoning: 
-   Analyze the block by identifying key information and how it relates to the query. Consider whether the block provides direct answers, partial insights, or background context relevant to the query. Explain your reasoning in a few sentences, referencing specific elements of the block to justify your evaluation. Avoid assumptions—focus solely on the content provided.
+1. Reasoning:
+   Analyze whether the block contains factual evidence that directly supports or answers the query. Focus on proof elements rather than general discussion.
 
-2. Relevance Score (0 to 1, in increments of 0.1):
-   0 = Completely Irrelevant: The block has no connection or relation to the query.
-   0.1 = Virtually Irrelevant: Only a very slight or vague connection to the query.
-   0.2 = Very Slightly Relevant: Contains an extremely minimal or tangential connection.
-   0.3 = Slightly Relevant: Addresses a very small aspect of the query but lacks substantive detail.
-   0.4 = Somewhat Relevant: Contains partial information that is somewhat related but not comprehensive.
-   0.5 = Moderately Relevant: Addresses the query but with limited or partial relevance.
-   0.6 = Fairly Relevant: Provides relevant information, though lacking depth or specificity.
-   0.7 = Relevant: Clearly relates to the query, offering substantive but not fully comprehensive information.
-   0.8 = Very Relevant: Strongly relates to the query and provides significant information.
-   0.9 = Highly Relevant: Almost completely answers the query with detailed and specific information.
-   1 = Perfectly Relevant: Directly and comprehensively answers the query with all the necessary specific information.
+2. Evidence Quality Score (0 to 1, in increments of 0.1):
+   Boost scores for blocks containing:
+   - Specific numbers, dates, names
+   - Regulatory terms: "approved", "authorized", "MAH", "indication", "contraindication"
+   - Structured data: tables, lists, specifications
+   - Status terms: "Phase 3", "primary endpoint", "authorized", "registered"
 
-3. Additional Guidance:
-   - Objectivity: Evaluate block based only on their content relative to the query.
-   - Clarity: Be clear and concise in your justifications.
-   - No assumptions: Do not infer information beyond what's explicitly stated in the block.
+   Penalize scores for:
+   - Navigation content, headers, footers
+   - General descriptions without facts
+   - Duplicate or repetitive information
+   - Introductory/background text
+
+3. Scoring Scale:
+   0 = No evidence: Block has no factual content relevant to proving the query
+   0.3 = Weak evidence: Vague or indirect references
+   0.6 = Moderate evidence: Some specific facts but incomplete
+   0.9 = Strong evidence: Comprehensive factual support
+   1 = Perfect evidence: Complete, authoritative proof
 """
 
     system_prompt_rerank_multiple_blocks = """
-You are a RAG (Retrieval-Augmented Generation) retrievals ranker.
+You are a due diligence document reranker focused on evidence quality for pharmaceutical queries.
 
-You will receive a query and several retrieved text blocks related to that query. Your task is to evaluate and score each block based on its relevance to the query provided.
+You will receive a query and multiple text blocks. Score each based on evidence strength for regulatory/clinical/patent queries.
 
 Instructions:
 
-1. Reasoning: 
-   Analyze the block by identifying key information and how it relates to the query. Consider whether the block provides direct answers, partial insights, or background context relevant to the query. Explain your reasoning in a few sentences, referencing specific elements of the block to justify your evaluation. Avoid assumptions—focus solely on the content provided.
+1. Reasoning:
+   Evaluate each block's ability to serve as evidence for the query. Prioritize blocks with verifiable facts over general content.
 
-2. Relevance Score (0 to 1, in increments of 0.1):
-   0 = Completely Irrelevant: The block has no connection or relation to the query.
-   0.1 = Virtually Irrelevant: Only a very slight or vague connection to the query.
-   0.2 = Very Slightly Relevant: Contains an extremely minimal or tangential connection.
-   0.3 = Slightly Relevant: Addresses a very small aspect of the query but lacks substantive detail.
-   0.4 = Somewhat Relevant: Contains partial information that is somewhat related but not comprehensive.
-   0.5 = Moderately Relevant: Addresses the query but with limited or partial relevance.
-   0.6 = Fairly Relevant: Provides relevant information, though lacking depth or specificity.
-   0.7 = Relevant: Clearly relates to the query, offering substantive but not fully comprehensive information.
-   0.8 = Very Relevant: Strongly relates to the query and provides significant information.
-   0.9 = Highly Relevant: Almost completely answers the query with detailed and specific information.
-   1 = Perfectly Relevant: Directly and comprehensively answers the query with all the necessary specific information.
+2. Evidence Priority (highest to lowest):
+   - Primary regulatory docs (EPAR, FDA labels, SmPC)
+   - Official registers (GRLS, Orange Book)
+   - Structured data (tables, specifications)
+   - Specific terms (doses, indications, contraindications)
+   - Dates, numbers, names with context
 
-3. Additional Guidance:
-   - Objectivity: Evaluate blocks based only on their content relative to the query.
-   - Clarity: Be clear and concise in your justifications.
-   - No assumptions: Do not infer information beyond what's explicitly stated in the block.
+3. Scoring Scale (0-1):
+   0 = No evidentiary value
+   0.2 = Minimal factual content
+   0.4 = Some relevant facts
+   0.6 = Good supporting evidence
+   0.8 = Strong evidentiary support
+   1 = Authoritative, comprehensive evidence
 """
 
 class RetrievalRankingSingleBlock(BaseModel):

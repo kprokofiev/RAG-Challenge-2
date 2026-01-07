@@ -60,6 +60,10 @@ class RunConfig:
     api_provider: str = "openai"
     answering_model: str = "gpt-4o-mini-2024-07-18" #or "gpt-4o-2024-08-06"
     config_suffix: str = ""
+    # DD metadata filters
+    tenant_id: Optional[str] = None
+    case_id: Optional[str] = None
+    doc_kind: Optional[str] = None
 
 class Pipeline:
     def __init__(self, root_path: Path, subset_name: str = "subset.csv", questions_file_name: str = "questions.json", pdf_reports_dir_name: str = "pdf_reports", run_config: RunConfig = RunConfig()):
@@ -265,7 +269,10 @@ class Pipeline:
             parallel_requests=self.run_config.parallel_requests,
             api_provider=self.run_config.api_provider,
             answering_model=self.run_config.answering_model,
-            full_context=self.run_config.full_context            
+            full_context=self.run_config.full_context,
+            tenant_id=self.run_config.tenant_id,
+            case_id=self.run_config.case_id,
+            doc_kind=self.run_config.doc_kind
         )
         
         output_path = self._get_next_available_filename(self.paths.answers_file_path)
@@ -484,4 +491,54 @@ if __name__ == "__main__":
     
     # This method processes the questions and answers
     # Questions processing logic depends on the run_config
-    # pipeline.process_questions() 
+    # pipeline.process_questions()
+
+    def generate_dd_report(self, case_id: str, sections_plan: dict, output_path: str):
+        """
+        Generate DD report for a case
+        Args:
+            case_id: Case identifier
+            sections_plan: Dict with sections and their question plans
+            output_path: Where to save the report JSON
+        """
+        import json
+        from pathlib import Path
+
+        report_data = {
+            "report_id": f"dd_report_{case_id}_{int(time.time())}",
+            "case_id": case_id,
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "sections": [],
+            "evidence_index": {},
+            "documents": []
+        }
+
+        # Generate each section
+        for section_name, section_config in sections_plan.items():
+            section_result = self._generate_section(section_name, section_config, case_id)
+            report_data["sections"].append(section_result)
+
+        # Save report
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+        print(f"DD report generated: {output_path}")
+
+    def _generate_section(self, section_name: str, section_config: dict, case_id: str) -> dict:
+        """
+        Generate a single report section
+        """
+        # This would integrate with the new DD prompts and processing
+        # For now, return placeholder structure
+        return {
+            "section_id": section_name,
+            "title": section_config.get("title", section_name),
+            "claims": [],
+            "numbers": [],
+            "risks": [],
+            "unknowns": [],
+            "evidence": []
+        } 

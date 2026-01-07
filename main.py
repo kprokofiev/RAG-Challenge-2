@@ -53,9 +53,28 @@ def process_questions(config):
     root_path = Path.cwd()
     run_config = configs[config]
     pipeline = Pipeline(root_path, run_config=run_config)
-    
+
     click.echo(f"Processing questions (config={config})...")
     pipeline.process_questions()
+
+@cli.command()
+@click.option('--case-id', required=True, help='Case identifier')
+@click.option('--sections-plan', required=True, help='Path to sections plan JSON file')
+@click.option('--output', default='dd_report.json', help='Output report file path')
+def generate_dd_report(case_id, sections_plan, output):
+    """Generate DD report for a case."""
+    import json
+
+    root_path = Path.cwd()
+    pipeline = Pipeline(root_path)
+
+    # Load sections plan
+    with open(sections_plan, 'r', encoding='utf-8') as f:
+        sections_data = json.load(f)
+
+    click.echo(f"Generating DD report for case {case_id}...")
+    pipeline.generate_dd_report(case_id, sections_data, output)
+    click.echo(f"Report saved to {output}")
 
 if __name__ == '__main__':
     cli()

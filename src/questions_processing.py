@@ -25,7 +25,10 @@ class QuestionsProcessor:
         parallel_requests: int = 10,
         api_provider: str = "openai",
         answering_model: str = "gpt-4o-2024-08-06",
-        full_context: bool = False
+        full_context: bool = False,
+        tenant_id: Optional[str] = None,
+        case_id: Optional[str] = None,
+        doc_kind: Optional[str] = None
     ):
         self.questions = self._load_questions(questions_file_path)
         self.documents_dir = Path(documents_dir)
@@ -42,6 +45,11 @@ class QuestionsProcessor:
         self.api_provider = api_provider
         self.openai_processor = APIProcessor(provider=api_provider)
         self.full_context = full_context
+
+        # DD metadata filters
+        self.tenant_id = tenant_id
+        self.case_id = case_id
+        self.doc_kind = doc_kind
 
         self.answer_details = []
         self.detail_counter = 0
@@ -139,7 +147,10 @@ class QuestionsProcessor:
                 query=question,
                 llm_reranking_sample_size=self.llm_reranking_sample_size,
                 top_n=self.top_n_retrieval,
-                return_parent_pages=self.return_parent_pages
+                return_parent_pages=self.return_parent_pages,
+                tenant_id=self.tenant_id,
+                case_id=self.case_id,
+                doc_kind=self.doc_kind
             )
         
         if not retrieval_results:

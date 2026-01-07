@@ -1,0 +1,30 @@
+{
+  "regulatory_status": {
+    "title": "Regulatory Status",
+    "questions": [
+      {
+        "scope": "RU_REG",
+        "question": "What is the current GRLS registration status for the product?",
+        "answer_type": "facts",
+        "doc_kind_preference": "GRLS_PDF"
+      },
+      {
+        "scope": "EU_REG",
+        "question": "What does the EPAR state about indication and MAH?",
+        "answer_type": "facts",
+        "doc_kind_preference": "EPAR_FULL"
+      }
+    ]
+  },
+  "clinical_trials": {
+    "title": "Clinical Trials",
+    "questions": [
+      {
+        "scope": "US_CLIN",
+        "question": "Which pivotal trials are listed on ClinicalTrials.gov?",
+        "answer_type": "table",
+        "doc_kind_preference": "CTGov"
+      }
+    ]
+  }
+}

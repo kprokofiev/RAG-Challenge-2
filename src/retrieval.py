@@ -150,7 +150,7 @@ class VectorRetriever:
         similarity_score = round(similarity_score, 4)
         return similarity_score
 
-    def retrieve_by_company_name(self, company_name: str, query: str, llm_reranking_sample_size: int = None, top_n: int = 3, return_parent_pages: bool = False) -> List[Tuple[str, float]]:
+    def retrieve_by_company_name(self, company_name: str, query: str, llm_reranking_sample_size: int = None, top_n: int = 3, return_parent_pages: bool = False, tenant_id: str = None, case_id: str = None, doc_kind: str = None) -> List[Tuple[str, float]]:
         target_report = None
         for report in self.all_dbs:
             document = report.get("document", {})
@@ -243,14 +243,17 @@ class HybridRetriever:
         self.reranker = LLMReranker()
         
     def retrieve_by_company_name(
-        self, 
-        company_name: str, 
-        query: str, 
+        self,
+        company_name: str,
+        query: str,
         llm_reranking_sample_size: int = 28,
         documents_batch_size: int = 2,
         top_n: int = 6,
         llm_weight: float = 0.7,
-        return_parent_pages: bool = False
+        return_parent_pages: bool = False,
+        tenant_id: str = None,
+        case_id: str = None,
+        doc_kind: str = None
     ) -> List[Dict]:
         """
         Retrieve and rerank documents using hybrid approach.
@@ -272,7 +275,10 @@ class HybridRetriever:
             company_name=company_name,
             query=query,
             top_n=llm_reranking_sample_size,
-            return_parent_pages=return_parent_pages
+            return_parent_pages=return_parent_pages,
+            tenant_id=tenant_id,
+            case_id=case_id,
+            doc_kind=doc_kind
         )
         
         # Rerank results using LLM
