@@ -174,6 +174,80 @@ class PDFParser:
 
         _log.info(f"{'#'*50}\nCompleted in {elapsed_time:.2f} seconds. Successfully converted {success_count}/{total_docs} documents.\n{'#'*50}")
 
+    def parse_single_document(self, pdf_path: Path) -> Optional[Dict]:
+        """
+        Parse a single PDF document and return parsed data as dict.
+
+        Args:
+            pdf_path: Path to the PDF file
+
+        Returns:
+            Dict with parsed document data or None if failed
+        """
+        try:
+            _log.info(f"Parsing single document: {pdf_path}")
+
+            # Convert single document
+            conv_results = list(self.convert_documents([pdf_path]))
+
+            if not conv_results:
+                _log.error(f"No conversion result for {pdf_path}")
+                return None
+
+            conv_res = conv_results[0]
+
+            if conv_res.status != ConversionStatus.SUCCESS:
+                _log.error(f"Conversion failed for {pdf_path}: {conv_res.status}")
+                return None
+
+            # Process the document
+            processor = JsonReportProcessor(
+                metadata_lookup=self.metadata_lookup,
+                debug_data_path=self.debug_data_path
+            )
+
+            # Normalize the document data
+            data = conv_res.document.export_to_dict()
+            normalized_data = self._normalize_page_sequence(data)
+
+            # Assemble report
+            processed_report = processor.assemble_report(conv_res, normalized_data)
+
+            # Add page count and anchors
+            processed_report['page_count'] = len(normalized_data.get('content', {}).get('pages', []))
+            processed_report['page_anchors'] = self._extract_page_anchors(normalized_data)
+
+            _log.info(f"Successfully parsed {pdf_path}: {processed_report['page_count']} pages")
+            return processed_report
+
+        except Exception as e:
+            _log.error(f"Error parsing document {pdf_path}: {e}")
+            return None
+
+    def _extract_page_anchors(self, normalized_data: Dict) -> Dict[int, Dict]:
+        """
+        Extract page anchors and metadata for citation support.
+
+        Args:
+            normalized_data: Normalized document data
+
+        Returns:
+            Dict mapping page numbers to anchor data
+        """
+        anchors = {}
+        pages = normalized_data.get('content', {}).get('pages', [])
+
+        for page_data in pages:
+            page_num = page_data.get('page_number', page_data.get('page', 0))
+            anchors[page_num] = {
+                'page_number': page_num,
+                'text_length': len(page_data.get('text', '')),
+                'has_tables': len(page_data.get('tables', [])) > 0,
+                'table_count': len(page_data.get('tables', []))
+            }
+
+        return anchors
+
     def parse_and_export_parallel(
         self,
         input_doc_paths: List[Path] = None,

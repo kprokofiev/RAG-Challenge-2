@@ -1,0 +1,38 @@
+{
+  "tenant_id": "demo_tenant",
+  "case_id": "rivaroxaban_dd_2024",
+  "documents": [
+    {
+      "doc_id": "epar_eu_2024",
+      "doc_kind": "epar",
+      "title": "European Public Assessment Report - Rivaroxaban",
+      "s3_rendered_pdf_key": "tenants/demo_tenant/cases/rivaroxaban_dd_2024/documents/epar_eu_2024/rendered/document.pdf",
+      "source_url": "https://www.ema.europa.eu/en/documents/product-information/xarelto-epar-product-information_en.pdf",
+      "retrieved_at": "2026-01-08T10:00:00Z"
+    },
+    {
+      "doc_id": "grls_ru_2024",
+      "doc_kind": "grls",
+      "title": "State Register of Medicines - Rivaroxaban Entry",
+      "s3_rendered_pdf_key": "tenants/demo_tenant/cases/rivaroxaban_dd_2024/documents/grls_ru_2024/rendered/document.pdf",
+      "source_url": "https://grls.rosminzdrav.ru/Grls_View_v2.aspx?routingGuid=12345678-1234-1234-1234-123456789012",
+      "retrieved_at": "2026-01-08T10:15:00Z"
+    },
+    {
+      "doc_id": "us_label_2024",
+      "doc_kind": "us_fda",
+      "title": "FDA Label - Xarelto (rivaroxaban)",
+      "s3_rendered_pdf_key": "tenants/demo_tenant/cases/rivaroxaban_dd_2024/documents/us_label_2024/rendered/document.pdf",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2024/022406s032lbl.pdf",
+      "retrieved_at": "2026-01-08T10:30:00Z"
+    },
+    {
+      "doc_id": "clinicaltrials_gov",
+      "doc_kind": "clinical_trials",
+      "title": "ClinicalTrials.gov - Rivaroxaban Studies",
+      "s3_rendered_pdf_key": "tenants/demo_tenant/cases/rivaroxaban_dd_2024/documents/clinicaltrials_gov/rendered/document.pdf",
+      "source_url": "https://clinicaltrials.gov/search?cond=rivaroxaban",
+      "retrieved_at": "2026-01-08T10:45:00Z"
+    }
+  ]
+}

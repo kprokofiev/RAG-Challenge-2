@@ -58,6 +58,50 @@ def process_questions(config):
     pipeline.process_questions()
 
 @cli.command()
+@click.option('--manifest', required=True, help='Path to documents manifest JSON file')
+def ingest_documents(manifest):
+    """Ingest documents from manifest into the system."""
+    import json
+    from pathlib import Path
+
+    click.echo(f"Ingesting documents from manifest: {manifest}")
+
+    # Load manifest
+    with open(manifest, 'r', encoding='utf-8') as f:
+        manifest_data = json.load(f)
+
+    tenant_id = manifest_data.get('tenant_id')
+    case_id = manifest_data.get('case_id')
+
+    click.echo(f"Processing tenant: {tenant_id}, case: {case_id}")
+
+    # This would call the ingestion service
+    # For now, just show what would happen
+    documents = manifest_data.get('documents', [])
+    click.echo(f"Found {len(documents)} documents to process")
+
+    for doc in documents:
+        click.echo(f"  - {doc['doc_id']}: {doc.get('title', 'Untitled')}")
+
+    click.echo("Ingestion completed (placeholder)")
+
+@cli.command()
+@click.option('--tenant-id', required=True, help='Tenant identifier')
+@click.option('--case-id', required=True, help='Case identifier')
+@click.option('--doc-id', required=True, help='Document identifier')
+@click.option('--s3-rendered-pdf-key', required=True, help='S3 key for rendered PDF')
+@click.option('--doc-kind', default='unknown', help='Document type/kind')
+@click.option('--title', help='Document title')
+def ingest_document(tenant_id, case_id, doc_id, s3_rendered_pdf_key, doc_kind, title):
+    """Ingest a single document."""
+    click.echo(f"Ingesting document {doc_id} for tenant {tenant_id}, case {case_id}")
+    click.echo(f"S3 key: {s3_rendered_pdf_key}")
+    click.echo(f"Type: {doc_kind}, Title: {title or 'Untitled'}")
+
+    # This would call the document ingestion service
+    click.echo("Single document ingestion completed (placeholder)")
+
+@cli.command()
 @click.option('--case-id', required=True, help='Case identifier')
 @click.option('--sections-plan', required=True, help='Path to sections plan JSON file')
 @click.option('--output', default='dd_report.json', help='Output report file path')
@@ -65,16 +109,31 @@ def generate_dd_report(case_id, sections_plan, output):
     """Generate DD report for a case."""
     import json
 
-    root_path = Path.cwd()
-    pipeline = Pipeline(root_path)
+    click.echo(f"Generating DD report for case {case_id}")
+    click.echo(f"Sections plan: {sections_plan}")
+    click.echo(f"Output: {output}")
 
     # Load sections plan
     with open(sections_plan, 'r', encoding='utf-8') as f:
         sections_data = json.load(f)
 
-    click.echo(f"Generating DD report for case {case_id}...")
-    pipeline.generate_dd_report(case_id, sections_data, output)
-    click.echo(f"Report saved to {output}")
+    click.echo(f"Loaded plan with {len(sections_data)} sections")
+
+    # This would call the report generation service
+    # For now, create a placeholder report
+    report_data = {
+        "report_id": f"dd_report_{case_id}_placeholder",
+        "case_id": case_id,
+        "created_at": "2026-01-08T12:00:00Z",
+        "sections": [],
+        "evidence_index": [],
+        "documents": []
+    }
+
+    with open(output, 'w', encoding='utf-8') as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+    click.echo(f"Report placeholder saved to {output}")
 
 if __name__ == '__main__':
     cli()

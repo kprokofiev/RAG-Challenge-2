@@ -1,29 +1,91 @@
 {
-  "regulatory_status": {
-    "title": "Regulatory Status",
+  "regulatory_status_eu": {
+    "section_id": "regulatory_status_eu",
+    "title": "EU Regulatory Status",
+    "questions": [
+      {
+        "scope": "EU_REG",
+        "question": "What does the EPAR state about indication, MAH, and approval status for rivaroxaban?",
+        "answer_type": "facts",
+        "doc_kind_preference": "epar"
+      }
+    ]
+  },
+  "regulatory_status_ru": {
+    "section_id": "regulatory_status_ru",
+    "title": "RU Regulatory Status",
     "questions": [
       {
         "scope": "RU_REG",
-        "question": "What is the current GRLS registration status for the product?",
+        "question": "What is the current GRLS registration status and marketing authorization details?",
         "answer_type": "facts",
-        "doc_kind_preference": "GRLS_PDF"
-      },
+        "doc_kind_preference": "grls"
+      }
+    ]
+  },
+  "regulatory_status_us": {
+    "section_id": "regulatory_status_us",
+    "title": "US Regulatory Status",
+    "questions": [
       {
-        "scope": "EU_REG",
-        "question": "What does the EPAR state about indication and MAH?",
+        "scope": "US_REG",
+        "question": "What is the FDA approval status, indications, and boxed warnings?",
         "answer_type": "facts",
-        "doc_kind_preference": "EPAR_FULL"
+        "doc_kind_preference": "us_fda"
       }
     ]
   },
   "clinical_trials": {
-    "title": "Clinical Trials",
+    "section_id": "clinical_trials",
+    "title": "Clinical Trials Overview",
     "questions": [
       {
-        "scope": "US_CLIN",
-        "question": "Which pivotal trials are listed on ClinicalTrials.gov?",
+        "scope": "CLINICAL_RU",
+        "question": "Which clinical trials are registered in the Russian Clinical Trials Registry?",
         "answer_type": "table",
-        "doc_kind_preference": "CTGov"
+        "doc_kind_preference": "clinical_trials"
+      },
+      {
+        "scope": "CLINICAL_US",
+        "question": "What are the key phase 3 trials and their status on ClinicalTrials.gov?",
+        "answer_type": "table",
+        "doc_kind_preference": "clinical_trials"
+      }
+    ]
+  },
+  "safety_profile": {
+    "section_id": "safety_profile",
+    "title": "Safety Profile & Contraindications",
+    "questions": [
+      {
+        "scope": "EU_REG",
+        "question": "What contraindications and special warnings are listed in the EPAR?",
+        "answer_type": "facts",
+        "doc_kind_preference": "epar"
+      },
+      {
+        "scope": "US_REG",
+        "question": "What are the boxed warnings and contraindications in the US label?",
+        "answer_type": "facts",
+        "doc_kind_preference": "us_fda"
+      }
+    ]
+  },
+  "manufacturing_quality": {
+    "section_id": "manufacturing_quality",
+    "title": "Manufacturing & Quality",
+    "questions": [
+      {
+        "scope": "MANUFACTURING",
+        "question": "Who are the MAH and manufacturing sites listed in regulatory documents?",
+        "answer_type": "facts",
+        "doc_kind_preference": "epar"
+      },
+      {
+        "scope": "QUALITY",
+        "question": "Are there any GMP compliance issues or quality-related warnings?",
+        "answer_type": "boolean",
+        "doc_kind_preference": "epar"
       }
     ]
   }

@@ -30,17 +30,64 @@ class TextSplitter():
             
         return tables_by_page
 
-    def _split_report(self, file_content: Dict[str, any], serialized_tables_report_path: Optional[Path] = None) -> Dict[str, any]:
-        """Split report into chunks, preserving markdown tables in content and optionally including serialized tables."""
-        chunks = []
-        chunk_id = 0
-        
+    def _split_report_hierarchical(self, file_content: Dict[str, any], serialized_tables_report_path: Optional[Path] = None) -> Dict[str, any]:
+        """
+        Split report into hierarchical chunks with parent/child relationships and typed chunks.
+        """
+        all_chunks = []
+        chunk_id_counter = 0
+
         tables_by_page = {}
         if serialized_tables_report_path is not None:
             with open(serialized_tables_report_path, 'r', encoding='utf-8') as f:
                 parsed_report = json.load(f)
             tables_by_page = self._get_serialized_tables_by_page(parsed_report.get('tables', []))
-        
+
+        for page in file_content['content']['pages']:
+            # Create hierarchical text chunks
+            hierarchical_chunks = self._split_page_hierarchical(page)
+
+            # Add parents
+            for parent in hierarchical_chunks['parents']:
+                parent['id'] = chunk_id_counter
+                chunk_id_counter += 1
+                all_chunks.append(parent)
+
+            # Add children
+            for child in hierarchical_chunks['children']:
+                child['id'] = chunk_id_counter
+                chunk_id_counter += 1
+                all_chunks.append(child)
+
+            # Add table chunks
+            if tables_by_page and page['page'] in tables_by_page:
+                for table in tables_by_page[page['page']]:
+                    table_chunk = {
+                        "id": chunk_id_counter,
+                        "type": "table",
+                        "page_from": page['page'],
+                        "page_to": page['page'],
+                        "text": table['text'],
+                        "table_id": table.get('table_id'),
+                        "length_tokens": table['length_tokens']
+                    }
+                    all_chunks.append(table_chunk)
+                    chunk_id_counter += 1
+
+        file_content['content']['chunks'] = all_chunks
+        return file_content
+
+    def _split_report(self, file_content: Dict[str, any], serialized_tables_report_path: Optional[Path] = None) -> Dict[str, any]:
+        """Split report into chunks, preserving markdown tables in content and optionally including serialized tables."""
+        chunks = []
+        chunk_id = 0
+
+        tables_by_page = {}
+        if serialized_tables_report_path is not None:
+            with open(serialized_tables_report_path, 'r', encoding='utf-8') as f:
+                parsed_report = json.load(f)
+            tables_by_page = self._get_serialized_tables_by_page(parsed_report.get('tables', []))
+
         for page in file_content['content']['pages']:
             page_chunks = self._split_page(page)
             for chunk in page_chunks:
@@ -48,14 +95,14 @@ class TextSplitter():
                 chunk['type'] = 'content'
                 chunk_id += 1
                 chunks.append(chunk)
-            
+
             if tables_by_page and page['page'] in tables_by_page:
                 for table in tables_by_page[page['page']]:
                     table['id'] = chunk_id
                     table['type'] = 'serialized_table'
                     chunk_id += 1
                     chunks.append(table)
-        
+
         file_content['content']['chunks'] = chunks
         return file_content
 
@@ -66,6 +113,66 @@ class TextSplitter():
         token_count = len(tokens)
 
         return token_count
+
+    def _split_page_hierarchical(self, page: Dict[str, any], chunk_size: int = 300, chunk_overlap: int = 50) -> Dict[str, List[Dict[str, any]]]:
+        """
+        Split page into hierarchical chunks: parent chunks and child chunks.
+
+        Returns:
+            Dict with 'parents' and 'children' lists
+        """
+        page_text = page['text']
+        page_num = page['page']
+
+        # Create parent chunks (larger context units)
+        parent_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+            model_name="gpt-4o",
+            chunk_size=chunk_size * 3,  # Larger parent chunks
+            chunk_overlap=chunk_overlap
+        )
+
+        parent_texts = parent_splitter.split_text(page_text)
+        parents = []
+        children = []
+
+        parent_id_counter = 0
+
+        for parent_idx, parent_text in enumerate(parent_texts):
+            parent_id = f"parent_{page_num}_{parent_idx}"
+
+            # Create parent chunk
+            parent_chunk = {
+                "id": parent_id,
+                "type": "parent",
+                "page_from": page_num,
+                "page_to": page_num,
+                "text": parent_text,
+                "length_tokens": self.count_tokens(parent_text)
+            }
+            parents.append(parent_chunk)
+
+            # Create child chunks from parent
+            child_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+                model_name="gpt-4o",
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap
+            )
+
+            child_texts = child_splitter.split_text(parent_text)
+
+            for child_idx, child_text in enumerate(child_texts):
+                child_chunk = {
+                    "id": f"child_{page_num}_{parent_idx}_{child_idx}",
+                    "type": "child",
+                    "parent_id": parent_id,
+                    "page_from": page_num,
+                    "page_to": page_num,
+                    "text": child_text,
+                    "length_tokens": self.count_tokens(child_text)
+                }
+                children.append(child_chunk)
+
+        return {"parents": parents, "children": children}
 
     def _split_page(self, page: Dict[str, any], chunk_size: int = 300, chunk_overlap: int = 50) -> List[Dict[str, any]]:
         """Split page text into chunks. The original text includes markdown tables."""

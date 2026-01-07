@@ -179,20 +179,43 @@ class DDSectionAnswerPrompt:
     instruction = AnswerWithRAGContextSharedPrompt.instruction + """
 
 Generate structured output for due diligence report section.
-Answer based on the specified answer_type and scope.
-Every claim, number, and risk must have supporting evidence_ids.
-If evidence is missing, move to unknowns.
+CRITICAL: You must ONLY reference evidence using the provided evidence_ids from the candidates list.
+Do NOT create new evidence references or hallucinate evidence_ids.
+
+Rules:
+- Every claim, number, and risk MUST have evidence_ids from the provided candidates
+- If no suitable evidence exists, move the item to unknowns with reason "No supporting evidence in provided candidates"
+- evidence_ids must exactly match the IDs in the candidates list
+- Do not modify or create evidence - only reference existing candidate IDs
 """
 
-    user_prompt = AnswerWithRAGContextSharedPrompt.user_prompt
+    user_prompt = """
+Context: {context}
+
+Question: {question}
+Answer type: {answer_type}
+Scope: {scope}
+
+Available evidence candidates:
+{evidence_candidates}
+
+Generate structured answer following the rules above.
+"""
 
     pydantic_schema = re.sub(r"^ {4}", "", inspect.getsource(DDSectionAnswerSchema), flags=re.MULTILINE)
 
     example = r"""
 Example for Regulatory Status section:
+
+Context: [retrieved text from documents]
+
 Question: What is the current GRLS registration status?
 Answer type: facts
 Scope: RU_REG
+
+Available evidence candidates:
+- ev_GRLS_45_001: "Rivaroxaban (Xarelto) - Marketing authorization granted 15.03.2021, registration number LP-005639"
+- ev_SPC_12_002: "Rivaroxaban is indicated for prevention of stroke"
 
 Answer:
 ```json
@@ -202,7 +225,7 @@ Answer:
     {
       "id": "grls_status",
       "text": "Rivaroxaban is registered in Russia with marketing authorization",
-      "evidence_ids": ["ev1"],
+      "evidence_ids": ["ev_GRLS_45_001"],
       "confidence": 0.95
     }
   ],
@@ -211,7 +234,7 @@ Answer:
   "unknowns": [],
   "evidence": [
     {
-      "id": "ev1",
+      "id": "ev_GRLS_45_001",
       "doc_id": "GRLS_2024",
       "doc_title": "State Register of Medicines",
       "page": 45,
@@ -221,6 +244,8 @@ Answer:
   "notes": "Status confirmed in latest GRLS update"
 }
 ```
+
+IMPORTANT: Notice that only evidence_ids from the candidates list are used. The system will validate this and reject any response with invalid evidence references.
 """
 
     system_prompt = build_system_prompt(instruction, example)

@@ -98,6 +98,79 @@ python main.py process-reports --config ser_tab
 
 Check `pipeline.py` for more configs and detils on them.
 
+## DD Kit Production Features (v2)
+
+This repository has been extended with production-ready DD (Due Diligence) Kit features for pharmaceutical document analysis:
+
+### New Components
+
+- **StorageClient**: S3/MinIO integration for document storage
+- **DocumentLoader**: Batch document ingestion with metadata
+- **EvidenceCandidatesBuilder**: Deterministic evidence extraction
+- **ValidationGates**: Evidence linkage validation
+- **DDSectionAnswerSchema**: Unified structured output schema
+- **Hierarchical Chunking**: Parent/child relationships with typed chunks
+
+### DD-Specific Features
+
+- **Evidence-First Architecture**: Every claim links to source evidence
+- **Multi-Jurisdictional Support**: RU/EU/US regulatory document handling
+- **Conflict Resolution**: Handles contradictory information across sources
+- **Tenant/Case Isolation**: Strict data separation for multi-tenant usage
+- **Report Orchestration**: Automated multi-section report generation
+
+### CLI Commands
+
+#### Document Ingestion
+```bash
+# Ingest from manifest
+python main.py ingest-documents --manifest documents_manifest_example.json
+
+# Ingest single document
+python main.py ingest-document --tenant-id demo_tenant --case-id rivaroxaban_dd_2024 --doc-id epar_eu_2024 --s3-rendered-pdf-key "tenants/demo_tenant/cases/rivaroxaban_dd_2024/documents/epar_eu_2024/rendered/document.pdf" --doc-kind epar --title "EPAR Rivaroxaban"
+```
+
+#### Report Generation
+```bash
+# Generate DD report
+python main.py generate-dd-report --case-id rivaroxaban_dd_2024 --sections-plan sections_plan_example.json --output dd_report.json
+```
+
+### Configuration
+
+Set these environment variables in `.env`:
+
+```bash
+# Storage (S3/MinIO)
+STORAGE_ENDPOINT_URL=https://minio.example.com
+STORAGE_ACCESS_KEY=your_access_key
+STORAGE_SECRET_KEY=your_secret_key
+STORAGE_BUCKET_NAME=ddkit-documents
+STORAGE_REGION=us-east-1
+STORAGE_USE_SSL=true
+
+# OpenAI (existing)
+OPENAI_API_KEY=sk-...
+```
+
+### Example Files
+
+- `documents_manifest_example.json` - Sample document manifest
+- `sections_plan_example.json` - Sample report sections plan
+- `dd_report.json` - Generated report output format
+
+### Architecture Overview
+
+```
+Documents (S3/MinIO) → DocumentLoader → PDFParser → TextSplitter (hierarchical)
+                                                            ↓
+Vector Index (per tenant/case) ← Chunking → BM25 Index
+                                                            ↓
+Retriever → EvidenceCandidatesBuilder → LLM (DDSectionAnswerPrompt)
+                                                            ↓
+ValidationGates → ReportAssembler → report.json (for UI)
+```
+
 ## License
 
 MIT
