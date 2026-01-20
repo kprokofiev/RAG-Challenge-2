@@ -93,8 +93,9 @@ class DocParseIndexProcessor:
         """Process a single document through the ingestion pipeline."""
         try:
             # Step 1: Parse PDF
-            parsed_reports_dir = temp_path / "01_parsed_reports"
-            parsed_reports_dir.mkdir(exist_ok=True)
+            # Use pipeline's expected debug_data/01_parsed_reports directory
+            parsed_reports_dir = pipeline.paths.parsed_reports_path
+            parsed_reports_dir.mkdir(parents=True, exist_ok=True)
 
             # Use PDFParser to parse the single PDF
             from src.pdf_parsing import PDFParser
@@ -108,19 +109,16 @@ class DocParseIndexProcessor:
             parser = PDFParser(output_dir=parsed_reports_dir, csv_metadata_path=metadata_csv)
             parser.parse_and_export(input_doc_paths=[pdf_path])
 
-            # Step 2: Serialize tables (if needed)
-            pipeline.serialize_tables(max_workers=1)
-
-            # Step 3: Merge reports
+            # Step 2: Merge reports
             pipeline.merge_reports()
 
-            # Step 4: Chunk reports
-            pipeline.chunk_reports(include_serialized_tables=True)
+            # Step 3: Chunk reports
+            pipeline.chunk_reports(include_serialized_tables=False)
 
-            # Step 5: Create vector databases
+            # Step 4: Create vector databases
             pipeline.create_vector_dbs()
 
-            # Step 6: Upload results to S3
+            # Step 5: Upload results to S3
             parsed_key = self._upload_ingestion_results(
                 temp_path, tenant_id, case_id, doc_id, s3_parsed_json_key
             )
@@ -135,7 +133,7 @@ class DocParseIndexProcessor:
         """Upload ingestion results to S3."""
         try:
             # Upload parsed JSON (docling)
-            parsed_path = temp_path / "01_parsed_reports" / f"{doc_id}.json"
+            parsed_path = temp_path / "debug_data" / "01_parsed_reports" / f"{doc_id}.json"
             parsed_key = s3_parsed_json_key or f"tenants/{tenant_id}/cases/{case_id}/documents/{doc_id}/parsed/docling.json"
             if parsed_path.exists():
                 if not self.storage_client.upload_file(parsed_key, parsed_path):

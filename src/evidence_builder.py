@@ -12,15 +12,15 @@ class EvidenceCandidate:
     """
 
     def __init__(self, chunk: Dict[str, Any], doc_id: str, doc_title: Optional[str] = None):
-        self.evidence_id = self._generate_evidence_id(chunk, doc_id)
         self.doc_id = doc_id
         self.doc_title = doc_title
         self.page = chunk.get('page_from', chunk.get('page', 0))
+        self.evidence_id = self._generate_evidence_id(chunk, doc_id, self.page)
         self.snippet = self._extract_snippet(chunk)
         self.chunk_type = chunk.get('type', 'content')
         self.confidence = self._calculate_confidence(chunk)
 
-    def _generate_evidence_id(self, chunk: Dict[str, Any], doc_id: str) -> str:
+    def _generate_evidence_id(self, chunk: Dict[str, Any], doc_id: str, page: int) -> str:
         """
         Generate deterministic evidence ID from chunk data.
 
@@ -37,8 +37,8 @@ class EvidenceCandidate:
             return f"ev_{chunk_id}"
 
         # Fallback: hash-based ID
-        content_hash = hashlib.md5(f"{doc_id}_{self.page}_{chunk.get('text', '')[:100]}".encode()).hexdigest()[:8]
-        return f"ev_{doc_id}_{self.page}_{content_hash}"
+        content_hash = hashlib.md5(f"{doc_id}_{page}_{chunk.get('text', '')[:100]}".encode()).hexdigest()[:8]
+        return f"ev_{doc_id}_{page}_{content_hash}"
 
     def _extract_snippet(self, chunk: Dict[str, Any], max_length: int = 400) -> str:
         """
@@ -219,7 +219,7 @@ class EvidenceCandidatesBuilder:
             page_info = f"Page {candidate.page}"
             snippet = candidate.snippet
 
-            part = f"{doc_info} ({page_info}): {snippet}"
+            part = f"- {candidate.evidence_id}: {doc_info} ({page_info}): {snippet}"
             formatted_parts.append(part)
 
         return "\n\n".join(formatted_parts)
