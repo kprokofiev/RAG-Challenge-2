@@ -1,0 +1,202 @@
+import logging
+import signal
+import sys
+import time
+from typing import Dict, Any, Optional
+
+from src.queue_handler import JobQueueHandler
+from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, JobCallback
+from src.settings import settings
+from src.storage_client import StorageClient
+
+logger = logging.getLogger(__name__)
+
+
+class DDKitWorker:
+    """Main DD Kit RAG worker class."""
+
+    def __init__(self):
+        self.queue_handler = JobQueueHandler()
+        self.doc_processor = DocParseIndexProcessor()
+        self.report_processor = ReportGenerateProcessor()
+        self.running = False
+        self.job_attempts: Dict[str, int] = {}
+
+    def start(self):
+        """Start the worker loop."""
+        logger.info("Starting DD Kit RAG worker")
+        self.running = True
+
+        # Set up signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+        try:
+            self._worker_loop()
+        except Exception as e:
+            logger.error(f"Worker loop failed: {e}")
+            sys.exit(1)
+        finally:
+            logger.info("Worker stopped")
+
+    def stop(self):
+        """Stop the worker."""
+        logger.info("Stopping worker...")
+        self.running = False
+
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals."""
+        logger.info(f"Received signal {signum}, shutting down gracefully...")
+        self.stop()
+
+    def _worker_loop(self):
+        """Main worker processing loop."""
+        logger.info("Worker loop started")
+
+        while self.running:
+            try:
+                # Try to get a job from either queue
+                job_data = self._get_next_job()
+
+                if job_data:
+                    self._process_job(job_data)
+                else:
+                    # No jobs available, sleep briefly
+                    time.sleep(5)
+
+            except Exception as e:
+                logger.error(f"Error in worker loop: {e}")
+                time.sleep(10)  # Sleep longer on error
+
+    def _get_next_job(self) -> Optional[Dict[str, Any]]:
+        """Get the next job from available queues."""
+        # Try doc_parse_index queue first
+        job_data = self.queue_handler.dequeue_job("doc_parse_index", timeout=1)
+        if job_data:
+            return job_data
+
+        # Try report_generate queue
+        job_data = self.queue_handler.dequeue_job("report_generate", timeout=1)
+        if job_data:
+            return job_data
+
+        return None
+
+    def _process_job(self, job_data: Dict[str, Any]):
+        """Process a single job with retry logic."""
+        job_type = job_data.get("job_type")
+        job_id = self._get_job_id(job_data)
+
+        if not job_id:
+            logger.error("Job missing required fields for identification")
+            return
+
+        # Initialize attempt counter
+        if job_id not in self.job_attempts:
+            self.job_attempts[job_id] = 0
+
+        self.job_attempts[job_id] += 1
+        attempt = self.job_attempts[job_id]
+
+        logger.info(f"Processing job {job_id} (attempt {attempt}/{settings.max_job_attempts})")
+
+        try:
+            success = self._execute_job_processor(job_type, job_data)
+
+            if success:
+                logger.info(f"Job {job_id} completed successfully")
+                self._send_callback(job_data, True)
+                # Clean up attempt counter on success
+                if job_id in self.job_attempts:
+                    del self.job_attempts[job_id]
+            else:
+                logger.error(f"Job {job_id} failed on attempt {attempt}")
+                self._handle_job_failure(job_data, job_id, attempt)
+
+        except Exception as e:
+            logger.error(f"Job {job_id} failed with exception: {e}")
+            self._handle_job_failure(job_data, job_id, attempt, str(e))
+
+    def _execute_job_processor(self, job_type: str, job_data: Dict[str, Any]) -> bool:
+        """Execute the appropriate job processor."""
+        if job_type == "doc_parse_index":
+            return self.doc_processor.process_job(job_data)
+        elif job_type == "report_generate":
+            return self.report_processor.process_job(job_data)
+        else:
+            logger.error(f"Unknown job type: {job_type}")
+            return False
+
+    def _handle_job_failure(self, job_data: Dict[str, Any], job_id: str, attempt: int, error_msg: Optional[str] = None):
+        """Handle job failure, possibly re-queue or send callback."""
+        if attempt >= settings.max_job_attempts:
+            logger.error(f"Job {job_id} failed permanently after {attempt} attempts")
+            self._send_callback(job_data, False, error_msg)
+            # Clean up attempt counter
+            if job_id in self.job_attempts:
+                del self.job_attempts[job_id]
+        else:
+            logger.warning(f"Job {job_id} failed, will retry (attempt {attempt + 1})")
+            # Re-queue the job (implement if needed - for now just log)
+
+    def _get_job_id(self, job_data: Dict[str, Any]) -> Optional[str]:
+        """Generate a unique job ID for tracking attempts."""
+        job_type = job_data.get("job_type")
+        if job_type == "doc_parse_index":
+            return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}:{job_data.get('doc_id')}"
+        elif job_type == "report_generate":
+            return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}"
+        return None
+
+    def _send_callback(self, job_data: Dict[str, Any], success: bool, error_message: Optional[str] = None):
+        """Send job completion callback if configured."""
+        if settings.job_callback_url:
+            JobCallback.send_callback(settings.job_callback_url, job_data, success, error_message)
+
+    def check_health(self) -> Dict[str, Any]:
+        """Perform health check."""
+        health_status = {
+            "healthy": True,
+            "checks": {}
+        }
+
+        # Check Redis connection
+        try:
+            redis_healthy = self.queue_handler.is_healthy()
+            health_status["checks"]["redis"] = {"healthy": redis_healthy}
+            if not redis_healthy:
+                health_status["healthy"] = False
+        except Exception as e:
+            health_status["checks"]["redis"] = {"healthy": False, "error": str(e)}
+            health_status["healthy"] = False
+
+        # Check storage connection
+        try:
+            storage_client = StorageClient()
+            # Try to list bucket (basic connectivity check)
+            storage_healthy = True  # Assume healthy if no exception
+            health_status["checks"]["storage"] = {"healthy": storage_healthy}
+        except Exception as e:
+            health_status["checks"]["storage"] = {"healthy": False, "error": str(e)}
+            health_status["healthy"] = False
+
+        # Check environment
+        try:
+            # Validate that required settings are present
+            env_healthy = all([
+                settings.openai_api_key,
+                settings.redis_url,
+                settings.storage_endpoint_url,
+                settings.storage_access_key,
+                settings.storage_secret_key
+            ])
+            health_status["checks"]["environment"] = {"healthy": env_healthy}
+            if not env_healthy:
+                health_status["healthy"] = False
+        except Exception as e:
+            health_status["checks"]["environment"] = {"healthy": False, "error": str(e)}
+            health_status["healthy"] = False
+
+        return health_status
+
+

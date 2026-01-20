@@ -16,7 +16,7 @@ class StorageClient:
     """
 
     def __init__(self):
-        self.endpoint_url = os.getenv('STORAGE_ENDPOINT_URL')
+        self.endpoint_url = os.getenv('STORAGE_ENDPOINT_URL') or os.getenv('STORAGE_ENDPOINT')
         self.access_key = os.getenv('STORAGE_ACCESS_KEY')
         self.secret_key = os.getenv('STORAGE_SECRET_KEY')
         self.bucket_name = os.getenv('STORAGE_BUCKET_NAME', 'ddkit-documents')
@@ -107,6 +107,19 @@ class StorageClient:
             logger.error(f"Unexpected error uploading {s3_key}: {e}")
             return False
 
+    def list_objects(self, prefix: str) -> list[str]:
+        """List object keys under the given prefix."""
+        try:
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            keys: list[str] = []
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                for item in page.get('Contents', []):
+                    keys.append(item['Key'])
+            return keys
+        except Exception as e:
+            logger.error(f"S3 list error for {prefix}: {e}")
+            return []
+
     def upload_file(self, s3_key: str, file_path: str | Path, content_type: Optional[str] = None) -> bool:
         """
         Upload local file to S3/MinIO.
@@ -191,3 +204,5 @@ class StorageClient:
             if e.response['Error']['Code'] != 'NoSuchKey':
                 logger.error(f"Error getting size of {s3_key}: {e}")
             return None
+
+

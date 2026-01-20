@@ -141,6 +141,16 @@ class VectorRetriever:
         return all_dbs
 
     @staticmethod
+    def _match_filters(metainfo: dict, tenant_id: str = None, case_id: str = None, doc_kind: str = None) -> bool:
+        if tenant_id and metainfo.get("tenant_id") != tenant_id:
+            return False
+        if case_id and metainfo.get("case_id") != case_id:
+            return False
+        if doc_kind and metainfo.get("doc_kind") != doc_kind:
+            return False
+        return True
+
+    @staticmethod
     def get_strings_cosine_similarity(str1, str2):
         llm = VectorRetriever.set_up_llm()
         embeddings = llm.embeddings.create(input=[str1, str2], model="text-embedding-3-large")
@@ -206,6 +216,57 @@ class VectorRetriever:
                 retrieval_results.append(result)
             
         return retrieval_results
+
+    def retrieve_by_case(
+        self,
+        query: str,
+        top_n: int = 6,
+        return_parent_pages: bool = False,
+        tenant_id: str = None,
+        case_id: str = None,
+        doc_kind: str = None
+    ) -> List[Dict]:
+        """
+        Retrieve chunks across all documents for the given tenant/case.
+        """
+        embedding = self.llm.embeddings.create(
+            input=query,
+            model="text-embedding-3-large"
+        )
+        embedding = embedding.data[0].embedding
+        embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+
+        candidates: List[Dict] = []
+        for report in self.all_dbs:
+            document = report.get("document", {})
+            metainfo = document.get("metainfo", {})
+            if not self._match_filters(metainfo, tenant_id=tenant_id, case_id=case_id, doc_kind=doc_kind):
+                continue
+            vector_db = report.get("vector_db")
+            if vector_db is None:
+                continue
+            chunks = document.get("content", {}).get("chunks", [])
+            pages = document.get("content", {}).get("pages", [])
+            if not chunks:
+                continue
+            actual_top_n = min(top_n, len(chunks))
+            distances, indices = vector_db.search(x=embedding_array, k=actual_top_n)
+            for distance, index in zip(distances[0], indices[0]):
+                distance = round(float(distance), 4)
+                chunk = chunks[index]
+                page_num = chunk.get("page", chunk.get("page_from", 0))
+                parent_page = next((page for page in pages if page.get("page") == page_num), None)
+                text = parent_page["text"] if (return_parent_pages and parent_page) else chunk.get("text", "")
+                candidates.append({
+                    "distance": distance,
+                    "page": page_num,
+                    "text": text,
+                    "type": chunk.get("type", "content"),
+                    "doc_id": metainfo.get("doc_id", report.get("name")),
+                    "doc_title": metainfo.get("title", metainfo.get("company_name"))
+                })
+        candidates.sort(key=lambda r: r["distance"], reverse=True)
+        return candidates[:top_n]
 
     def retrieve_all(self, company_name: str) -> List[Dict]:
         target_report = None
@@ -289,4 +350,32 @@ class HybridRetriever:
             llm_weight=llm_weight
         )
         
+        return reranked_results[:top_n]
+
+    def retrieve_by_case(
+        self,
+        query: str,
+        llm_reranking_sample_size: int = 28,
+        documents_batch_size: int = 2,
+        top_n: int = 6,
+        llm_weight: float = 0.7,
+        return_parent_pages: bool = False,
+        tenant_id: str = None,
+        case_id: str = None,
+        doc_kind: str = None
+    ) -> List[Dict]:
+        vector_results = self.vector_retriever.retrieve_by_case(
+            query=query,
+            top_n=llm_reranking_sample_size,
+            return_parent_pages=return_parent_pages,
+            tenant_id=tenant_id,
+            case_id=case_id,
+            doc_kind=doc_kind
+        )
+        reranked_results = self.reranker.rerank_documents(
+            query=query,
+            documents=vector_results,
+            documents_batch_size=documents_batch_size,
+            llm_weight=llm_weight
+        )
         return reranked_results[:top_n]

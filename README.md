@@ -48,6 +48,86 @@ Each dataset directory contains its own README with specific setup instructions 
 
 - Study example questions, reports, and system outputs
 - Run the pipeline from scratch using provided PDFs
+
+## Worker Mode (Asynchronous Processing)
+
+The system now supports asynchronous job processing via Redis queues for production deployment.
+
+### Supported Job Types
+
+1. **Document Parse & Index** (`doc_parse_index`)
+   - Downloads PDF from S3/MinIO storage
+   - Parses document and creates vector embeddings
+   - Stores processed chunks and vectors back to storage
+
+2. **Report Generation** (`report_generate`)
+   - Generates DD reports from sections plan
+   - Processes evidence and creates structured output
+   - Stores final report JSON to storage
+
+### Environment Variables
+
+Required:
+- `OPENAI_API_KEY` - OpenAI API key
+- `REDIS_URL` - Redis connection URL (e.g., `redis://localhost:6379`)
+- `STORAGE_ENDPOINT_URL` - S3/MinIO endpoint
+- `STORAGE_ACCESS_KEY` - Storage access key
+- `STORAGE_SECRET_KEY` - Storage secret key
+
+Optional:
+- `STORAGE_BUCKET_NAME` - Bucket name (default: `ddkit-documents`)
+- `QUEUE_DOC_PARSE_INDEX` - Queue name for doc processing (default: `ddkit:doc_parse_index`)
+- `QUEUE_REPORT_GENERATE` - Queue name for report generation (default: `ddkit:report_generate`)
+- `LOG_LEVEL` - Logging level (default: `INFO`)
+- `JOB_CALLBACK_URL` - HTTP endpoint for job completion callbacks
+
+### Running the Worker
+
+```bash
+# Start worker (processes jobs from Redis queues)
+python main.py worker
+
+# Health check
+python main.py health-check
+
+# Health check with JSON output
+python main.py health-check --format json
+```
+
+### Docker Deployment
+
+```bash
+# Build and run with docker-compose
+docker-compose up --build
+
+# Or run manually
+docker build -t ddkit-worker .
+docker run -e OPENAI_API_KEY=your_key -e REDIS_URL=redis://host:6379 ddkit-worker
+```
+
+### Job Payload Examples
+
+**Document Parse Job:**
+```json
+{
+  "job_type": "doc_parse_index",
+  "tenant_id": "demo",
+  "case_id": "c1",
+  "doc_id": "d1",
+  "doc_kind": "epar",
+  "s3_rendered_pdf_key": "tenants/demo/cases/c1/documents/d1/rendered/document.pdf"
+}
+```
+
+**Report Generate Job:**
+```json
+{
+  "job_type": "report_generate",
+  "tenant_id": "demo",
+  "case_id": "c1",
+  "sections_plan_key": "tenants/demo/cases/c1/sections/plan.json"
+}
+```
 - Use pre-processed data to skip directly to specific pipeline stages
 
 See the respective README files for detailed dataset contents and setup instructions:

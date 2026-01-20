@@ -5,6 +5,7 @@ import logging
 import os
 import json
 import pandas as pd
+from typing import Optional
 
 from src.pdf_parsing import PDFParser
 from src.parsed_reports_merging import PageTextPreparation
@@ -13,6 +14,7 @@ from src.ingestion import VectorDBIngestor
 from src.ingestion import BM25Ingestor
 from src.questions_processing import QuestionsProcessor
 from src.tables_serialization import TableSerializer
+from src.dd_report_generator import DDReportGenerator
 
 @dataclass
 class PipelineConfig:
@@ -495,50 +497,19 @@ if __name__ == "__main__":
 
     def generate_dd_report(self, case_id: str, sections_plan: dict, output_path: str):
         """
-        Generate DD report for a case
-        Args:
-            case_id: Case identifier
-            sections_plan: Dict with sections and their question plans
-            output_path: Where to save the report JSON
+        Generate DD report for a case using DD prompts + evidence gating.
         """
-        import json
-        from pathlib import Path
+        generator = DDReportGenerator(
+            documents_dir=self.paths.documents_dir,
+            vector_db_dir=self.paths.vector_db_dir,
+            tenant_id=self.run_config.tenant_id,
+            case_id=case_id
+        )
+        report_data = generator.generate_report(sections_plan)
 
-        report_data = {
-            "report_id": f"dd_report_{case_id}_{int(time.time())}",
-            "case_id": case_id,
-            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "sections": [],
-            "evidence_index": {},
-            "documents": []
-        }
-
-        # Generate each section
-        for section_name, section_config in sections_plan.items():
-            section_result = self._generate_section(section_name, section_config, case_id)
-            report_data["sections"].append(section_result)
-
-        # Save report
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
-
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
 
         print(f"DD report generated: {output_path}")
-
-    def _generate_section(self, section_name: str, section_config: dict, case_id: str) -> dict:
-        """
-        Generate a single report section
-        """
-        # This would integrate with the new DD prompts and processing
-        # For now, return placeholder structure
-        return {
-            "section_id": section_name,
-            "title": section_config.get("title", section_name),
-            "claims": [],
-            "numbers": [],
-            "risks": [],
-            "unknowns": [],
-            "evidence": []
-        } 

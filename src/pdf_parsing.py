@@ -5,7 +5,7 @@ import re
 import json
 from tabulate import tabulate
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional, Dict
 
 # from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
@@ -52,17 +52,34 @@ class PDFParser:
 
     @staticmethod
     def _parse_csv_metadata(csv_path: Path) -> dict:
-        """Parse CSV file and create a lookup dictionary with sha1 as key."""
+        """Parse CSV file and create a lookup dictionary keyed by filename/sha1."""
         import csv
         metadata_lookup = {}
-        
+
         with open(csv_path, 'r', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                # Handle both old and new CSV formats for company name
+                sha1 = (row.get('sha1') or '').strip()
+                filename = (row.get('filename') or '').strip()
+                doc_id = (row.get('doc_id') or '').strip()
+                key = sha1
+                if not key:
+                    if filename:
+                        key = Path(filename).stem
+                    elif doc_id:
+                        key = doc_id
+                if not key:
+                    continue
+
                 company_name = row.get('company_name', row.get('name', '')).strip('"')
-                metadata_lookup[row['sha1']] = {
-                    'company_name': company_name
+                metadata_lookup[key] = {
+                    'company_name': company_name,
+                    'doc_id': doc_id or key,
+                    'doc_kind': (row.get('doc_kind') or '').strip(),
+                    'tenant_id': (row.get('tenant_id') or '').strip(),
+                    'case_id': (row.get('case_id') or '').strip(),
+                    'title': (row.get('title') or '').strip(),
+                    'source_url': (row.get('source_url') or '').strip()
                 }
         return metadata_lookup
 
@@ -351,7 +368,20 @@ class JsonReportProcessor:
         # Add CSV metadata if available
         if self.metadata_lookup and sha1_name in self.metadata_lookup:
             csv_meta = self.metadata_lookup[sha1_name]
-            metainfo['company_name'] = csv_meta['company_name']
+            if csv_meta.get('company_name'):
+                metainfo['company_name'] = csv_meta['company_name']
+            if csv_meta.get('doc_id'):
+                metainfo['doc_id'] = csv_meta['doc_id']
+            if csv_meta.get('doc_kind'):
+                metainfo['doc_kind'] = csv_meta['doc_kind']
+            if csv_meta.get('tenant_id'):
+                metainfo['tenant_id'] = csv_meta['tenant_id']
+            if csv_meta.get('case_id'):
+                metainfo['case_id'] = csv_meta['case_id']
+            if csv_meta.get('title'):
+                metainfo['title'] = csv_meta['title']
+            if csv_meta.get('source_url'):
+                metainfo['source_url'] = csv_meta['source_url']
             
         return metainfo
 

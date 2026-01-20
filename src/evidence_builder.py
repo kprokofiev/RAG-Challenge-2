@@ -267,3 +267,5 @@ class EvidenceCandidatesBuilder:
             'valid_count': len(valid_claims),
             'invalid_count': len(invalid_claims)
         }
+
+

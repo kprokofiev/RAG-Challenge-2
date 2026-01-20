@@ -1,6 +1,11 @@
 import click
 from pathlib import Path
+import logging
+import json
+import sys
 from src.pipeline import Pipeline, configs, preprocess_configs
+from src.worker import DDKitWorker
+from src.settings import settings
 
 @click.group()
 def cli():
@@ -62,7 +67,7 @@ def process_questions(config):
 def ingest_documents(manifest):
     """Ingest documents from manifest into the system."""
     import json
-    from pathlib import Path
+    from src.job_processors import DocParseIndexProcessor
 
     click.echo(f"Ingesting documents from manifest: {manifest}")
 
@@ -75,15 +80,27 @@ def ingest_documents(manifest):
 
     click.echo(f"Processing tenant: {tenant_id}, case: {case_id}")
 
-    # This would call the ingestion service
-    # For now, just show what would happen
+    processor = DocParseIndexProcessor()
     documents = manifest_data.get('documents', [])
     click.echo(f"Found {len(documents)} documents to process")
 
     for doc in documents:
         click.echo(f"  - {doc['doc_id']}: {doc.get('title', 'Untitled')}")
+        job_data = {
+            "job_type": "doc_parse_index",
+            "tenant_id": tenant_id,
+            "case_id": case_id,
+            "doc_id": doc["doc_id"],
+            "doc_kind": doc.get("doc_kind", "unknown"),
+            "title": doc.get("title", ""),
+            "source_url": doc.get("source_url", ""),
+            "s3_rendered_pdf_key": doc["s3_rendered_pdf_key"],
+            "s3_parsed_json_key": doc.get("s3_parsed_json_key")
+        }
+        if not processor.process_job(job_data):
+            click.echo(f"Failed to ingest document {doc['doc_id']}")
 
-    click.echo("Ingestion completed (placeholder)")
+    click.echo("Ingestion completed")
 
 @cli.command()
 @click.option('--tenant-id', required=True, help='Tenant identifier')
@@ -94,12 +111,25 @@ def ingest_documents(manifest):
 @click.option('--title', help='Document title')
 def ingest_document(tenant_id, case_id, doc_id, s3_rendered_pdf_key, doc_kind, title):
     """Ingest a single document."""
+    from src.job_processors import DocParseIndexProcessor
     click.echo(f"Ingesting document {doc_id} for tenant {tenant_id}, case {case_id}")
     click.echo(f"S3 key: {s3_rendered_pdf_key}")
     click.echo(f"Type: {doc_kind}, Title: {title or 'Untitled'}")
 
-    # This would call the document ingestion service
-    click.echo("Single document ingestion completed (placeholder)")
+    processor = DocParseIndexProcessor()
+    job_data = {
+        "job_type": "doc_parse_index",
+        "tenant_id": tenant_id,
+        "case_id": case_id,
+        "doc_id": doc_id,
+        "doc_kind": doc_kind,
+        "title": title or "",
+        "s3_rendered_pdf_key": s3_rendered_pdf_key
+    }
+    if not processor.process_job(job_data):
+        click.echo("Single document ingestion failed")
+        sys.exit(1)
+    click.echo("Single document ingestion completed")
 
 @cli.command()
 @click.option('--case-id', required=True, help='Case identifier')
@@ -119,21 +149,71 @@ def generate_dd_report(case_id, sections_plan, output):
 
     click.echo(f"Loaded plan with {len(sections_data)} sections")
 
-    # This would call the report generation service
-    # For now, create a placeholder report
-    report_data = {
-        "report_id": f"dd_report_{case_id}_placeholder",
-        "case_id": case_id,
-        "created_at": "2026-01-08T12:00:00Z",
-        "sections": [],
-        "evidence_index": [],
-        "documents": []
-    }
+    pipeline = Pipeline(Path.cwd())
+    pipeline.generate_dd_report(case_id, sections_data, output)
+    click.echo(f"Report saved to {output}")
 
-    with open(output, 'w', encoding='utf-8') as f:
-        json.dump(report_data, f, indent=2, ensure_ascii=False)
+@cli.command()
+def worker():
+    """Start the DD Kit RAG worker to process jobs from Redis queues."""
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
-    click.echo(f"Report placeholder saved to {output}")
+    click.echo("Starting DD Kit RAG worker...")
+    click.echo(f"Redis URL: {settings.redis_url}")
+    click.echo(f"Doc parse queue: {settings.queue_doc_parse_index}")
+    click.echo(f"Report generate queue: {settings.queue_report_generate}")
+
+    try:
+        worker_instance = DDKitWorker()
+        worker_instance.start()
+    except KeyboardInterrupt:
+        click.echo("Worker stopped by user")
+    except Exception as e:
+        click.echo(f"Worker failed: {e}", err=True)
+        sys.exit(1)
+
+@cli.command()
+@click.option('--format', type=click.Choice(['json', 'text']), default='text', help='Output format')
+def health_check(format):
+    """Perform health check and exit with appropriate status code."""
+    # Configure logging to ERROR only for health checks
+    logging.basicConfig(level=logging.ERROR)
+
+    try:
+        worker_instance = DDKitWorker()
+        health_status = worker_instance.check_health()
+
+        if format == 'json':
+            click.echo(json.dumps(health_status, indent=2))
+        else:
+            click.echo("DD Kit RAG Worker Health Check")
+            click.echo("=" * 40)
+
+            overall_healthy = health_status.get("healthy", False)
+            click.echo(f"Overall Status: {'✓ HEALTHY' if overall_healthy else '✗ UNHEALTHY'}")
+
+            for check_name, check_data in health_status.get("checks", {}).items():
+                status = "✓" if check_data.get("healthy", False) else "✗"
+                error = check_data.get("error", "")
+                click.echo(f"{check_name.upper()}: {status} {error}")
+
+        # Exit with appropriate code
+        sys.exit(0 if overall_healthy else 1)
+
+    except Exception as e:
+        if format == 'json':
+            click.echo(json.dumps({
+                "healthy": False,
+                "error": str(e)
+            }, indent=2))
+        else:
+            click.echo(f"Health check failed: {e}")
+
+        sys.exit(1)
 
 if __name__ == '__main__':
     cli()

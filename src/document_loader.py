@@ -174,7 +174,7 @@ class DocumentLoader:
         Returns:
             S3 key for parsed JSON
         """
-        return f"tenants/{metadata.tenant_id}/cases/{metadata.case_id}/documents/{metadata.doc_id}/parsed/document.json"
+        return f"tenants/{metadata.tenant_id}/cases/{metadata.case_id}/documents/{metadata.doc_id}/parsed/docling.json"
 
     def _calculate_checksum(self, file_path: str) -> Optional[str]:
         """
@@ -196,3 +196,5 @@ class DocumentLoader:
         except Exception as e:
             logger.warning(f"Failed to calculate checksum for {file_path}: {e}")
             return None
+
+
