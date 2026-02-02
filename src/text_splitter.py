@@ -1,8 +1,14 @@
 import json
+import logging
+import re
 import tiktoken
 from pathlib import Path
 from typing import List, Dict, Optional
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from src.settings import settings
+
+logger = logging.getLogger(__name__)
 
 class TextSplitter():
     def _get_serialized_tables_by_page(self, tables: List[Dict]) -> Dict[int, List[Dict]]:
@@ -114,7 +120,7 @@ class TextSplitter():
 
         return token_count
 
-    def _split_page_hierarchical(self, page: Dict[str, any], chunk_size: int = 300, chunk_overlap: int = 50) -> Dict[str, List[Dict[str, any]]]:
+    def _split_page_hierarchical(self, page: Dict[str, any], chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = None) -> Dict[str, List[Dict[str, any]]]:
         """
         Split page into hierarchical chunks: parent chunks and child chunks.
 
@@ -123,6 +129,11 @@ class TextSplitter():
         """
         page_text = page['text']
         page_num = page['page']
+
+        if chunk_size is None:
+            chunk_size = settings.chunk_size_tokens
+        if chunk_overlap is None:
+            chunk_overlap = settings.chunk_overlap_tokens
 
         # Create parent chunks (larger context units)
         parent_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
@@ -174,8 +185,12 @@ class TextSplitter():
 
         return {"parents": parents, "children": children}
 
-    def _split_page(self, page: Dict[str, any], chunk_size: int = 300, chunk_overlap: int = 50) -> List[Dict[str, any]]:
+    def _split_page(self, page: Dict[str, any], chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = None) -> List[Dict[str, any]]:
         """Split page text into chunks. The original text includes markdown tables."""
+        if chunk_size is None:
+            chunk_size = settings.chunk_size_tokens
+        if chunk_overlap is None:
+            chunk_overlap = settings.chunk_overlap_tokens
         text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             model_name="gpt-4o",
             chunk_size=chunk_size,
@@ -190,6 +205,24 @@ class TextSplitter():
                 "text": chunk
             })
         return chunks_with_meta
+
+    def _dedupe_chunks(self, chunks: List[Dict[str, any]]) -> List[Dict[str, any]]:
+        if not settings.chunk_dedup:
+            return chunks
+        seen = set()
+        deduped = []
+        for chunk in chunks:
+            text = (chunk.get("text") or "").strip()
+            if not text:
+                continue
+            norm = re.sub(r"\s+", " ", text).lower()
+            if norm in seen:
+                continue
+            seen.add(norm)
+            deduped.append(chunk)
+        if len(deduped) != len(chunks):
+            logger.info("Chunk dedup: %d -> %d", len(chunks), len(deduped))
+        return deduped
 
     def split_all_reports(self, all_report_dir: Path, output_dir: Path, serialized_tables_dir: Optional[Path] = None):
 
@@ -206,6 +239,7 @@ class TextSplitter():
                 report_data = json.load(file)
                 
             updated_report = self._split_report(report_data, serialized_tables_path)
+            updated_report["content"]["chunks"] = self._dedupe_chunks(updated_report["content"]["chunks"])
             output_dir.mkdir(parents=True, exist_ok=True)
             
             with open(output_dir / report_path.name, 'w', encoding='utf-8') as file:

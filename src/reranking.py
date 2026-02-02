@@ -40,7 +40,12 @@ class LLMReranker:
       
     def set_up_llm(self):
         load_dotenv()
-        llm = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        timeout_raw = os.getenv("DDKIT_LLM_TIMEOUT_SECONDS", "120")
+        try:
+            timeout_seconds = float(timeout_raw)
+        except (TypeError, ValueError):
+            timeout_seconds = 120.0
+        llm = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), timeout=timeout_seconds, max_retries=2)
         return llm
     
     def get_rank_for_single_block(self, query, retrieved_document):

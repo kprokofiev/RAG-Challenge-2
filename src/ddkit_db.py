@@ -52,6 +52,19 @@ class DDKitDB:
             (report_id, tenant_id, case_id, title, sections_plan_key, s3_report_json_key)
         )
 
+    def update_report_failed(self, report_id: str, tenant_id: str, case_id: str, error_message: str) -> None:
+        self._exec(
+            """
+            INSERT INTO reports (id, tenant_id, case_id, title, status, error_message, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, 'failed', %s, NOW(), NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                status='failed',
+                error_message=EXCLUDED.error_message,
+                updated_at=NOW()
+            """,
+            (report_id, tenant_id, case_id, f"DD Report — {case_id}", error_message)
+        )
+
     def _exec(self, query: str, params: tuple) -> None:
         if not self.dsn:
             return

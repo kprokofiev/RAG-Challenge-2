@@ -13,6 +13,14 @@ from src.reranking import LLMReranker
 
 _log = logging.getLogger(__name__)
 
+
+def _get_llm_timeout_seconds() -> float:
+    raw = os.getenv("DDKIT_LLM_TIMEOUT_SECONDS", "120")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 120.0
+
 class BM25Retriever:
     def __init__(self, bm25_db_dir: Path, documents_dir: Path):
         self.bm25_db_dir = bm25_db_dir
@@ -88,7 +96,7 @@ class VectorRetriever:
         load_dotenv()
         llm = OpenAI(
             api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=None,
+            timeout=_get_llm_timeout_seconds(),
             max_retries=2
             )
         return llm
@@ -98,7 +106,7 @@ class VectorRetriever:
         load_dotenv()
         llm = OpenAI(
             api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=None,
+            timeout=_get_llm_timeout_seconds(),
             max_retries=2
             )
         return llm
@@ -141,13 +149,27 @@ class VectorRetriever:
         return all_dbs
 
     @staticmethod
-    def _match_filters(metainfo: dict, tenant_id: str = None, case_id: str = None, doc_kind: str = None) -> bool:
+    def _doc_kind_matches(value: str, pattern: Union[str, List[str], Tuple[str, ...], set]) -> bool:
+        if not value or not pattern:
+            return False
+        if isinstance(pattern, (list, tuple, set)):
+            return any(VectorRetriever._doc_kind_matches(value, item) for item in pattern if item)
+        if not isinstance(pattern, str):
+            return False
+        if "*" in pattern:
+            prefix = pattern.rstrip("*")
+            return value.startswith(prefix)
+        return value == pattern
+
+    @staticmethod
+    def _match_filters(metainfo: dict, tenant_id: str = None, case_id: str = None, doc_kind: Union[str, List[str], Tuple[str, ...], set] = None) -> bool:
         if tenant_id and metainfo.get("tenant_id") != tenant_id:
             return False
         if case_id and metainfo.get("case_id") != case_id:
             return False
         if doc_kind and metainfo.get("doc_kind") != doc_kind:
-            return False
+            if not VectorRetriever._doc_kind_matches(metainfo.get("doc_kind"), doc_kind):
+                return False
         return True
 
     @staticmethod

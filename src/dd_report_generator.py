@@ -1,8 +1,9 @@
 import json
+import logging
 import os
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 from src.api_requests import APIProcessor
 from src.evidence_builder import EvidenceCandidatesBuilder
@@ -24,17 +25,35 @@ class DDReportGenerator:
         self.evidence_builder = EvidenceCandidatesBuilder()
         self.validator = ValidationGates()
 
-    def generate_report(self, sections_plan: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_report(self, sections_plan: Dict[str, Any], deadline: Optional[float] = None) -> Dict[str, Any]:
+        logger = logging.getLogger(__name__)
+        start_ts = time.time()
         documents = self._load_documents_meta()
         doc_titles = {d["doc_id"]: d.get("title") for d in documents if d.get("doc_id")}
 
         evidence_index_map: Dict[str, Dict[str, Any]] = {}
         sections_output: List[Dict[str, Any]] = []
 
+        logger.info(
+            "DD report generation started (sections=%d, documents=%d)",
+            len(sections_plan),
+            len(documents)
+        )
+        if deadline is not None:
+            logger.info("Report generation timeout in %.2fs", max(0.0, deadline - start_ts))
+
         for _, section_cfg in sections_plan.items():
+            self._check_deadline(deadline, "before_section")
             section_id = section_cfg.get("section_id") or section_cfg.get("id")
             title = section_cfg.get("title", section_id)
             questions = section_cfg.get("questions", [])
+            section_start = time.time()
+            logger.info(
+                "Generating section '%s' (%s), questions=%d",
+                title,
+                section_id,
+                len(questions)
+            )
 
             section_output = {
                 "section_id": section_id,
@@ -48,16 +67,48 @@ class DDReportGenerator:
             section_evidence_ids: set[str] = set()
 
             for question in questions:
+                self._check_deadline(deadline, f"before_question:{section_id}")
                 q_text = question.get("question", "")
                 if not q_text:
                     continue
-                doc_kind = question.get("doc_kind_preference")
+                doc_kind = self._parse_doc_kind(question.get("doc_kind_preference"))
+                focus_terms = self._parse_focus_terms(
+                    question.get("focus_terms") or question.get("drug_terms")
+                )
+                query_text = q_text
+                if focus_terms:
+                    query_text = f"{q_text} {' '.join(focus_terms)}"
+                logger.info(
+                    "Question: %s | doc_kind=%s | focus_terms=%s",
+                    q_text[:160],
+                    doc_kind,
+                    ",".join(focus_terms) if focus_terms else "-"
+                )
+                t0 = time.time()
+                retrieve_limit = 30 if focus_terms else 10
                 retrieved = self.retriever.retrieve_by_case(
-                    query=q_text,
-                    top_n=10,
+                    query=query_text,
+                    top_n=retrieve_limit,
                     tenant_id=self.tenant_id,
                     case_id=self.case_id,
                     doc_kind=doc_kind
+                )
+                if focus_terms:
+                    before_count = len(retrieved)
+                    retrieved = [item for item in retrieved if self._candidate_matches_terms(item, focus_terms)]
+                    retrieved = retrieved[:10]
+                    logger.info(
+                        "Filtered retrieved passages by focus_terms (%s): %d -> %d",
+                        ",".join(focus_terms),
+                        before_count,
+                        len(retrieved)
+                    )
+                self._check_deadline(deadline, f"after_retrieval:{section_id}")
+                logger.info(
+                    "Retrieved %d passages for question '%s' in %.2fs",
+                    len(retrieved),
+                    q_text[:80],
+                    time.time() - t0
                 )
                 retrieved_by_doc: Dict[str, List[Dict[str, Any]]] = {}
                 for item in retrieved:
@@ -66,6 +117,11 @@ class DDReportGenerator:
 
                 candidates = self.evidence_builder.build_candidates_from_multiple_docs(
                     retrieved_by_doc, doc_titles=doc_titles
+                )
+                logger.info(
+                    "Evidence candidates: %d (doc_kind=%s)",
+                    len(candidates),
+                    doc_kind or "any"
                 )
                 candidates_prompt = self.evidence_builder.candidates_to_prompt_format(candidates)
 
@@ -82,12 +138,21 @@ class DDReportGenerator:
                     evidence_candidates=candidates_prompt
                 )
 
+                t1 = time.time()
                 answer = self.api.send_message(
                     model=self.answering_model,
                     system_content=system_prompt,
                     human_content=user_prompt,
                     is_structured=True,
                     response_format=DDSectionAnswerSchema
+                )
+                self._check_deadline(deadline, f"after_llm:{section_id}")
+                logger.info(
+                    "LLM answered question in %.2fs (claims=%d, numbers=%d, risks=%d)",
+                    time.time() - t1,
+                    len(answer.get("claims", [])),
+                    len(answer.get("numbers", [])),
+                    len(answer.get("risks", []))
                 )
                 answer["section_id"] = section_id
                 answer.setdefault("evidence", [])
@@ -115,7 +180,9 @@ class DDReportGenerator:
 
             section_output["evidence"] = [evidence_index_map[eid] for eid in section_evidence_ids if eid in evidence_index_map]
             sections_output.append(section_output)
+            logger.info("Section '%s' completed in %.2fs", section_id, time.time() - section_start)
 
+        logger.info("DD report generation finished in %.2fs", time.time() - start_ts)
         return {
             "report_id": f"dd_report_{self.case_id}_{int(time.time())}",
             "case_id": self.case_id,
@@ -150,6 +217,52 @@ class DDReportGenerator:
             text = item.get("text", "")
             parts.append(f'Text retrieved from page {page_number}:\n"""\n{text}\n"""')
         return "\n\n---\n\n".join(parts)
+
+    @staticmethod
+    def _check_deadline(deadline: Optional[float], stage: str) -> None:
+        if deadline is not None and time.time() > deadline:
+            raise TimeoutError(f"report_timeout at {stage}")
+
+    @staticmethod
+    def _parse_doc_kind(raw_value: Any) -> Optional[Union[str, List[str]]]:
+        if raw_value is None:
+            return None
+        if isinstance(raw_value, (list, tuple, set)):
+            parts = [str(item).strip() for item in raw_value if str(item).strip()]
+            return parts or None
+        if isinstance(raw_value, str):
+            if "," in raw_value:
+                parts = [part.strip() for part in raw_value.split(",") if part.strip()]
+                return parts or None
+            return raw_value.strip() or None
+        return None
+
+    @staticmethod
+    def _parse_focus_terms(raw_value: Any) -> List[str]:
+        if raw_value is None:
+            return []
+        if isinstance(raw_value, str):
+            items = [raw_value]
+        elif isinstance(raw_value, (list, tuple, set)):
+            items = list(raw_value)
+        else:
+            return []
+        terms: List[str] = []
+        for item in items:
+            term = str(item).strip().lower()
+            if term and term not in terms:
+                terms.append(term)
+        return terms
+
+    @staticmethod
+    def _candidate_matches_terms(item: Dict[str, Any], terms: List[str]) -> bool:
+        if not terms:
+            return True
+        haystack = " ".join([
+            item.get("text", ""),
+            item.get("doc_title", "")
+        ]).lower()
+        return any(term in haystack for term in terms)
 
     @staticmethod
     def _collect_evidence_ids(answer: Dict[str, Any]) -> set[str]:

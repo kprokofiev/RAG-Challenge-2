@@ -1,6 +1,8 @@
 import os
 import json
 import pickle
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Union
 from pathlib import Path
 from tqdm import tqdm
@@ -11,6 +13,8 @@ from rank_bm25 import BM25Okapi
 import faiss
 import numpy as np
 from tenacity import retry, wait_fixed, stop_after_attempt
+
+from src.settings import settings
 
 
 class BM25Ingestor:
@@ -63,21 +67,44 @@ class VectorDBIngestor:
         return llm
 
     @retry(wait=wait_fixed(20), stop=stop_after_attempt(2))
-    def _get_embeddings(self, text: Union[str, List[str]], model: str = "text-embedding-3-large") -> List[float]:
+    def _get_embeddings(self, text: Union[str, List[str]], model: str = None) -> List[float]:
+        model = model or settings.embeddings_model
         if isinstance(text, str) and not text.strip():
             raise ValueError("Input text cannot be an empty string.")
-        
-        if isinstance(text, list):
-            text_chunks = [text[i:i + 1024] for i in range(0, len(text), 1024)]
-        else:
-            text_chunks = [text]
 
-        embeddings = []
-        for chunk in text_chunks:
-            response = self.llm.embeddings.create(input=chunk, model=model)
-            embeddings.extend([embedding.embedding for embedding in response.data])
-        
-        return embeddings
+        if isinstance(text, list):
+            if not text:
+                return []
+            sanitized = [t if (isinstance(t, str) and t.strip()) else " " for t in text]
+            batch_size = max(1, settings.embeddings_batch_size)
+            batches = [(i, sanitized[i:i + batch_size]) for i in range(0, len(sanitized), batch_size)]
+            results: List[List[float]] = [None] * len(sanitized)  # type: ignore
+
+            with ThreadPoolExecutor(max_workers=max(1, settings.embeddings_max_concurrency)) as executor:
+                future_map = {
+                    executor.submit(self._embed_batch_with_retry, batch, model): start_idx
+                    for start_idx, batch in batches
+                }
+                for future in as_completed(future_map):
+                    start_idx = future_map[future]
+                    batch_embeddings = future.result()
+                    for offset, emb in enumerate(batch_embeddings):
+                        results[start_idx + offset] = emb
+
+            return results  # type: ignore
+
+        response = self.llm.embeddings.create(input=text, model=model)
+        return [embedding.embedding for embedding in response.data]
+
+    def _embed_batch_with_retry(self, batch: List[str], model: str) -> List[List[float]]:
+        for attempt in range(1, settings.embeddings_retry_max + 1):
+            try:
+                response = self.llm.embeddings.create(input=batch, model=model)
+                return [embedding.embedding for embedding in response.data]
+            except Exception as e:
+                if attempt >= settings.embeddings_retry_max:
+                    raise
+                time.sleep(settings.embeddings_backoff_seconds * attempt)
 
     def _create_vector_db(self, embeddings: List[float]):
         embeddings_array = np.array(embeddings, dtype=np.float32)

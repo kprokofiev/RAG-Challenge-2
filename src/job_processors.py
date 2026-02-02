@@ -2,17 +2,45 @@ import json
 import logging
 import tempfile
 import time
+from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import requests
+from PyPDF2 import PdfReader
 
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
 from src.storage_client import StorageClient
 from src.settings import settings
 from src.ddkit_db import DDKitDB
+from src.text_splitter import TextSplitter
+from src.ingestion import VectorDBIngestor
 
 logger = logging.getLogger(__name__)
+
+
+def _doc_parse_worker(payload: Dict[str, Any], result_queue: Queue) -> None:
+    """Run doc parsing pipeline in a subprocess with isolation."""
+    try:
+        processor = DocParseIndexProcessor()
+        temp_path = Path(payload["temp_path"])
+        pdf_path = Path(payload["pdf_path"])
+        pipeline = Pipeline(temp_path)
+        success, parsed_key = processor._process_single_document(
+            pipeline=pipeline,
+            pdf_path=pdf_path,
+            temp_path=temp_path,
+            tenant_id=payload["tenant_id"],
+            case_id=payload["case_id"],
+            doc_id=payload["doc_id"],
+            doc_kind=payload["doc_kind"],
+            title=payload.get("title", ""),
+            source_url=payload.get("source_url", ""),
+            s3_parsed_json_key=payload.get("s3_parsed_json_key"),
+        )
+        result_queue.put({"success": success, "parsed_key": parsed_key})
+    except Exception as exc:
+        result_queue.put({"success": False, "error": str(exc)})
 
 
 class DocParseIndexProcessor:
@@ -57,12 +85,26 @@ class DocParseIndexProcessor:
                     logger.error(f"Failed to download PDF for doc {doc_id}")
                     return False
 
-                # Create pipeline instance
-                pipeline = Pipeline(temp_path)
+                invalid_reason = self._validate_pdf_file(local_pdf_path)
+                if invalid_reason:
+                    logger.error(f"Invalid PDF for doc {doc_id}: {invalid_reason}")
+                    if job_id and self.ddkit_db.is_configured():
+                        self.ddkit_db.mark_job_failed(job_id, invalid_reason)
+                    job_data["status"] = "failed"
+                    job_data["error_message"] = invalid_reason
+                    return False
 
-                # Process single PDF through the pipeline
-                success, parsed_key = self._process_single_document(
-                    pipeline, local_pdf_path, temp_path, tenant_id, case_id, doc_id, doc_kind, title, source_url, s3_parsed_json_key
+                # Process single PDF through the pipeline with timeout isolation
+                success, parsed_key, error_message = self._process_single_document_with_timeout(
+                    temp_path=temp_path,
+                    pdf_path=local_pdf_path,
+                    tenant_id=tenant_id,
+                    case_id=case_id,
+                    doc_id=doc_id,
+                    doc_kind=doc_kind,
+                    title=title,
+                    source_url=source_url,
+                    s3_parsed_json_key=s3_parsed_json_key
                 )
 
                 if success:
@@ -75,8 +117,10 @@ class DocParseIndexProcessor:
                     return True
                 else:
                     if job_id and self.ddkit_db.is_configured():
-                        self.ddkit_db.mark_job_failed(job_id, "processing_failed")
+                        self.ddkit_db.mark_job_failed(job_id, error_message or "processing_failed")
                     job_data["status"] = "failed"
+                    if error_message:
+                        job_data["error_message"] = error_message
                     logger.error(f"Failed to process document {doc_id}")
                     return False
 
@@ -126,7 +170,76 @@ class DocParseIndexProcessor:
 
         except Exception as e:
             logger.error(f"Error in document processing pipeline for {doc_id}: {e}")
-            return False, None
+            return self._process_single_document_fallback(
+                pipeline=pipeline,
+                pdf_path=pdf_path,
+                temp_path=temp_path,
+                tenant_id=tenant_id,
+                case_id=case_id,
+                doc_id=doc_id,
+                doc_kind=doc_kind,
+                title=title,
+                source_url=source_url,
+                s3_parsed_json_key=s3_parsed_json_key
+            )
+
+    def _process_single_document_with_timeout(
+        self,
+        temp_path: Path,
+        pdf_path: Path,
+        tenant_id: str,
+        case_id: str,
+        doc_id: str,
+        doc_kind: str,
+        title: str,
+        source_url: str,
+        s3_parsed_json_key: Optional[str]
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """Run the pipeline in a subprocess and enforce a timeout."""
+        timeout_seconds = max(1, settings.job_timeout_seconds)
+        result_queue: Queue = Queue()
+        payload = {
+            "temp_path": str(temp_path),
+            "pdf_path": str(pdf_path),
+            "tenant_id": tenant_id,
+            "case_id": case_id,
+            "doc_id": doc_id,
+            "doc_kind": doc_kind,
+            "title": title,
+            "source_url": source_url,
+            "s3_parsed_json_key": s3_parsed_json_key
+        }
+        proc = Process(target=_doc_parse_worker, args=(payload, result_queue))
+        proc.start()
+        proc.join(timeout=timeout_seconds)
+
+        if proc.is_alive():
+            proc.terminate()
+            proc.join()
+            return False, None, f"processing_timeout_{timeout_seconds}s"
+
+        if result_queue.empty():
+            return False, None, "processing_failed_no_result"
+
+        result = result_queue.get()
+        if result.get("success"):
+            return True, result.get("parsed_key"), None
+        return False, None, result.get("error", "processing_failed")
+
+    def _validate_pdf_file(self, pdf_path: Path) -> Optional[str]:
+        if not pdf_path.exists():
+            return "pdf_missing"
+        size = pdf_path.stat().st_size
+        if size < settings.min_pdf_bytes:
+            return f"pdf_too_small_{size}_bytes"
+        try:
+            with open(pdf_path, "rb") as handle:
+                sig = handle.read(4)
+            if sig != b"%PDF":
+                return "pdf_signature_missing"
+        except Exception as exc:
+            return f"pdf_validation_error_{exc}"
+        return None
 
     def _upload_ingestion_results(self, temp_path: Path, tenant_id: str, case_id: str, doc_id: str,
                                   s3_parsed_json_key: Optional[str] = None) -> Optional[str]:
@@ -173,6 +286,60 @@ class DocParseIndexProcessor:
         except Exception as e:
             logger.error(f"Error uploading ingestion results for {doc_id}: {e}")
             return None
+
+    def _process_single_document_fallback(self, pipeline: Pipeline, pdf_path: Path, temp_path: Path,
+                                          tenant_id: str, case_id: str, doc_id: str, doc_kind: str,
+                                          title: str, source_url: str,
+                                          s3_parsed_json_key: Optional[str]) -> tuple[bool, Optional[str]]:
+        """Fallback ingestion using PyPDF2 text extraction when Docling fails."""
+        try:
+            reader = PdfReader(str(pdf_path))
+            pages = []
+            for idx, page in enumerate(reader.pages, start=1):
+                text = page.extract_text() or ""
+                pages.append({"page": idx, "text": text})
+
+            if not pages:
+                raise RuntimeError("No text extracted from PDF")
+
+            metainfo = {
+                "sha1_name": doc_id,
+                "doc_id": doc_id,
+                "doc_kind": doc_kind,
+                "tenant_id": tenant_id,
+                "case_id": case_id,
+                "title": title,
+                "source_url": source_url
+            }
+
+            parsed_dir = pipeline.paths.parsed_reports_path
+            parsed_dir.mkdir(parents=True, exist_ok=True)
+            parsed_path = parsed_dir / f"{doc_id}.json"
+            with open(parsed_path, "w", encoding="utf-8") as f:
+                json.dump({"metainfo": metainfo, "content": {"pages": pages}}, f, ensure_ascii=False, indent=2)
+
+            merged_dir = pipeline.paths.merged_reports_path
+            merged_dir.mkdir(parents=True, exist_ok=True)
+            merged_path = merged_dir / f"{doc_id}.json"
+            with open(merged_path, "w", encoding="utf-8") as f:
+                json.dump({"metainfo": metainfo, "content": {"pages": pages, "chunks": None}}, f, ensure_ascii=False, indent=2)
+
+            documents_dir = pipeline.paths.documents_dir
+            splitter = TextSplitter()
+            splitter.split_all_reports(merged_dir, documents_dir)
+
+            vector_dir = pipeline.paths.vector_db_dir
+            vector_ingestor = VectorDBIngestor()
+            vector_ingestor.process_reports(documents_dir, vector_dir)
+
+            parsed_key = self._upload_ingestion_results(
+                temp_path, tenant_id, case_id, doc_id, s3_parsed_json_key
+            )
+            return (parsed_key is not None), parsed_key
+
+        except Exception as fallback_err:
+            logger.error(f"Fallback parsing failed for {doc_id}: {fallback_err}")
+            return False, None
 
 
 class ReportGenerateProcessor:
@@ -222,17 +389,42 @@ class ReportGenerateProcessor:
                     logger.error(f"Failed to download case artifacts for case {case_id}")
                     return False
 
-                # Generate DD report
-                output_path = temp_path / "dd_report.json"
                 documents_dir = temp_path / "databases" / "chunked_reports"
                 vector_dir = temp_path / "databases" / "vector_dbs"
+                chunk_files = list(documents_dir.glob("*.json"))
+                vector_files = list(vector_dir.glob("*.faiss"))
+                logger.info(
+                    "Report artifacts ready: chunks=%d vectors=%d",
+                    len(chunk_files),
+                    len(vector_files)
+                )
+
+                # Generate DD report with timeout
+                output_path = temp_path / "dd_report.json"
                 generator = DDReportGenerator(
                     documents_dir=documents_dir,
                     vector_db_dir=vector_dir,
                     tenant_id=tenant_id,
                     case_id=case_id
                 )
-                report_payload = generator.generate_report(sections_plan)
+                start_ts = time.time()
+                deadline = time.time() + settings.job_timeout_seconds
+                logger.info("Report generation timeout set to %ds", settings.job_timeout_seconds)
+                try:
+                    report_payload = generator.generate_report(sections_plan, deadline=deadline)
+                except TimeoutError as err:
+                    logger.error(f"Report generation timed out: {err}")
+                    if self.ddkit_db.is_configured():
+                        self.ddkit_db.update_report_failed(
+                            report_id=report_id,
+                            tenant_id=tenant_id,
+                            case_id=case_id,
+                            error_message=str(err)
+                        )
+                    if job_id and self.ddkit_db.is_configured():
+                        self.ddkit_db.mark_job_failed(job_id, str(err))
+                    return False
+                logger.info("Report generation finished in %.2fs", time.time() - start_ts)
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(report_payload, f, ensure_ascii=False, indent=2)
 
@@ -272,23 +464,29 @@ class ReportGenerateProcessor:
         if not keys:
             logger.error(f"No artifacts found under {base_prefix}")
             return False
+        logger.info("Found %d artifacts under %s", len(keys), base_prefix)
 
         chunks_dir = temp_path / "databases" / "chunked_reports"
         vectors_dir = temp_path / "databases" / "vector_dbs"
         chunks_dir.mkdir(parents=True, exist_ok=True)
         vectors_dir.mkdir(parents=True, exist_ok=True)
 
+        chunk_count = 0
+        vector_count = 0
         for key in keys:
             if "/chunks/" in key and key.endswith(".json"):
                 local_path = chunks_dir / Path(key).name
                 if not self.storage_client.download_to_path(key, local_path):
                     logger.error(f"Failed to download chunk {key}")
                     return False
+                chunk_count += 1
             if "/vectors/" in key and key.endswith(".faiss"):
                 local_path = vectors_dir / Path(key).name
                 if not self.storage_client.download_to_path(key, local_path):
                     logger.error(f"Failed to download vector {key}")
                     return False
+                vector_count += 1
+        logger.info("Downloaded artifacts: chunks=%d vectors=%d", chunk_count, vector_count)
         return True
 
 

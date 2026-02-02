@@ -17,6 +17,14 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 
+def _get_llm_timeout_seconds() -> float:
+    raw = os.getenv("DDKIT_LLM_TIMEOUT_SECONDS", "120")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 120.0
+
+
 class BaseOpenaiProcessor:
     def __init__(self):
         self.llm = self.set_up_llm()
@@ -27,7 +35,7 @@ class BaseOpenaiProcessor:
         load_dotenv()
         llm = OpenAI(
             api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=None,
+            timeout=_get_llm_timeout_seconds(),
             max_retries=2
             )
         return llm

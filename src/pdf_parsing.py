@@ -13,6 +13,8 @@ from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBacke
 from docling.datamodel.base_models import ConversionStatus
 from docling.datamodel.document import ConversionResult
 
+from src.settings import settings
+
 _log = logging.getLogger(__name__)
 
 def _process_chunk(pdf_paths, pdf_backend, output_dir, num_threads, metadata_lookup, debug_data_path):
@@ -91,12 +93,13 @@ class PDFParser:
         from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
         
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = True
+        pipeline_options.do_ocr = settings.docling_do_ocr
         ocr_options = EasyOcrOptions(lang=['en'], force_full_page_ocr=False)
         pipeline_options.ocr_options = ocr_options
-        pipeline_options.do_table_structure = True
-        pipeline_options.table_structure_options.do_cell_matching = True
-        pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
+        pipeline_options.do_table_structure = settings.docling_do_tables
+        if settings.docling_do_tables:
+            pipeline_options.table_structure_options.do_cell_matching = True
+            pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
         
         format_options = {
             InputFormat.PDF: FormatOption(
@@ -537,6 +540,8 @@ class JsonReportProcessor:
         return sorted_pages
 
     def assemble_tables(self, tables, data):
+        if not settings.docling_do_tables:
+            return []
         assembled_tables = []
         for i, table in enumerate(tables):
             table_json_obj = table.model_dump()
@@ -599,6 +604,8 @@ class JsonReportProcessor:
         return md_table
 
     def assemble_pictures(self, data):
+        if not settings.docling_do_pictures:
+            return []
         assembled_pictures = []
         for i, picture in enumerate(data['pictures']):
             children_list = self._process_picture_block(picture, data)

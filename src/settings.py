@@ -33,6 +33,29 @@ class WorkerSettings(BaseSettings):
     # Job processing settings
     max_job_attempts: int = Field(3, env="MAX_JOB_ATTEMPTS")
     job_timeout_seconds: int = Field(3600, env="JOB_TIMEOUT_SECONDS")  # 1 hour default
+    worker_mode: str = Field("all", env="WORKER_MODE")  # all|doc_parse_index|report_generate
+    worker_concurrency: int = Field(1, env="WORKER_CONCURRENCY")
+    worker_poll_timeout: int = Field(2, env="WORKER_POLL_TIMEOUT")
+
+    # Embeddings settings
+    embeddings_model: str = Field("text-embedding-3-large", env="EMBEDDINGS_MODEL")
+    embeddings_batch_size: int = Field(128, env="EMBEDDINGS_BATCH_SIZE")
+    embeddings_max_concurrency: int = Field(4, env="EMBEDDINGS_MAX_CONCURRENCY")
+    embeddings_retry_max: int = Field(3, env="EMBEDDINGS_RETRY_MAX")
+    embeddings_backoff_seconds: int = Field(5, env="EMBEDDINGS_BACKOFF_SECONDS")
+
+    # Chunking settings
+    chunk_size_tokens: int = Field(800, env="CHUNK_SIZE_TOKENS")
+    chunk_overlap_tokens: int = Field(100, env="CHUNK_OVERLAP_TOKENS")
+    chunk_dedup: bool = Field(True, env="CHUNK_DEDUP")
+
+    # Docling tuning
+    docling_do_ocr: bool = Field(True, env="DOCLING_DO_OCR")
+    docling_do_tables: bool = Field(True, env="DOCLING_DO_TABLES")
+    docling_do_pictures: bool = Field(True, env="DOCLING_DO_PICTURES")
+
+    # PDF validation
+    min_pdf_bytes: int = Field(5000, env="MIN_PDF_BYTES")
 
     @validator('storage_endpoint_url', pre=True)
     def resolve_storage_endpoint(cls, v):
@@ -55,6 +78,13 @@ class WorkerSettings(BaseSettings):
         if v.upper() not in valid_levels:
             raise ValueError(f"LOG_LEVEL must be one of {valid_levels}")
         return v.upper()
+
+    @validator('worker_mode')
+    def validate_worker_mode(cls, v):
+        allowed = {"all", "doc_parse_index", "report_generate"}
+        if v not in allowed:
+            raise ValueError(f"WORKER_MODE must be one of {sorted(allowed)}")
+        return v
 
     class Config:
         env_file = ".env"

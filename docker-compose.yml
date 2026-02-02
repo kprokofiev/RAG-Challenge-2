@@ -37,11 +37,25 @@ services:
       # Required
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=redis://host.docker.internal:6379
+      - DDKIT_DB_DSN=postgresql://user:password@host.docker.internal:5432/pharm_search
       - STORAGE_ENDPOINT_URL=http://host.docker.internal:9000
       - STORAGE_ACCESS_KEY=minioadmin
       - STORAGE_SECRET_KEY=minioadmin
       - STORAGE_BUCKET_NAME=ddkit
       - STORAGE_USE_SSL=false
+      - WORKER_MODE=all
+      - WORKER_CONCURRENCY=2
+      - DDKIT_LLM_TIMEOUT_SECONDS=120
+      - JOB_TIMEOUT_SECONDS=900
+      - EMBEDDINGS_BATCH_SIZE=128
+      - EMBEDDINGS_MAX_CONCURRENCY=4
+      - CHUNK_SIZE_TOKENS=800
+      - CHUNK_OVERLAP_TOKENS=100
+      - CHUNK_DEDUP=true
+      - MIN_PDF_BYTES=5000
+      - DOCLING_DO_OCR=false
+      - DOCLING_DO_TABLES=true
+      - DOCLING_DO_PICTURES=false
 
       # Optional
       - LOG_LEVEL=INFO
@@ -61,6 +75,82 @@ services:
     # volumes:
     #   - .:/app
     #   - /app/__pycache__
+
+  rag-worker-index:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_URL=redis://host.docker.internal:6379
+      - DDKIT_DB_DSN=postgresql://user:password@host.docker.internal:5432/pharm_search
+      - STORAGE_ENDPOINT_URL=http://host.docker.internal:9000
+      - STORAGE_ACCESS_KEY=minioadmin
+      - STORAGE_SECRET_KEY=minioadmin
+      - STORAGE_BUCKET_NAME=ddkit
+      - STORAGE_USE_SSL=false
+      - WORKER_MODE=doc_parse_index
+      - WORKER_CONCURRENCY=4
+      - DDKIT_LLM_TIMEOUT_SECONDS=120
+      - JOB_TIMEOUT_SECONDS=900
+      - EMBEDDINGS_BATCH_SIZE=128
+      - EMBEDDINGS_MAX_CONCURRENCY=4
+      - CHUNK_SIZE_TOKENS=800
+      - CHUNK_OVERLAP_TOKENS=100
+      - CHUNK_DEDUP=true
+      - MIN_PDF_BYTES=5000
+      - DOCLING_DO_OCR=false
+      - DOCLING_DO_TABLES=true
+      - DOCLING_DO_PICTURES=false
+      - LOG_LEVEL=INFO
+      - QUEUE_DOC_PARSE_INDEX=ddkit:doc_parse_index
+      - QUEUE_REPORT_GENERATE=ddkit:report_generate
+      - JOB_CALLBACK_URL=${JOB_CALLBACK_URL:-http://host.docker.internal:8085/ddkit/jobs/callback}
+      - DDKIT_CALLBACK_TOKEN=${DDKIT_CALLBACK_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  rag-worker-report:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_URL=redis://host.docker.internal:6379
+      - DDKIT_DB_DSN=postgresql://user:password@host.docker.internal:5432/pharm_search
+      - STORAGE_ENDPOINT_URL=http://host.docker.internal:9000
+      - STORAGE_ACCESS_KEY=minioadmin
+      - STORAGE_SECRET_KEY=minioadmin
+      - STORAGE_BUCKET_NAME=ddkit
+      - STORAGE_USE_SSL=false
+      - WORKER_MODE=report_generate
+      - WORKER_CONCURRENCY=2
+      - DDKIT_LLM_TIMEOUT_SECONDS=120
+      - JOB_TIMEOUT_SECONDS=900
+      - EMBEDDINGS_BATCH_SIZE=128
+      - EMBEDDINGS_MAX_CONCURRENCY=2
+      - CHUNK_SIZE_TOKENS=800
+      - CHUNK_OVERLAP_TOKENS=100
+      - CHUNK_DEDUP=true
+      - MIN_PDF_BYTES=5000
+      - DOCLING_DO_OCR=false
+      - DOCLING_DO_TABLES=true
+      - DOCLING_DO_PICTURES=false
+      - LOG_LEVEL=INFO
+      - QUEUE_DOC_PARSE_INDEX=ddkit:doc_parse_index
+      - QUEUE_REPORT_GENERATE=ddkit:report_generate
+      - JOB_CALLBACK_URL=${JOB_CALLBACK_URL:-http://host.docker.internal:8085/ddkit/jobs/callback}
+      - DDKIT_CALLBACK_TOKEN=${DDKIT_CALLBACK_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   redis_data:

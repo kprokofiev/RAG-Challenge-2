@@ -2,7 +2,9 @@ import logging
 import signal
 import sys
 import time
-from typing import Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from typing import Dict, Any, Optional, Set
 
 from src.queue_handler import JobQueueHandler
 from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, JobCallback
@@ -21,6 +23,9 @@ class DDKitWorker:
         self.report_processor = ReportGenerateProcessor()
         self.running = False
         self.job_attempts: Dict[str, int] = {}
+        self.job_attempts_lock = Lock()
+        self.mode = settings.worker_mode
+        self.concurrency = max(1, settings.worker_concurrency)
 
     def start(self):
         """Start the worker loop."""
@@ -51,36 +56,53 @@ class DDKitWorker:
 
     def _worker_loop(self):
         """Main worker processing loop."""
-        logger.info("Worker loop started")
+        logger.info(
+            "Worker loop started (mode=%s, concurrency=%d)",
+            self.mode,
+            self.concurrency,
+        )
 
-        while self.running:
-            try:
-                # Try to get a job from either queue
-                job_data = self._get_next_job()
+        futures: Set = set()
+        with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+            while self.running:
+                try:
+                    # Clean up finished jobs
+                    done = {f for f in futures if f.done()}
+                    for f in done:
+                        futures.remove(f)
+                        if exc := f.exception():
+                            logger.error(f"Job execution failed: {exc}")
 
-                if job_data:
-                    self._process_job(job_data)
-                else:
-                    # No jobs available, sleep briefly
-                    time.sleep(5)
+                    if len(futures) >= self.concurrency:
+                        time.sleep(0.5)
+                        continue
 
-            except Exception as e:
-                logger.error(f"Error in worker loop: {e}")
-                time.sleep(10)  # Sleep longer on error
+                    # Try to get a job from the selected queue(s)
+                    job_data = self._get_next_job()
+
+                    if job_data:
+                        futures.add(executor.submit(self._process_job, job_data))
+                    else:
+                        # No jobs available, sleep briefly
+                        time.sleep(1)
+
+                except Exception as e:
+                    logger.error(f"Error in worker loop: {e}")
+                    time.sleep(5)  # Sleep on error
 
     def _get_next_job(self) -> Optional[Dict[str, Any]]:
         """Get the next job from available queues."""
-        # Try doc_parse_index queue first
-        job_data = self.queue_handler.dequeue_job("doc_parse_index", timeout=1)
+        timeout = settings.worker_poll_timeout
+        if self.mode == "doc_parse_index":
+            return self.queue_handler.dequeue_job("doc_parse_index", timeout=timeout)
+        if self.mode == "report_generate":
+            return self.queue_handler.dequeue_job("report_generate", timeout=timeout)
+
+        # default: try doc_parse_index first, then report_generate
+        job_data = self.queue_handler.dequeue_job("doc_parse_index", timeout=timeout)
         if job_data:
             return job_data
-
-        # Try report_generate queue
-        job_data = self.queue_handler.dequeue_job("report_generate", timeout=1)
-        if job_data:
-            return job_data
-
-        return None
+        return self.queue_handler.dequeue_job("report_generate", timeout=timeout)
 
     def _process_job(self, job_data: Dict[str, Any]):
         """Process a single job with retry logic."""
@@ -92,11 +114,11 @@ class DDKitWorker:
             return
 
         # Initialize attempt counter
-        if job_id not in self.job_attempts:
-            self.job_attempts[job_id] = 0
-
-        self.job_attempts[job_id] += 1
-        attempt = self.job_attempts[job_id]
+        with self.job_attempts_lock:
+            if job_id not in self.job_attempts:
+                self.job_attempts[job_id] = 0
+            self.job_attempts[job_id] += 1
+            attempt = self.job_attempts[job_id]
 
         logger.info(f"Processing job {job_id} (attempt {attempt}/{settings.max_job_attempts})")
 
@@ -107,8 +129,9 @@ class DDKitWorker:
                 logger.info(f"Job {job_id} completed successfully")
                 self._send_callback(job_data, True)
                 # Clean up attempt counter on success
-                if job_id in self.job_attempts:
-                    del self.job_attempts[job_id]
+                with self.job_attempts_lock:
+                    if job_id in self.job_attempts:
+                        del self.job_attempts[job_id]
             else:
                 logger.error(f"Job {job_id} failed on attempt {attempt}")
                 self._handle_job_failure(job_data, job_id, attempt)
@@ -133,8 +156,9 @@ class DDKitWorker:
             logger.error(f"Job {job_id} failed permanently after {attempt} attempts")
             self._send_callback(job_data, False, error_msg)
             # Clean up attempt counter
-            if job_id in self.job_attempts:
-                del self.job_attempts[job_id]
+            with self.job_attempts_lock:
+                if job_id in self.job_attempts:
+                    del self.job_attempts[job_id]
         else:
             logger.warning(f"Job {job_id} failed, will retry (attempt {attempt + 1})")
             # Re-queue the job (implement if needed - for now just log)
