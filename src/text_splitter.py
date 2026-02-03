@@ -227,7 +227,8 @@ class TextSplitter():
     def split_all_reports(self, all_report_dir: Path, output_dir: Path, serialized_tables_dir: Optional[Path] = None):
 
         all_report_paths = list(all_report_dir.glob("*.json"))
-        
+        stats = []
+
         for report_path in all_report_paths:
             serialized_tables_path = None
             if serialized_tables_dir is not None:
@@ -239,10 +240,31 @@ class TextSplitter():
                 report_data = json.load(file)
                 
             updated_report = self._split_report(report_data, serialized_tables_path)
+            before_dedup = len(updated_report.get("content", {}).get("chunks", []))
             updated_report["content"]["chunks"] = self._dedupe_chunks(updated_report["content"]["chunks"])
+            after_dedup = len(updated_report.get("content", {}).get("chunks", []))
+
+            token_lengths = []
+            for chunk in updated_report.get("content", {}).get("chunks", []):
+                length_tokens = chunk.get("length_tokens")
+                if length_tokens is None:
+                    length_tokens = self.count_tokens(chunk.get("text", ""))
+                token_lengths.append(length_tokens)
+
+            avg_tokens = sum(token_lengths) / len(token_lengths) if token_lengths else 0
+            stats.append({
+                "doc_name": report_path.name,
+                "chunks_before_dedup": before_dedup,
+                "chunks_after_dedup": after_dedup,
+                "dedup_ratio": (after_dedup / before_dedup) if before_dedup else 1.0,
+                "tokens_min": min(token_lengths) if token_lengths else 0,
+                "tokens_avg": avg_tokens,
+                "tokens_max": max(token_lengths) if token_lengths else 0
+            })
             output_dir.mkdir(parents=True, exist_ok=True)
             
             with open(output_dir / report_path.name, 'w', encoding='utf-8') as file:
                 json.dump(updated_report, file, indent=2, ensure_ascii=False)
                 
         print(f"Split {len(all_report_paths)} files")
+        return stats

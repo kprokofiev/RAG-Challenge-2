@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 import signal
 import sys
 import time
@@ -30,6 +32,10 @@ class DDKitWorker:
     def start(self):
         """Start the worker loop."""
         logger.info("Starting DD Kit RAG worker")
+        if os.getenv("DDKIT_DB_DSN"):
+            logger.info("DDKit DB callbacks enabled")
+        else:
+            logger.warning("DDKit DB callbacks disabled (DDKIT_DB_DSN missing)")
         self.running = True
 
         # Set up signal handlers for graceful shutdown
@@ -175,7 +181,13 @@ class DDKitWorker:
     def _send_callback(self, job_data: Dict[str, Any], success: bool, error_message: Optional[str] = None):
         """Send job completion callback if configured."""
         if settings.job_callback_url:
-            JobCallback.send_callback(settings.job_callback_url, job_data, success, error_message)
+            duration_ms = JobCallback.send_callback(settings.job_callback_url, job_data, success, error_message)
+            if duration_ms is not None and job_data.get("metrics"):
+                metrics = job_data["metrics"]
+                metrics.setdefault("stages", {})
+                metrics["stages"]["callback_ms"] = duration_ms
+                if job_data.get("job_type") == "doc_parse_index":
+                    logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
 
     def check_health(self) -> Dict[str, Any]:
         """Perform health check."""

@@ -50,8 +50,8 @@ class WorkerSettings(BaseSettings):
     chunk_dedup: bool = Field(True, env="CHUNK_DEDUP")
 
     # Docling tuning
-    docling_do_ocr: bool = Field(True, env="DOCLING_DO_OCR")
-    docling_do_tables: bool = Field(True, env="DOCLING_DO_TABLES")
+    docling_do_ocr: bool = Field(False, env="DOCLING_DO_OCR")
+    docling_do_tables: bool = Field(False, env="DOCLING_DO_TABLES")
     docling_do_pictures: bool = Field(True, env="DOCLING_DO_PICTURES")
 
     # PDF validation

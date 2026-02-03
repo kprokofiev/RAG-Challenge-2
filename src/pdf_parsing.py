@@ -38,9 +38,13 @@ class PDFParser:
         output_dir: Path = Path("./parsed_pdfs"),
         num_threads: int = None,
         csv_metadata_path: Path = None,
+        docling_do_ocr: Optional[bool] = None,
+        docling_do_tables: Optional[bool] = None,
     ):
         self.pdf_backend = pdf_backend
         self.output_dir = output_dir
+        self._docling_do_ocr = docling_do_ocr
+        self._docling_do_tables = docling_do_tables
         self.doc_converter = self._create_document_converter()
         self.num_threads = num_threads
         self.metadata_lookup = {}
@@ -93,10 +97,10 @@ class PDFParser:
         from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
         
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = settings.docling_do_ocr
+        pipeline_options.do_ocr = settings.docling_do_ocr if self._docling_do_ocr is None else self._docling_do_ocr
         ocr_options = EasyOcrOptions(lang=['en'], force_full_page_ocr=False)
         pipeline_options.ocr_options = ocr_options
-        pipeline_options.do_table_structure = settings.docling_do_tables
+        pipeline_options.do_table_structure = settings.docling_do_tables if self._docling_do_tables is None else self._docling_do_tables
         if settings.docling_do_tables:
             pipeline_options.table_structure_options.do_cell_matching = True
             pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE

@@ -54,7 +54,7 @@ services:
       - CHUNK_DEDUP=true
       - MIN_PDF_BYTES=5000
       - DOCLING_DO_OCR=false
-      - DOCLING_DO_TABLES=true
+      - DOCLING_DO_TABLES=false
       - DOCLING_DO_PICTURES=false
 
       # Optional
@@ -98,7 +98,7 @@ services:
       - CHUNK_DEDUP=true
       - MIN_PDF_BYTES=5000
       - DOCLING_DO_OCR=false
-      - DOCLING_DO_TABLES=true
+      - DOCLING_DO_TABLES=false
       - DOCLING_DO_PICTURES=false
       - LOG_LEVEL=INFO
       - QUEUE_DOC_PARSE_INDEX=ddkit:doc_parse_index
@@ -136,7 +136,7 @@ services:
       - CHUNK_DEDUP=true
       - MIN_PDF_BYTES=5000
       - DOCLING_DO_OCR=false
-      - DOCLING_DO_TABLES=true
+      - DOCLING_DO_TABLES=false
       - DOCLING_DO_PICTURES=false
       - LOG_LEVEL=INFO
       - QUEUE_DOC_PARSE_INDEX=ddkit:doc_parse_index

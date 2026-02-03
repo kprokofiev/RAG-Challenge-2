@@ -182,12 +182,13 @@ class Pipeline:
         if include_serialized_tables:
             serialized_tables_dir = self.paths.parsed_reports_path
         
-        text_splitter.split_all_reports(
+        stats = text_splitter.split_all_reports(
             self.paths.merged_reports_path,
             self.paths.documents_dir,
             serialized_tables_dir
         )
         print(f"Chunked reports saved to {self.paths.documents_dir}")
+        return stats
 
     def create_vector_dbs(self):
         """Create vector databases from chunked reports."""
@@ -197,6 +198,7 @@ class Pipeline:
         vdb_ingestor = VectorDBIngestor()
         vdb_ingestor.process_reports(input_dir, output_dir)
         print(f"Vector databases created in {output_dir}")
+        return vdb_ingestor.last_report_metrics
     
     def create_bm25_db(self):
         """Create BM25 database from chunked reports."""
