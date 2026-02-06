@@ -9,7 +9,7 @@ from threading import Lock
 from typing import Dict, Any, Optional, Set
 
 from src.queue_handler import JobQueueHandler
-from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, JobCallback
+from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, CaseViewGenerateProcessor, JobCallback
 from src.settings import settings
 from src.storage_client import StorageClient
 
@@ -23,6 +23,7 @@ class DDKitWorker:
         self.queue_handler = JobQueueHandler()
         self.doc_processor = DocParseIndexProcessor()
         self.report_processor = ReportGenerateProcessor()
+        self.case_view_processor = CaseViewGenerateProcessor()
         self.running = False
         self.job_attempts: Dict[str, int] = {}
         self.job_attempts_lock = Lock()
@@ -103,12 +104,17 @@ class DDKitWorker:
             return self.queue_handler.dequeue_job("doc_parse_index", timeout=timeout)
         if self.mode == "report_generate":
             return self.queue_handler.dequeue_job("report_generate", timeout=timeout)
+        if self.mode == "case_view_generate":
+            return self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
 
-        # default: try doc_parse_index first, then report_generate
+        # default: try doc_parse_index first, then report_generate, then case_view_generate
         job_data = self.queue_handler.dequeue_job("doc_parse_index", timeout=timeout)
         if job_data:
             return job_data
-        return self.queue_handler.dequeue_job("report_generate", timeout=timeout)
+        job_data = self.queue_handler.dequeue_job("report_generate", timeout=timeout)
+        if job_data:
+            return job_data
+        return self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
 
     def _process_job(self, job_data: Dict[str, Any]):
         """Process a single job with retry logic."""
@@ -152,6 +158,8 @@ class DDKitWorker:
             return self.doc_processor.process_job(job_data)
         elif job_type == "report_generate":
             return self.report_processor.process_job(job_data)
+        elif job_type == "case_view_generate":
+            return self.case_view_processor.process_job(job_data)
         else:
             logger.error(f"Unknown job type: {job_type}")
             return False
@@ -175,6 +183,8 @@ class DDKitWorker:
         if job_type == "doc_parse_index":
             return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}:{job_data.get('doc_id')}"
         elif job_type == "report_generate":
+            return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}"
+        elif job_type == "case_view_generate":
             return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}"
         return None
 

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import tempfile
 import time
 import tarfile
@@ -7,10 +8,13 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 import requests
+from urllib.parse import quote
 from PyPDF2 import PdfReader
 
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
+from src.case_view_v2_generator import CaseViewV2Generator
+from src.pubmed_pipeline import PubMedIngestor
 from src.storage_client import StorageClient
 from src.settings import settings
 from src.ddkit_db import DDKitDB
@@ -697,6 +701,443 @@ class ReportGenerateProcessor:
         base_prefix = f"tenants/{tenant_id}/cases/{case_id}/documents/"
         keys = self.storage_client.list_objects(base_prefix)
         if not keys:
+            # Snapshot-only cases are valid: we can still generate a (partial) case view,
+            # and later enrichment (auto-attach / PubMed) can add documents.
+            logger.info("No document artifacts found under %s (continuing with empty corpus)", base_prefix)
+            chunks_dir = temp_path / "databases" / "chunked_reports"
+            vectors_dir = temp_path / "databases" / "vector_dbs"
+            chunks_dir.mkdir(parents=True, exist_ok=True)
+            vectors_dir.mkdir(parents=True, exist_ok=True)
+            return True
+        logger.info("Found %d artifacts under %s", len(keys), base_prefix)
+
+        chunks_dir = temp_path / "databases" / "chunked_reports"
+        vectors_dir = temp_path / "databases" / "vector_dbs"
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        vectors_dir.mkdir(parents=True, exist_ok=True)
+
+        chunk_count = 0
+        vector_count = 0
+        for key in keys:
+            if "/chunks/" in key and key.endswith("chunks_bundle.tar.gz"):
+                bundle_path = chunks_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, bundle_path):
+                    logger.error(f"Failed to download chunk bundle {key}")
+                    return False
+                try:
+                    with tarfile.open(bundle_path, "r:gz") as tar:
+                        members = [m for m in tar.getmembers() if m.name.endswith(".json")]
+                        tar.extractall(path=chunks_dir)
+                    chunk_count += len(members)
+                except Exception as exc:
+                    logger.error(f"Failed to extract chunk bundle {key}: {exc}")
+                    return False
+                continue
+            if "/chunks/" in key and key.endswith(".json"):
+                if key.endswith("manifest.json"):
+                    continue
+                local_path = chunks_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.error(f"Failed to download chunk {key}")
+                    return False
+                chunk_count += 1
+            if "/vectors/" in key and key.endswith(".faiss"):
+                local_path = vectors_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.error(f"Failed to download vector {key}")
+                    return False
+                vector_count += 1
+        logger.info("Downloaded artifacts: chunks=%d vectors=%d", chunk_count, vector_count)
+        return True
+
+
+class CaseViewGenerateProcessor:
+    """Processor for case_view_generate jobs."""
+
+    def __init__(self):
+        self.storage_client = StorageClient()
+        self.ddkit_db = DDKitDB()
+
+    def _gateway_base_url(self) -> str:
+        """
+        Base URL for the Go API gateway used for auto-attach of missing sources.
+
+        In docker compose, the worker connects via host.docker.internal:8085 (published port).
+        """
+        base = (
+            os.getenv("DDKIT_GATEWAY_BASE_URL")
+            or os.getenv("DDKIT_API_BASE_URL")
+            or os.getenv("DDKIT_BASE_URL")
+            or "http://host.docker.internal:8085"
+        )
+        return base.rstrip("/")
+
+    def _attach_sources(self, case_id: str, sources: list[dict[str, Any]], force: bool = False) -> list[str]:
+        """
+        Calls POST /v1/cases/{caseId}/sources:attach and returns list of created/queued doc_ids.
+        """
+        if not sources:
+            return []
+        url = f"{self._gateway_base_url()}/v1/cases/{case_id}/sources:attach"
+        payload = {"sources": sources, "force": bool(force)}
+        resp = requests.post(url, json=payload, timeout=60)
+        resp.raise_for_status()
+        data = resp.json() or {}
+        doc_ids: list[str] = []
+        for it in data.get("results") or []:
+            if isinstance(it, dict) and it.get("document_id"):
+                doc_ids.append(str(it["document_id"]))
+        return doc_ids
+
+    def _wait_for_documents_indexed(self, doc_ids: list[str], deadline: Optional[float]) -> None:
+        """
+        Wait until doc_fetch_render -> doc_parse_index completes and the document becomes usable for retrieval.
+
+        We consider a document "ready" when:
+        - status in {"indexed", "parsed"} AND s3_parsed_json_key is present
+        """
+        if not doc_ids or not self.ddkit_db.is_configured():
+            return
+
+        remaining = set(str(d) for d in doc_ids if str(d).strip())
+        backoff_s = 2.0
+        while remaining:
+            if deadline is not None and time.time() > deadline:
+                raise TimeoutError(f"Timeout waiting for documents to index: {sorted(remaining)[:5]}")
+
+            done: set[str] = set()
+            for doc_id in list(remaining):
+                row = self.ddkit_db.get_document(doc_id)
+                if not row:
+                    continue
+                status = str(row.get("status") or "").lower()
+                parsed_key = row.get("s3_parsed_json_key")
+                if status == "failed":
+                    msg = row.get("error_message") or "unknown"
+                    logger.warning("Document failed during fetch/index: doc=%s err=%s", doc_id, msg)
+                    done.add(doc_id)  # don't block case view generation forever
+                    continue
+                if status in {"indexed", "parsed"} and parsed_key:
+                    done.add(doc_id)
+
+            remaining -= done
+            if remaining:
+                time.sleep(backoff_s)
+                backoff_s = min(backoff_s * 1.2, 8.0)
+
+    def _ensure_min_case_corpus(
+        self,
+        tenant_id: str,
+        case_id: str,
+        inn: str,
+        deadline: Optional[float],
+        snapshot: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Minimal auto-attach to make CaseView v2 usable even when the case starts with only
+        a snapshot and no attached documents.
+
+        What we try to ensure:
+        - US: openFDA label + openFDA drugsfda (approval metadata)
+        - Clinical: 1-2 CTGov registry documents
+        - EU: best-effort (SmPC/PIL links if available)
+        - RU: instruction PDF if a link exists in the frontend snapshot
+        """
+        inn = (inn or "").strip()
+        if not inn or not self.ddkit_db.is_configured():
+            return
+
+        docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
+        kinds = {str(d.get("doc_kind") or "").lower() for d in docs}
+
+        sources: list[dict[str, Any]] = []
+        snapshot = snapshot if isinstance(snapshot, dict) else None
+
+        def _collect_ru_instruction_links() -> list[str]:
+            if not snapshot:
+                return []
+            urls: list[str] = []
+            seeds = []
+            for key in ["ru_instruction_url", "ru_instruction", "instruction_url", "instructionUrl"]:
+                val = snapshot.get(key)
+                if isinstance(val, str):
+                    seeds.append(val)
+                elif isinstance(val, list):
+                    seeds.extend([v for v in val if isinstance(v, str)])
+            ru_sections = snapshot.get("ruSections") or {}
+            reg = ru_sections.get("regulatory") or {}
+            items = reg.get("items") or []
+            for item in items if isinstance(items, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                links = item.get("links") or {}
+                if not isinstance(links, dict):
+                    continue
+                for key, value in links.items():
+                    values = value if isinstance(value, list) else [value]
+                    for v in values:
+                        if not isinstance(v, str):
+                            continue
+                        key_l = str(key).lower()
+                        url_l = v.lower()
+                        if any(tok in key_l for tok in ["instruction", "instr", "leaflet", "pil"]):
+                            seeds.append(v)
+                        elif any(tok in url_l for tok in ["instruction", "instr", "leaflet"]):
+                            seeds.append(v)
+            for v in seeds:
+                v = v.strip()
+                if v and v.startswith("http") and v not in urls:
+                    urls.append(v)
+            return urls
+
+        # US regulatory documents
+        if "label" not in kinds:
+            sources.append(
+                {
+                    "url": f"https://api.fda.gov/drug/label.json?searchTerm={quote(inn)}",
+                    "doc_kind": "label",
+                    "title": f"FDA label (openFDA): {inn}",
+                    "region": "us",
+                }
+            )
+        if "us_fda" not in kinds:
+            # Drugs@FDA dataset usually contains approval/application metadata that label JSON may not have.
+            sources.append(
+                {
+                    "url": f"https://api.fda.gov/drug/drugsfda.json?search=openfda.generic_name:{quote(inn)}&limit=5",
+                    "doc_kind": "us_fda",
+                    "title": f"FDA Drugs@FDA (openFDA): {inn}",
+                    "region": "us",
+                }
+            )
+
+        # EU best-effort: if the API gateway can provide direct SmPC/PIL URLs, attach them.
+        if not ({"smpc", "pil", "assessment_report", "epar"} & kinds):
+            try:
+                eu_url = f"{self._gateway_base_url()}/api/v1/regulation/eu?inn={quote(inn)}"
+                eu_resp = requests.get(eu_url, timeout=60)
+                eu_resp.raise_for_status()
+                eu_data = (
+                    eu_resp.json()
+                    if eu_resp.headers.get("content-type", "").startswith("application/json")
+                    else json.loads(eu_resp.text)
+                )
+                eu_auth = eu_data.get("eu_authorization") or {}
+                if isinstance(eu_auth, dict):
+                    if eu_auth.get("smpc_url"):
+                        sources.append({"url": eu_auth["smpc_url"], "doc_kind": "smpc", "title": f"EU SmPC: {inn}", "region": "eu"})
+                    if eu_auth.get("pil_url"):
+                        sources.append({"url": eu_auth["pil_url"], "doc_kind": "pil", "title": f"EU PIL: {inn}", "region": "eu"})
+                    if eu_auth.get("epar_url"):
+                        # Some procedures return only an overview link; still useful as a UI evidence target.
+                        sources.append({"url": eu_auth["epar_url"], "doc_kind": "epar", "title": f"EU EPAR/Overview: {inn}", "region": "eu"})
+                ema = eu_data.get("ema_centralized") or {}
+                if isinstance(ema, dict):
+                    for link in ema.get("smcp_links") or []:
+                        if link:
+                            sources.append({"url": link, "doc_kind": "smpc", "title": f"EU SmPC (EMA): {inn}", "region": "eu"})
+                    for link in ema.get("pil_links") or []:
+                        if link:
+                            sources.append({"url": link, "doc_kind": "pil", "title": f"EU PIL (EMA): {inn}", "region": "eu"})
+                    if ema.get("epar_url"):
+                        sources.append({"url": ema["epar_url"], "doc_kind": "epar", "title": f"EU EPAR (EMA): {inn}", "region": "eu"})
+            except Exception as exc:
+                logger.info("EU regulatory preflight skipped: %s", exc)
+
+        # RU instruction (if snapshot contains a link)
+        if "ru_instruction" not in kinds:
+            ru_links = _collect_ru_instruction_links()
+            if ru_links:
+                for link in ru_links[:2]:
+                    sources.append(
+                        {
+                            "url": link,
+                            "doc_kind": "ru_instruction",
+                            "title": f"RU instruction: {inn}",
+                            "region": "ru",
+                        }
+                    )
+
+        # Clinical: attach 1-2 CTGov studies (registry page)
+        if not any(k.startswith("ctgov") for k in kinds):
+            try:
+                clin_url = f"{self._gateway_base_url()}/v1/aggregate/clinical?inn={quote(inn)}&regions=us&limit=2&offset=0"
+                r = requests.get(clin_url, timeout=60)
+                r.raise_for_status()
+                body = r.json() if r.headers.get("content-type", "").startswith("application/json") else json.loads(r.text)
+                items = body.get("items") or []
+                if isinstance(items, list):
+                    for item in items[:2]:
+                        if not isinstance(item, dict):
+                            continue
+                        trial_id = str(item.get("trial_id") or "").strip()
+                        title = str(item.get("title") or "").strip()
+                        links = item.get("links") or {}
+                        if not isinstance(links, dict):
+                            continue
+                        registry = links.get("registry")
+                        if not registry:
+                            continue
+                        label = title or trial_id or "CTGov study"
+                        sources.append(
+                            {
+                                "url": registry,
+                                "doc_kind": "ctgov",
+                                "title": f"CTGov: {label}",
+                                "region": "us",
+                            }
+                        )
+            except Exception as exc:
+                logger.info("CTGov preflight skipped: %s", exc)
+
+        if not sources:
+            return
+
+        doc_ids = self._attach_sources(case_id=case_id, sources=sources, force=False)
+        if doc_ids:
+            logger.info("Auto-attached %d sources for case=%s", len(doc_ids), case_id)
+            self._wait_for_documents_indexed(doc_ids=doc_ids, deadline=deadline)
+
+    def process_job(self, job_data: Dict[str, Any]) -> bool:
+        tenant_id = job_data["tenant_id"]
+        case_id = job_data["case_id"]
+        job_id = job_data.get("job_id")
+        query = job_data.get("query") or job_data.get("inn") or ""
+        inn = job_data.get("inn") or ""
+        use_web = bool(job_data.get("use_web", True))
+        use_snapshot = bool(job_data.get("use_snapshot", True))
+        snapshot = job_data.get("snapshot")
+
+        logger.info(f"Processing case_view_generate job: tenant={tenant_id}, case={case_id}")
+
+        try:
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_running(job_id)
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+
+                deadline = time.time() + settings.job_timeout_seconds
+                logger.info("Case view generation timeout set to %ds", settings.job_timeout_seconds)
+
+                if not self._download_case_artifacts(temp_path, tenant_id, case_id):
+                    logger.error(f"Failed to download case artifacts for case {case_id}")
+                    return False
+
+                documents_dir = temp_path / "databases" / "chunked_reports"
+                vector_dir = temp_path / "databases" / "vector_dbs"
+
+                # Preflight: auto-attach a minimal set of authoritative sources (label/CTGov/etc)
+                # so regulatory + clinical sections are not empty in snapshot-only cases.
+                if use_web and (inn or query):
+                    try:
+                        self._ensure_min_case_corpus(
+                            tenant_id=tenant_id,
+                            case_id=case_id,
+                            inn=(inn or query),
+                            deadline=deadline,
+                            snapshot=snapshot if use_snapshot else None,
+                        )
+                        # Re-download to include newly parsed/indexed docs (chunks + vectors).
+                        self._download_case_artifacts(temp_path, tenant_id, case_id)
+                    except Exception as exc:
+                        logger.warning("Preflight auto-attach failed (continuing): %s", exc)
+
+                # PubMed: search -> rerank -> attach -> parse (text ingest) to enrich the case corpus.
+                if use_web and (inn or query):
+                    enabled_raw = os.getenv("DDKIT_PUBMED_ENABLED", "1").strip().lower()
+                    pubmed_enabled = enabled_raw not in {"0", "false", "no", "off"}
+                    if pubmed_enabled:
+                        try:
+                            retmax = int(os.getenv("DDKIT_PUBMED_RETMAX", "80"))
+                        except ValueError:
+                            retmax = 80
+                        try:
+                            top_n = int(os.getenv("DDKIT_PUBMED_ATTACH_TOP_N", "12"))
+                        except ValueError:
+                            top_n = 12
+                        top_n = max(0, min(top_n, 30))
+                        if top_n > 0:
+                            try:
+                                ingestor = PubMedIngestor(storage=self.storage_client, db=self.ddkit_db)
+                                pubmed_res, _ = ingestor.ingest_for_inn(
+                                    tenant_id=tenant_id,
+                                    case_id=case_id,
+                                    inn=(inn or query),
+                                    documents_dir=documents_dir,
+                                    vector_dir=vector_dir,
+                                    retmax=retmax,
+                                    attach_top_n=top_n,
+                                    deadline=deadline,
+                                )
+                                logger.info(
+                                    "PubMed ingestion done: attached=%d skipped=%d pmids=%d",
+                                    pubmed_res.attached_docs,
+                                    pubmed_res.skipped_existing,
+                                    pubmed_res.fetched_pmids,
+                                )
+                            except Exception as exc:
+                                logger.warning("PubMed ingestion failed (skipping): %s", exc)
+
+                output_path = temp_path / "case_view_v2.json"
+                generator = CaseViewV2Generator(
+                    documents_dir=documents_dir,
+                    vector_db_dir=vector_dir,
+                    tenant_id=tenant_id,
+                    case_id=case_id
+                )
+                try:
+                    payload = generator.generate_case_view(
+                        snapshot=snapshot if use_snapshot else None,
+                        query=query,
+                        inn=inn,
+                        use_web=use_web,
+                        use_snapshot=use_snapshot,
+                        deadline=deadline
+                    )
+                except TimeoutError as err:
+                    logger.error(f"Case view generation timed out: {err}")
+                    if job_id and self.ddkit_db.is_configured():
+                        self.ddkit_db.mark_job_failed(job_id, str(err))
+                    return False
+
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+
+                s3_key = f"tenants/{tenant_id}/cases/{case_id}/case-view/case_view_v2.json"
+                if not self.storage_client.upload_file(s3_key, output_path):
+                    logger.error(f"Failed to upload case view for case {case_id}")
+                    return False
+
+                if self.ddkit_db.is_configured():
+                    self.ddkit_db.upsert_case_view(
+                        case_id=case_id,
+                        tenant_id=tenant_id,
+                        inn=inn,
+                        payload=payload,
+                        schema_version=payload.get("schema_version", "2.0"),
+                        source_stats=payload.get("source_stats")
+                    )
+
+                if job_id and self.ddkit_db.is_configured():
+                    self.ddkit_db.mark_job_succeeded(job_id)
+
+                job_data["artifacts"] = {"s3_case_view_key": s3_key}
+                job_data["status"] = "succeeded"
+                logger.info(f"Successfully generated case view for case {case_id}")
+                return True
+
+        except Exception as e:
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_failed(job_id, str(e))
+            job_data["status"] = "failed"
+            logger.error(f"Error processing case_view_generate job for case {case_id}: {e}")
+            return False
+
+    def _download_case_artifacts(self, temp_path: Path, tenant_id: str, case_id: str) -> bool:
+        base_prefix = f"tenants/{tenant_id}/cases/{case_id}/documents/"
+        keys = self.storage_client.list_objects(base_prefix)
+        if not keys:
             logger.error(f"No artifacts found under {base_prefix}")
             return False
         logger.info("Found %d artifacts under %s", len(keys), base_prefix)
@@ -787,5 +1228,3 @@ class JobCallback:
         except Exception as e:
             logger.error(f"Failed to send callback: {e}")
             return None
-
-

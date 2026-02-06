@@ -17,6 +17,7 @@ class JobQueueHandler:
         self.redis_client = redis.from_url(settings.redis_url)
         self.doc_parse_index_queue = settings.queue_doc_parse_index
         self.report_generate_queue = settings.queue_report_generate
+        self.case_view_generate_queue = settings.queue_case_view_generate
 
     def _get_queue_name(self, job_type: str) -> str:
         """Get the appropriate queue name for job type."""
@@ -24,6 +25,8 @@ class JobQueueHandler:
             return self.doc_parse_index_queue
         elif job_type == "report_generate":
             return self.report_generate_queue
+        elif job_type == "case_view_generate":
+            return self.case_view_generate_queue
         else:
             raise ValueError(f"Unknown job type: {job_type}")
 

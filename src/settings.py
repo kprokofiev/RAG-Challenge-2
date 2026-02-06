@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 from pydantic import validator, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class WorkerSettings(BaseSettings):
@@ -24,6 +24,7 @@ class WorkerSettings(BaseSettings):
     # Queue settings (optional with defaults)
     queue_doc_parse_index: str = Field("ddkit:doc_parse_index", env="QUEUE_DOC_PARSE_INDEX")
     queue_report_generate: str = Field("ddkit:report_generate", env="QUEUE_REPORT_GENERATE")
+    queue_case_view_generate: str = Field("ddkit:case_view_generate", env="QUEUE_CASE_VIEW_GENERATE")
 
     # Optional settings
     log_level: str = Field("INFO", env="LOG_LEVEL")
@@ -33,7 +34,7 @@ class WorkerSettings(BaseSettings):
     # Job processing settings
     max_job_attempts: int = Field(3, env="MAX_JOB_ATTEMPTS")
     job_timeout_seconds: int = Field(3600, env="JOB_TIMEOUT_SECONDS")  # 1 hour default
-    worker_mode: str = Field("all", env="WORKER_MODE")  # all|doc_parse_index|report_generate
+    worker_mode: str = Field("all", env="WORKER_MODE")  # all|doc_parse_index|report_generate|case_view_generate
     worker_concurrency: int = Field(1, env="WORKER_CONCURRENCY")
     worker_poll_timeout: int = Field(2, env="WORKER_POLL_TIMEOUT")
 
@@ -81,14 +82,15 @@ class WorkerSettings(BaseSettings):
 
     @validator('worker_mode')
     def validate_worker_mode(cls, v):
-        allowed = {"all", "doc_parse_index", "report_generate"}
+        allowed = {"all", "doc_parse_index", "report_generate", "case_view_generate"}
         if v not in allowed:
             raise ValueError(f"WORKER_MODE must be one of {sorted(allowed)}")
         return v
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # Pydantic v2 settings config.
+    # extra="ignore" is important because our shared .env files often contain keys for
+    # other services (e.g. GEMINI_API_KEY, JINA_API_KEY) and we don't want the worker to fail.
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 
 # Global settings instance

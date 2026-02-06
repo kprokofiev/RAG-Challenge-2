@@ -1,0 +1,604 @@
+{
+  "schema_version": "2.0",
+  "case_id": "e2e",
+  "query": "metformin",
+  "inn_normalized": "metformin",
+  "generated_at": "2026-02-03T23:29:24Z",
+  "passport": {
+    "inn": {
+      "label": "МНН",
+      "value": "metformin",
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$.inn"
+        }
+      ]
+    },
+    "trade_names": {
+      "label": "ТН",
+      "value": {
+        "ru": [
+          "ДемоТН"
+        ],
+        "eu": [],
+        "us": []
+      },
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$."
+        }
+      ]
+    },
+    "registered_in": {
+      "label": "Где зарегистрирован",
+      "value": {
+        "ru": {
+          "status": "registered",
+          "countries": [
+            "RU"
+          ]
+        },
+        "eu": {
+          "status": "registered",
+          "countries": [
+            "DE",
+            "FR"
+          ]
+        },
+        "us": {
+          "status": "registered",
+          "countries": [
+            "US"
+          ]
+        }
+      },
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$."
+        }
+      ]
+    },
+    "registration_holders": {
+      "label": "Владельцы регистрации",
+      "value": {
+        "ru": [
+          "ООО Демо Холдер"
+        ],
+        "eu": [],
+        "us": []
+      },
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$."
+        }
+      ]
+    },
+    "dosage_forms": {
+      "label": "Форма / путь введения",
+      "value": {
+        "ru": [
+          "tablet"
+        ],
+        "eu": [],
+        "us": []
+      },
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$."
+        }
+      ]
+    },
+    "dosages": {
+      "label": "Дозировки (ключевые)",
+      "value": {
+        "ru": [
+          "500 mg"
+        ],
+        "eu": [],
+        "us": []
+      },
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$."
+        }
+      ]
+    },
+    "updated_at": {
+      "label": "Обновлено",
+      "value": "2026-02-03T23:29:13Z",
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$.generatedAt"
+        }
+      ]
+    },
+    "fda_approval": {
+      "label": "Одобрение FDA",
+      "value": "2026-02-03 – approved (demo snapshot)",
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$.fda_approval"
+        }
+      ]
+    },
+    "chemical_formula": {
+      "label": "Химическая формула",
+      "value": "C4H11N5",
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$.chemical_formula"
+        }
+      ]
+    },
+    "drug_class": {
+      "label": "Относится к классу (класс/MoA)",
+      "value": "demo class / demo MoA",
+      "citations": [
+        {
+          "structured_source": "frontend_snapshot",
+          "json_path": "$.drug_class"
+        }
+      ]
+    }
+  },
+  "sections": {
+    "brief": {
+      "summary_text": "МНН: metformin\nРегистрация: {'ru': {'status': 'registered', 'countries': ['RU']}, 'eu': {'status': 'registered', 'countries': ['DE', 'FR']}, 'us': {'status': 'registered', 'countries': ['US']}}\nПатентная защита до: 2030",
+      "key_facts": [
+        {
+          "label": "Где зарегистрирован",
+          "value": {
+            "ru": {
+              "status": "registered",
+              "countries": [
+                "RU"
+              ]
+            },
+            "eu": {
+              "status": "registered",
+              "countries": [
+                "DE",
+                "FR"
+              ]
+            },
+            "us": {
+              "status": "registered",
+              "countries": [
+                "US"
+              ]
+            }
+          },
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$."
+            }
+          ]
+        },
+        {
+          "label": "Одобрение FDA",
+          "value": "2026-02-03 – approved (demo snapshot)",
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$.fda_approval"
+            }
+          ]
+        },
+        {
+          "label": "ТН",
+          "value": {
+            "ru": [
+              "ДемоТН"
+            ],
+            "eu": [],
+            "us": []
+          },
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$."
+            }
+          ]
+        },
+        {
+          "label": "Патентная стена: до какого года",
+          "value": "2030",
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$.ruSections.patents.patent_families[0]"
+            }
+          ]
+        },
+        {
+          "label": "Ключевое патентное семейство",
+          "value": {
+            "family_id": "DEMO-FAM-1",
+            "representative_doc": "US-DEMO-123",
+            "what_covers": [
+              "unknown"
+            ],
+            "summary": "active"
+          },
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$.ruSections.patents.patent_families[0]"
+            }
+          ]
+        },
+        {
+          "label": "Ключевое исследование",
+          "value": {
+            "trial_id": "RU-DEMO-TRIAL-1",
+            "title": "Demo RU trial (snapshot)",
+            "phase": "Phase 3",
+            "study_type": "randomized"
+          },
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$.ruSections.clinical.studies[0]"
+            }
+          ]
+        }
+      ]
+    },
+    "regulatory": {
+      "us": {},
+      "eu": {},
+      "ru": {
+        "entries": [
+          {
+            "reg_no": {
+              "label": "Рег. номер",
+              "value": "RU-DEMO-0001",
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "status": {
+              "label": "Статус",
+              "value": "registered",
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "holder": {
+              "label": "Держатель",
+              "value": "ООО Демо Холдер",
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "forms": {
+              "label": "Формы",
+              "value": [
+                "tablet"
+              ],
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "strengths": {
+              "label": "Дозировки",
+              "value": [
+                "500 mg"
+              ],
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "routes": {
+              "label": "Пути введения",
+              "value": [
+                "oral"
+              ],
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "authorized_presentations": {
+              "label": "Презентации",
+              "value": [],
+              "citations": [
+                {
+                  "structured_source": "frontend_snapshot",
+                  "json_path": "$.ruSections.regulatory.items[0]"
+                }
+              ]
+            },
+            "links": {}
+          }
+        ]
+      },
+      "instructions_highlights": []
+    },
+    "clinical": {
+      "global": {
+        "phase3": [],
+        "phase2": [],
+        "phase1": [],
+        "post_marketing": []
+      },
+      "ru": {
+        "phase3": [
+          {
+            "trial_id": "RU-DEMO-TRIAL-1",
+            "title": "Demo RU trial (snapshot)",
+            "phase": "Phase 3",
+            "study_type": "randomized",
+            "countries": [
+              "RU"
+            ],
+            "enrollment": "120",
+            "comparator": "placebo",
+            "regimen": "metformin 500 mg BID",
+            "status": "completed",
+            "efficacy_key_points": [
+              "Demo endpoint improved vs placebo (snapshot)"
+            ],
+            "conclusion": "Demo conclusion (snapshot)",
+            "where_conducted": "Russia",
+            "citations": [
+              {
+                "structured_source": "frontend_snapshot",
+                "json_path": "$.ruSections.clinical.studies[0]"
+              }
+            ]
+          }
+        ],
+        "phase2": [],
+        "phase1": [],
+        "post_marketing": []
+      },
+      "ongoing": {
+        "phase3": [],
+        "phase2": [],
+        "phase1": [],
+        "post_marketing": []
+      },
+      "pubmed": {
+        "comparative": [],
+        "abstracts": [],
+        "real_world": [
+          {
+            "title": "Metformin's impact on gut microbiome in type 2 diabetes",
+            "summary": "This study reveals that metformin significantly alters the gut microbiome, contributing to its therapeutic effects in type 2 diabetes. The altered microbiota improved glucose tolerance when transferred to germ-free mice.",
+            "citations": [
+              {
+                "doc_id": "ffbe557e-4f2d-4cb9-89a4-2c26b504130a",
+                "page": 1,
+                "snippet": "Title: Metformin alters the gut microbiome of individuals with treatment-naive type 2 diabetes, contributing to the therapeutic effects of the drug.\nMeta: Nature medicine | 2017 Jul | DOI: 10.1038/nm.4345\nAuthors: Wu H; Esteve E; Tremaroli V; Khan MT; Caesar R; Mannerås-Holm L; Ståhlman M; Olsson LM; Serino M; Planas-Fèlix M; Xifra G; Mercader JM; Torrents D; Burcelin R; Ricart W; Perkins R; Fe...",
+                "source_url": "https://pubmed.ncbi.nlm.nih.gov/28530702/"
+              }
+            ]
+          }
+        ],
+        "combination": [
+          {
+            "title": "Pioglitazone/metformin combination therapy for type 2 diabetes",
+            "summary": "A fixed-dose pioglitazone/metformin tablet is approved for type 2 diabetes treatment in patients with inadequate glycaemic control on monotherapy. Comparative trials show superior lipid control with this combination over others.",
+            "citations": [
+              {
+                "doc_id": "95678997-8501-4290-a494-0c5b37d4701f",
+                "page": 1,
+                "snippet": "Title: Pioglitazone/metformin.\nMeta: Drugs | 2006 | DOI: 10.2165/00003495-200666140-00007\nAuthors: Deeks ED; Scott LJ\nPublication types: Journal Article\n\nAbstract:\nA fixed-dose pioglitazone/metformin tablet is approved in the US and the EU for the treatment of adult patients with type 2 diabetes mellitus who currently have inadequate glycaemic control with metformin monotherapy. In the US, the ...",
+                "source_url": "https://pubmed.ncbi.nlm.nih.gov/17040116/"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "patents": {
+      "blocking_families": [
+        {
+          "family_id": "DEMO-FAM-1",
+          "representative_doc": "US-DEMO-123",
+          "summary": "active",
+          "coverage_type": [
+            "unknown"
+          ],
+          "countries": [
+            "US"
+          ],
+          "coverage_by_country": [
+            {
+              "country": "US",
+              "expires_at": "2030-01-01"
+            }
+          ],
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$.ruSections.patents.patent_families[0]"
+            }
+          ]
+        }
+      ],
+      "composition": [
+        {
+          "family_id": "DEMO-FAM-1",
+          "representative_doc": "US-DEMO-123",
+          "summary": "active",
+          "coverage_type": [
+            "unknown"
+          ],
+          "countries": [
+            "US"
+          ],
+          "coverage_by_country": [
+            {
+              "country": "US",
+              "expires_at": "2030-01-01"
+            }
+          ],
+          "citations": [
+            {
+              "structured_source": "frontend_snapshot",
+              "json_path": "$.ruSections.patents.patent_families[0]"
+            }
+          ]
+        }
+      ],
+      "treatment": [],
+      "synthesis": []
+    },
+    "synthesis": {
+      "synthesis_route": {
+        "steps": []
+      },
+      "treatment_method_from_patents": null
+    },
+    "sources": {
+      "documents": [
+        {
+          "doc_id": "95678997-8501-4290-a494-0c5b37d4701f",
+          "title": "Pioglitazone/metformin.",
+          "doc_kind": "publication",
+          "source_url": "https://pubmed.ncbi.nlm.nih.gov/17040116/",
+          "region": "global",
+          "date": null
+        },
+        {
+          "doc_id": "ffbe557e-4f2d-4cb9-89a4-2c26b504130a",
+          "title": "Metformin alters the gut microbiome of individuals with treatment-naive type 2 diabetes, contributing to the therapeutic effects of the drug.",
+          "doc_kind": "publication",
+          "source_url": "https://pubmed.ncbi.nlm.nih.gov/28530702/",
+          "region": "global",
+          "date": null
+        }
+      ],
+      "structured_sources": [
+        {
+          "source": "frontend_snapshot"
+        }
+      ],
+      "groups": {
+        "by_trial_id": {},
+        "by_family_id": {}
+      },
+      "filters": {
+        "by_kind": {
+          "publication": 2
+        },
+        "by_region": {
+          "global": 2
+        },
+        "by_year": {}
+      }
+    },
+    "unknowns": {
+      "gaps": [
+        {
+          "field": "regulatory.us",
+          "reason": "not found",
+          "needed_sources": [
+            "label",
+            "approval_letter",
+            "us_fda",
+            "complete_response_letter",
+            "anda_package"
+          ]
+        },
+        {
+          "field": "regulatory.eu",
+          "reason": "not found",
+          "needed_sources": [
+            "epar",
+            "smpc",
+            "pil",
+            "assessment_report"
+          ]
+        },
+        {
+          "field": "regulatory.instructions_highlights",
+          "reason": "not found",
+          "needed_sources": [
+            "ru_instruction",
+            "label",
+            "smpc",
+            "pil"
+          ]
+        },
+        {
+          "field": "clinical.global",
+          "reason": "not found",
+          "needed_sources": [
+            "ctgov*",
+            "ctis*",
+            "clinical_trials*",
+            "trial_registry"
+          ]
+        },
+        {
+          "field": "synthesis.synthesis_route",
+          "reason": "not found",
+          "needed_sources": [
+            "patent_pdf",
+            "patent"
+          ]
+        }
+      ]
+    }
+  },
+  "source_stats": {
+    "documents_total": 2,
+    "sources_total": 3,
+    "facts_total": 23,
+    "citations_total": 23,
+    "gaps_total": 5,
+    "ready_for_ui": true,
+    "quality_gates": {
+      "passport_min_fields": {
+        "required": 5,
+        "present": 7,
+        "passed": true
+      },
+      "patents_blocking_families": {
+        "required": 1,
+        "present": 1,
+        "passed": true
+      },
+      "clinical_trial_complete": {
+        "required": 1,
+        "present": 1,
+        "passed": true
+      },
+      "facts_have_citations": {
+        "required": 0,
+        "present": 0,
+        "passed": true
+      }
+    }
+  }
+}

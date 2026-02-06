@@ -197,3 +197,26 @@ class VectorDBIngestor:
             self.last_report_metrics.append(metrics)
 
         print(f"Processed {len(all_report_paths)} reports")
+
+    def process_single_report(self, report_path: Path, output_dir: Path) -> dict:
+        """
+        Process a single chunked report JSON and write its FAISS index to output_dir.
+
+        Useful for on-the-fly ingestion of extra documents (e.g., PubMed abstracts) without
+        re-embedding the full case corpus.
+        """
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "r", encoding="utf-8") as f:
+            report_data = json.load(f)
+        self._reset_embedding_metrics()
+        index = self._process_report(report_data)
+        sha1_name = report_data.get("metainfo", {}).get("sha1_name") or report_path.stem
+        faiss_file_path = output_dir / f"{sha1_name}.faiss"
+        write_start = time.perf_counter()
+        faiss.write_index(index, str(faiss_file_path))
+        write_ms = (time.perf_counter() - write_start) * 1000
+        metrics = dict(self.last_metrics)
+        metrics["faiss_write_ms"] = write_ms
+        metrics["doc_name"] = report_path.name
+        self.last_report_metrics = [metrics]
+        return metrics

@@ -33,6 +33,9 @@ services:
 
   rag-worker:
     build: .
+    env_file:
+      # Reuse the main stack env (contains PUBMED_API_KEY, OPENAI_API_KEY, etc.)
+      - ../../pharm_search/.env
     environment:
       # Required
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -78,6 +81,8 @@ services:
 
   rag-worker-index:
     build: .
+    env_file:
+      - ../../pharm_search/.env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=redis://host.docker.internal:6379
@@ -116,6 +121,8 @@ services:
 
   rag-worker-report:
     build: .
+    env_file:
+      - ../../pharm_search/.env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=redis://host.docker.internal:6379
@@ -155,5 +162,3 @@ services:
 volumes:
   redis_data:
   minio_data:
-
-

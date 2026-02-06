@@ -186,6 +186,7 @@ def health_check(format):
     try:
         worker_instance = DDKitWorker()
         health_status = worker_instance.check_health()
+        overall_healthy = bool(health_status.get("healthy", False))
 
         if format == 'json':
             click.echo(json.dumps(health_status, indent=2))
@@ -193,7 +194,6 @@ def health_check(format):
             click.echo("DD Kit RAG Worker Health Check")
             click.echo("=" * 40)
 
-            overall_healthy = health_status.get("healthy", False)
             click.echo(f"Overall Status: {'✓ HEALTHY' if overall_healthy else '✗ UNHEALTHY'}")
 
             for check_name, check_data in health_status.get("checks", {}).items():
