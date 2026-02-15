@@ -81,6 +81,8 @@ services:
 
   rag-worker-index:
     build: .
+    deploy:
+      replicas: 4
     env_file:
       - ../../pharm_search/.env
     environment:
@@ -133,11 +135,13 @@ services:
       - STORAGE_BUCKET_NAME=ddkit
       - STORAGE_USE_SSL=false
       - WORKER_MODE=report_generate
-      - WORKER_CONCURRENCY=2
+      - WORKER_CONCURRENCY=1
       - DDKIT_LLM_TIMEOUT_SECONDS=120
-      - JOB_TIMEOUT_SECONDS=900
-      - EMBEDDINGS_BATCH_SIZE=128
-      - EMBEDDINGS_MAX_CONCURRENCY=2
+      - JOB_TIMEOUT_SECONDS=1800
+      - EMBEDDINGS_BATCH_SIZE=64
+      - EMBEDDINGS_MAX_CONCURRENCY=1
+      - DDKIT_ANSWER_MODEL=gpt-4o-mini
+      - DDKIT_LLM_REQUEST_DELAY_MS=500
       - CHUNK_SIZE_TOKENS=800
       - CHUNK_OVERLAP_TOKENS=100
       - CHUNK_DEDUP=true

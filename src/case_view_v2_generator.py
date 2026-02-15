@@ -4,6 +4,7 @@ import os
 import time
 import inspect
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -15,6 +16,7 @@ from src.case_view_schemas import (
     PatentFamilyInsightExtraction,
     PublicationsExtraction,
     RegulatoryMarketExtraction,
+    RuRegulatoryExtraction,
     SynthesisExtraction,
     TrialsExtraction,
 )
@@ -400,8 +402,13 @@ class CaseViewV2Generator:
             }
             key_facts.append(self._fact("Ключевое исследование", value, (best_trial.get("citations") or [])[:3]))
 
-        summary_lines = self._build_summary_lines(passport, regulatory, clinical, patents, synthesis)
-        summary_text = "\n".join(summary_lines[:6]) if summary_lines else ""
+        # Generate narrative summary using LLM instead of simple concatenation
+        summary_text = self._generate_narrative_summary(passport, regulatory, clinical, patents, synthesis)
+
+        if not summary_text or len(summary_text.strip()) < 50:
+            # Fallback to simple lines if LLM fails
+            summary_lines = self._build_summary_lines(passport, regulatory, clinical, patents, synthesis)
+            summary_text = "\n".join(summary_lines[:6]) if summary_lines else ""
 
         if not summary_text:
             self._add_unknown(unknowns, "brief.summary_text", "not enough evidence", ["structured_sources"])
@@ -579,7 +586,26 @@ class CaseViewV2Generator:
         )
 
         # Prefer primary regulatory docs and authoritative pages
-        doc_kinds = ["label", "approval_letter", "us_fda", "smpc", "epar", "assessment_report", "review_article", "moa_overview", "scientific_pdf"]
+        doc_kinds = [
+            "label",
+            "approval_letter",
+            "us_fda",
+            "smpc",
+            "epar",
+            "assessment_report",
+            "review_article",
+            "moa_overview",
+            "scientific_pdf",
+            "scientific_article",
+            "publication",
+            "journal_page",
+            "drug_monograph",
+            "company_pdf",
+            "grls_card",
+            "grls",
+            "ru_instruction",
+            "eaeu_document",
+        ]
 
         extracted, cand_map = self._extract_structured_from_docs(
             task=task,
@@ -716,6 +742,117 @@ class CaseViewV2Generator:
             if not has_any_market_fact("eu"):
                 self._add_unknown(unknowns, "regulatory.eu", "not found", eu_doc_kinds)
 
+        # RU (GRLS / EAEU)
+        ru_task = (
+            "Extract RU regulatory facts for the drug case view (GRLS / EAEU registry).\n"
+            f"INN: {inn_normalized}\n"
+            "Return a list of registration entries. For EACH entry provide:\n"
+            "- trade_name (brand/trade name)\n"
+            "- holder (marketing authorization holder)\n"
+            "- reg_number (registration number)\n"
+            "- reg_date (registration date if present)\n"
+            "- dosage_forms (dosage forms/strengths as stated)\n"
+            "- status (active/suspended/withdrawn/expired if stated)\n"
+            "Use only evidence_ids from candidates. Leave empty if not supported."
+        )
+        ru_doc_kinds = ["grls_card", "grls", "ru_instruction", "ru_quality_letter", "eaeu_document"]
+        ru_extracted, ru_cands = self._extract_structured_from_docs(
+            task=ru_task,
+            response_format=RuRegulatoryExtraction,
+            doc_map=doc_map,
+            doc_kinds=ru_doc_kinds,
+            top_n=20,
+            deadline=deadline,
+        )
+        if ru_extracted and ru_cands:
+            entries_out: List[Dict[str, Any]] = []
+            for entry in ru_extracted.get("entries") or []:
+                if not isinstance(entry, dict):
+                    continue
+                out_entry: Dict[str, Any] = {}
+                tn = self._value_to_fact("Торговое название", entry.get("trade_name"), ru_cands, doc_map)
+                holder = self._value_to_fact("Держатель регистрации", entry.get("holder"), ru_cands, doc_map)
+                reg_no = self._value_to_fact("Рег. номер", entry.get("reg_number"), ru_cands, doc_map)
+                reg_date = self._value_to_fact("Дата регистрации", entry.get("reg_date"), ru_cands, doc_map)
+                forms = self._value_to_fact("Формы/дозировки", entry.get("dosage_forms"), ru_cands, doc_map)
+                status = self._value_to_fact("Статус", entry.get("status"), ru_cands, doc_map)
+                if tn:
+                    out_entry["trade_name"] = tn
+                if holder:
+                    out_entry["holder"] = holder
+                if reg_no:
+                    out_entry["reg_no"] = reg_no
+                    out_entry["reg_number"] = reg_no
+                if reg_date:
+                    out_entry["reg_date"] = reg_date
+                if forms:
+                    out_entry["forms"] = forms
+                    out_entry["dosage_forms"] = forms
+                if status:
+                    out_entry["status"] = status
+                if out_entry:
+                    entries_out.append(out_entry)
+
+            if entries_out:
+                def fact_value(fact: Any) -> Optional[str]:
+                    if isinstance(fact, dict):
+                        val = fact.get("value")
+                        if isinstance(val, str):
+                            return val.strip()
+                    return None
+
+                def entry_key(entry: Dict[str, Any]) -> str:
+                    for key in ("reg_no", "reg_number"):
+                        v = fact_value(entry.get(key))
+                        if v:
+                            return v.lower()
+                    v = fact_value(entry.get("trade_name"))
+                    if v:
+                        return v.lower()
+                    return ""
+
+                def merge_entry(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+                    out = dict(existing)
+                    for field in ("trade_name", "holder", "reg_no", "reg_number", "reg_date", "forms", "dosage_forms", "status"):
+                        inc = incoming.get(field)
+                        if inc is None:
+                            continue
+                        if self._fact_has_non_snapshot_citations(inc) or not self._fact_has_citations(out.get(field)):
+                            out[field] = inc
+                    return out
+
+                existing_entries = _as_list((regulatory.get("ru") or {}).get("entries"))
+                merged_entries: List[Dict[str, Any]] = []
+                seen = {}
+                for entry in existing_entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    key = entry_key(entry)
+                    if key:
+                        seen[key] = entry
+                    merged_entries.append(entry)
+
+                for entry in entries_out:
+                    key = entry_key(entry)
+                    if key and key in seen:
+                        for idx, existing in enumerate(merged_entries):
+                            if entry_key(existing) == key:
+                                merged_entries[idx] = merge_entry(existing, entry)
+                                break
+                    else:
+                        merged_entries.append(entry)
+                        if key:
+                            seen[key] = entry
+
+                regulatory.setdefault("ru", {})
+                regulatory["ru"]["entries"] = merged_entries
+            else:
+                if not (regulatory.get("ru") or {}).get("entries"):
+                    self._add_unknown(unknowns, "regulatory.ru.entries", "not found", ru_doc_kinds)
+        else:
+            if not (regulatory.get("ru") or {}).get("entries"):
+                self._add_unknown(unknowns, "regulatory.ru.entries", "not found", ru_doc_kinds)
+
         # Instructions highlights (RU instruction / SmPC / label)
         instr_task = (
             "Extract instruction/label highlights for the drug case view.\n"
@@ -728,7 +865,7 @@ class CaseViewV2Generator:
             "- 2-4 important restrictions / warnings\n"
             "Do NOT include a separate 'safety monitoring' block."
         )
-        instr_doc_kinds = ["ru_instruction", "label", "smpc", "pil"]
+        instr_doc_kinds = ["ru_instruction", "grls_card", "grls", "label", "smpc", "pil"]
         instr_extracted, instr_cands = self._extract_structured_from_docs(
             task=instr_task,
             response_format=InstructionHighlightsExtraction,
@@ -862,6 +999,32 @@ class CaseViewV2Generator:
         if any(h_map.values()) and h_cits:
             passport["registration_holders"] = self._fact("Владельцы регистрации", h_map, self._dedupe_citations(h_cits)[:5])
 
+        # Registered in: derive from available regulatory facts if missing.
+        if not self._fact_has_citations(passport.get("registered_in")):
+            reg_map: Dict[str, str] = {}
+            reg_cits: List[Dict[str, Any]] = []
+
+            if isinstance(ru, dict) and (ru.get("entries") or []):
+                reg_map["ru"] = "active"
+                for entry in ru.get("entries") or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    for key in ("trade_name", "holder", "reg_no", "reg_number", "forms", "dosage_forms", "status"):
+                        reg_cits.extend(fact_citations(entry.get(key)))
+
+            for market in ("us", "eu"):
+                block = regulatory.get(market) or {}
+                if not isinstance(block, dict):
+                    continue
+                if any(self._fact_has_citations(v) for v in block.values() if isinstance(v, dict)):
+                    reg_map[market] = "active"
+                    for v in block.values():
+                        if isinstance(v, dict):
+                            reg_cits.extend(fact_citations(v))
+
+            if reg_map and reg_cits:
+                passport["registered_in"] = self._fact("Где зарегистрирован", reg_map, self._dedupe_citations(reg_cits)[:5])
+
         # FDA approval: reuse US status if it contains approval date/summary.
         if not self._fact_has_citations(passport.get("fda_approval")):
             us = regulatory.get("us") or {}
@@ -917,6 +1080,7 @@ class CaseViewV2Generator:
             "ctis*",
             "clinical_trials*",
             "trial_registry",
+            "ru_clinical_permission",
         ]
         trials_extracted, trials_cands = self._extract_structured_from_docs(
             task=trials_task,
@@ -1010,29 +1174,29 @@ class CaseViewV2Generator:
             self._add_unknown(unknowns, "patents.blocking_families", "not found", ["ru_patent_fips", "patent_pdf"])
             return patents
 
-        # Normalize legacy snapshot shape: coverage_by_country -> coverage_by_jurisdiction.
+        # Normalize legacy snapshot shape: coverage_by_jurisdiction -> coverage_by_country.
         for fam in families:
             if not isinstance(fam, dict):
                 continue
-            if isinstance(fam.get("coverage_by_jurisdiction"), list):
+            if isinstance(fam.get("coverage_by_country"), list):
                 continue
-            legacy = fam.get("coverage_by_country")
+            legacy = fam.get("coverage_by_jurisdiction")
             if not isinstance(legacy, list):
                 continue
             out_cov: List[Dict[str, Any]] = []
             for row in legacy:
                 if not isinstance(row, dict):
                     continue
-                j = row.get("jurisdiction") or row.get("country")
-                if not j:
+                c = row.get("country") or row.get("jurisdiction")
+                if not c:
                     continue
-                entry: Dict[str, Any] = {"jurisdiction": str(j).strip().upper(), "expires_at": row.get("expires_at")}
+                entry: Dict[str, Any] = {"country": str(c).strip().upper(), "expires_at": row.get("expires_at")}
                 if row.get("status"):
                     entry["status"] = row.get("status")
                 out_cov.append(entry)
-            fam["coverage_by_jurisdiction"] = out_cov
-            # Remove the legacy field to avoid confusion in UI (EP is a jurisdiction, not a country).
-            fam.pop("coverage_by_country", None)
+            fam["coverage_by_country"] = out_cov
+            # Remove the legacy field.
+            fam.pop("coverage_by_jurisdiction", None)
 
         # Choose a limited set of families to enrich (LLM calls).
         try:
@@ -1044,7 +1208,7 @@ class CaseViewV2Generator:
         ranked = self._rank_patent_families(families)
         to_enrich = ranked[:max_enrich]
 
-        patent_doc_kinds = ["patent_pdf", "patent", "patent_family_summary", "ip_landscape"]
+        patent_doc_kinds = ["patent_pdf", "patent", "ru_patent_fips", "patent_family_summary", "ip_landscape"]
 
         for fam in to_enrich:
             self._check_deadline(deadline, "patents_before_family_llm")
@@ -1142,39 +1306,39 @@ class CaseViewV2Generator:
             if jur_statuses_out:
                 fam["jurisdiction_statuses"] = jur_statuses_out[:25]
 
-            # Optional coverage_by_jurisdiction refinement from patent text.
+            # Optional coverage_by_country refinement from patent text.
             cov_updates = extracted.get("coverage_by_country") or []
             if isinstance(cov_updates, list) and cov_updates:
-                existing_cov = fam.get("coverage_by_jurisdiction") or []
-                by_jur = {}
+                existing_cov = fam.get("coverage_by_country") or []
+                by_country = {}
                 for row in existing_cov:
-                    if isinstance(row, dict) and (row.get("jurisdiction") or row.get("country")):
-                        key = str(row.get("jurisdiction") or row.get("country")).upper()
-                        by_jur[key] = row
+                    if isinstance(row, dict) and (row.get("country") or row.get("jurisdiction")):
+                        key = str(row.get("country") or row.get("jurisdiction")).upper()
+                        by_country[key] = row
                 for row in cov_updates:
                     if not isinstance(row, dict):
                         continue
-                    j = str(row.get("country") or row.get("jurisdiction") or "").strip().upper()
-                    if not j:
+                    c = str(row.get("country") or row.get("jurisdiction") or "").strip().upper()
+                    if not c:
                         continue
                     expires = row.get("expires_at")
                     status = row.get("status")
                     eids = row.get("evidence_ids") or []
                     # Only fill missing expires_at; snapshot remains "truth" when present.
-                    if j in by_jur:
-                        if not by_jur[j].get("expires_at") and expires:
-                            by_jur[j]["expires_at"] = expires
-                        if status and not by_jur[j].get("status"):
-                            by_jur[j]["status"] = status
+                    if c in by_country:
+                        if not by_country[c].get("expires_at") and expires:
+                            by_country[c]["expires_at"] = expires
+                        if status and not by_country[c].get("status"):
+                            by_country[c]["status"] = status
                     else:
-                        entry: Dict[str, Any] = {"jurisdiction": j, "expires_at": expires}
+                        entry: Dict[str, Any] = {"country": c, "expires_at": expires}
                         if status:
                             entry["status"] = status
                         existing_cov.append(entry)
-                        by_jur[j] = existing_cov[-1]
+                        by_country[c] = existing_cov[-1]
                     if eids:
                         new_citations.extend(self._citations_from_evidence_ids(eids, cand_map, doc_map))
-                fam["coverage_by_jurisdiction"] = existing_cov
+                fam["coverage_by_country"] = existing_cov
 
             if new_citations:
                 new_citations = self._dedupe_citations(new_citations)
@@ -1213,11 +1377,11 @@ class CaseViewV2Generator:
 
         patents["views"] = {"blocking": [], "composition": comp_ids, "treatment": treat_ids, "synthesis": synth_ids}
 
-        # Blocking families: pick top 3-7 by score, prefer families with coverage_by_jurisdiction.
+        # Blocking families: pick top 3-7 by score, prefer families with coverage_by_country.
         ranked2 = self._rank_patent_families(families, prefer_types=True)
         blocking: List[Dict[str, Any]] = []
         for fam in ranked2:
-            if fam.get("coverage_by_jurisdiction"):
+            if fam.get("coverage_by_country"):
                 blocking.append(fam)
             if len(blocking) >= 7:
                 break
@@ -1254,7 +1418,7 @@ class CaseViewV2Generator:
             "Also, if patents describe a method of treatment/use, provide a short summary in treatment_method_from_patents.\n"
             "Do NOT guess if not supported by evidence.\n"
         )
-        patent_doc_kinds = ["patent_pdf", "patent"]
+        patent_doc_kinds = ["patent_pdf", "patent", "ru_patent_fips"]
         extracted, cand_map = self._extract_structured_from_docs(
             task=task,
             response_format=SynthesisExtraction,
@@ -2024,10 +2188,12 @@ class CaseViewV2Generator:
             citations = [self._snapshot_citation(base_path)]
             entry = {
                 "reg_no": self._fact("Рег. номер", item.get("reg_no"), citations),
+                "reg_number": self._fact("Рег. номер", item.get("reg_no"), citations),
                 "status": self._fact("Статус", item.get("status"), citations),
                 "trade_name": self._fact("Торговое название", item.get("trade_name") or item.get("tradeName"), citations),
                 "holder": self._fact("Держатель", item.get("holder"), citations),
                 "forms": self._fact("Формы", item.get("forms"), citations),
+                "dosage_forms": self._fact("Формы", item.get("forms"), citations),
                 "strengths": self._fact("Дозировки", item.get("strengths"), citations),
                 "routes": self._fact("Пути введения", item.get("routes"), citations),
                 "authorized_presentations": self._fact("Презентации", item.get("authorized_presentations"), citations),
@@ -2069,15 +2235,32 @@ class CaseViewV2Generator:
             citations = [self._snapshot_citation(base_path)]
             members = _as_list(item.get("members"))
             jurisdictions = []
-            coverage_by_jurisdiction = []
+            coverage_by_country = []
             rep_doc = None
+
+            # Extract assignees from snapshot (if available)
+            assignees_raw = _as_list(item.get("assignees") or item.get("Assignees") or item.get("applicants"))
+            assignees = []
+            for a in assignees_raw:
+                if isinstance(a, str) and a.strip():
+                    assignees.append(a.strip())
+                elif isinstance(a, dict):
+                    name = a.get("name") or a.get("Name") or a.get("assignee") or a.get("Assignee")
+                    if name and isinstance(name, str):
+                        assignees.append(name.strip())
+            if not assignees and item.get("owner"):
+                owner = item.get("owner")
+                if isinstance(owner, str):
+                    assignees.append(owner.strip())
+            assignees = list(dict.fromkeys(assignees)) or ["Unknown"]
+
             for member in members:
-                jur = member.get("jurisdiction")
-                if jur and jur not in jurisdictions:
-                    jurisdictions.append(jur)
+                country = member.get("jurisdiction") or member.get("country")
+                if country and country not in jurisdictions:
+                    jurisdictions.append(country)
                 expiry = member.get("expiryDateBase")
-                if jur:
-                    coverage_by_jurisdiction.append({"jurisdiction": jur, "expires_at": expiry})
+                if country:
+                    coverage_by_country.append({"country": country, "expires_at": expiry})
                 if rep_doc is None:
                     rep_doc = member.get("publicationNumber")
             fam_id = str(item.get("familyId") or "").strip()
@@ -2091,7 +2274,8 @@ class CaseViewV2Generator:
                     "summary": item.get("summary", {}).get("mainStatus") if isinstance(item.get("summary"), dict) else None,
                     "coverage_type": ["unknown"],
                     "countries": jurisdictions,
-                    "coverage_by_jurisdiction": coverage_by_jurisdiction,
+                    "coverage_by_country": coverage_by_country,
+                    "assignees": assignees,
                     "citations": citations
                 }
                 continue
@@ -2102,25 +2286,70 @@ class CaseViewV2Generator:
             if not existing.get("summary") and isinstance(item.get("summary"), dict):
                 existing["summary"] = item.get("summary", {}).get("mainStatus")
 
-            for jur in jurisdictions:
-                if jur not in (existing.get("countries") or []):
-                    existing.setdefault("countries", []).append(jur)
+            for country in jurisdictions:
+                if country not in (existing.get("countries") or []):
+                    existing.setdefault("countries", []).append(country)
 
-            by_jur = {str(c.get("jurisdiction")): c for c in _as_list(existing.get("coverage_by_jurisdiction")) if isinstance(c, dict)}
-            for row in coverage_by_jurisdiction:
-                jur = str(row.get("jurisdiction") or "")
-                if not jur:
+            by_country = {str(c.get("country") or c.get("jurisdiction")): c for c in _as_list(existing.get("coverage_by_country")) if isinstance(c, dict)}
+            for row in coverage_by_country:
+                country = str(row.get("country") or row.get("jurisdiction") or "")
+                if not country:
                     continue
-                if jur in by_jur:
-                    if not by_jur[jur].get("expires_at") and row.get("expires_at"):
-                        by_jur[jur]["expires_at"] = row.get("expires_at")
+                if country in by_country:
+                    if not by_country[country].get("expires_at") and row.get("expires_at"):
+                        by_country[country]["expires_at"] = row.get("expires_at")
                 else:
-                    existing.setdefault("coverage_by_jurisdiction", []).append(row)
-                    by_jur[jur] = row
+                    existing.setdefault("coverage_by_country", []).append(row)
+                    by_country[country] = row
+
+            # Merge assignees
+            existing_assignees = existing.get("assignees") or []
+            for a in assignees:
+                if a not in existing_assignees:
+                    existing_assignees.append(a)
+            existing["assignees"] = existing_assignees
 
             existing["citations"] = self._dedupe_citations((existing.get("citations") or []) + citations)
 
         return list(families_by_id.values())
+
+    @staticmethod
+    def _calculate_expires_at(priority_date_str: Optional[str], years_to_add: int = 20) -> Optional[str]:
+        """
+        Calculate patent expiry date from priority date + years_to_add (default 20 years).
+        Accepts formats: YYYY, YYYY-MM, YYYY-MM-DD, or ISO datetime.
+        Returns ISO date string (YYYY-MM-DD) or None if parsing fails.
+        """
+        if not priority_date_str:
+            return None
+
+        date_str = str(priority_date_str).strip()
+        if not date_str:
+            return None
+
+        try:
+            # Try parsing various formats
+            if len(date_str) == 4 and date_str.isdigit():
+                # YYYY
+                priority_date = datetime(int(date_str), 1, 1)
+            elif len(date_str) == 7 and date_str[4] == '-':
+                # YYYY-MM
+                parts = date_str.split('-')
+                priority_date = datetime(int(parts[0]), int(parts[1]), 1)
+            elif len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+                # YYYY-MM-DD
+                parts = date_str.split('-')
+                priority_date = datetime(int(parts[0]), int(parts[1]), int(parts[2]))
+            else:
+                # Try ISO datetime parsing
+                priority_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+
+            # Add years_to_add years
+            expiry_date = priority_date + timedelta(days=365 * years_to_add)
+            return expiry_date.strftime("%Y-%m-%d")
+        except (ValueError, AttributeError, IndexError):
+            logger.debug(f"Failed to parse priority date for expiry calculation: {date_str}")
+            return None
 
     def _collect_global_patent_families(self, snapshot: Optional[dict]) -> List[Dict[str, Any]]:
         """
@@ -2166,38 +2395,69 @@ class CaseViewV2Generator:
                 None
             )
 
-            # Extract assignees/holders
-            assignees = _as_list(item.get("assignees")) or []
+            # Extract assignees/holders (правообладатели)
+            assignees_raw = _as_list(item.get("assignees") or item.get("Assignees") or item.get("applicants"))
+            assignees = []
+            for a in assignees_raw:
+                if isinstance(a, str) and a.strip():
+                    assignees.append(a.strip())
+                elif isinstance(a, dict):
+                    name = a.get("name") or a.get("Name") or a.get("assignee") or a.get("Assignee")
+                    if name and isinstance(name, str):
+                        assignees.append(name.strip())
+            # Fallback: если assignees пусто, берём из владельца
+            if not assignees and item.get("owner"):
+                owner = item.get("owner")
+                if isinstance(owner, str):
+                    assignees.append(owner.strip())
+            # Уникализируем
+            assignees = list(dict.fromkeys(assignees)) or ["Unknown"]
+
+            # Extract priority date for expires_at calculation
+            earliest_priority = (
+                item.get("earliest_priority") or
+                item.get("earliestPriority") or
+                item.get("priority_date") or
+                item.get("priorityDate") or
+                item.get("filingDate") or
+                item.get("filing_date")
+            )
 
             # Extract jurisdictions from members or directly
             members = _as_list(item.get("members"))
             jurisdictions = []
-            coverage_by_jurisdiction = []
+            coverage_by_country = []
 
             # If members is a list of doc IDs (strings), extract jurisdiction from prefix
             for member in members:
                 if isinstance(member, str):
                     # Doc IDs like "EP1234567" or "US1234567"
-                    jur = member[:2].upper() if len(member) >= 2 else None
-                    if jur and jur not in jurisdictions:
-                        jurisdictions.append(jur)
+                    country = member[:2].upper() if len(member) >= 2 else None
+                    if country and country not in jurisdictions:
+                        jurisdictions.append(country)
                 elif isinstance(member, dict):
-                    jur = member.get("jurisdiction")
-                    if jur and jur not in jurisdictions:
-                        jurisdictions.append(jur)
+                    country = member.get("jurisdiction") or member.get("country")
+                    if country and country not in jurisdictions:
+                        jurisdictions.append(country)
+                    # Расчет expires_at: если указана дата в member, используем её, иначе рассчитываем
                     expiry = member.get("expiryDateBase") or member.get("expires_at")
-                    if jur:
-                        coverage_by_jurisdiction.append({"jurisdiction": jur, "expires_at": expiry})
+                    if not expiry and earliest_priority:
+                        expiry = self._calculate_expires_at(earliest_priority, years_to_add=20)
+                    if country:
+                        coverage_by_country.append({"country": country, "expires_at": expiry})
 
-            # Extract expiry info
+            # Extract expiry info from estimated_expiry field
             estimated_expiry = item.get("estimated_expiry") or {}
             if isinstance(estimated_expiry, dict):
-                for jur_key in ["US", "EP", "WO"]:
-                    exp_date = estimated_expiry.get(jur_key)
-                    if exp_date and jur_key not in [c.get("jurisdiction") for c in coverage_by_jurisdiction]:
-                        coverage_by_jurisdiction.append({"jurisdiction": jur_key, "expires_at": exp_date})
-                        if jur_key not in jurisdictions:
-                            jurisdictions.append(jur_key)
+                for country_key in ["US", "EP", "WO", "CN", "JP"]:
+                    exp_date = estimated_expiry.get(country_key)
+                    # Если даты нет, рассчитываем
+                    if not exp_date and earliest_priority:
+                        exp_date = self._calculate_expires_at(earliest_priority, years_to_add=20)
+                    if exp_date and country_key not in [c.get("country") for c in coverage_by_country]:
+                        coverage_by_country.append({"country": country_key, "expires_at": exp_date})
+                        if country_key not in jurisdictions:
+                            jurisdictions.append(country_key)
 
             # Extract status
             status = item.get("status") or item.get("summary")
@@ -2212,10 +2472,10 @@ class CaseViewV2Generator:
                     "summary": status,
                     "coverage_type": ["unknown"],  # Will be enriched later by LLM
                     "countries": jurisdictions,
-                    "coverage_by_jurisdiction": coverage_by_jurisdiction,
+                    "coverage_by_country": coverage_by_country,
                     "assignees": assignees,
                     "cpc": _as_list(item.get("cpc_top") or item.get("cpc")),
-                    "earliest_priority": item.get("earliest_priority") or item.get("earliestPriority"),
+                    "earliest_priority": earliest_priority,
                     "citations": citations,
                 }
             else:
@@ -2224,9 +2484,25 @@ class CaseViewV2Generator:
                     existing["representative_doc"] = rep_doc
                 if not existing.get("summary") and status:
                     existing["summary"] = status
-                for jur in jurisdictions:
-                    if jur not in (existing.get("countries") or []):
-                        existing.setdefault("countries", []).append(jur)
+                if not existing.get("assignees") or existing.get("assignees") == ["Unknown"]:
+                    existing["assignees"] = assignees
+                for country in jurisdictions:
+                    if country not in (existing.get("countries") or []):
+                        existing.setdefault("countries", []).append(country)
+
+                # Merge coverage_by_country
+                by_country = {str(c.get("country")): c for c in _as_list(existing.get("coverage_by_country")) if isinstance(c, dict)}
+                for row in coverage_by_country:
+                    country_key = str(row.get("country") or "")
+                    if not country_key:
+                        continue
+                    if country_key in by_country:
+                        if not by_country[country_key].get("expires_at") and row.get("expires_at"):
+                            by_country[country_key]["expires_at"] = row.get("expires_at")
+                    else:
+                        existing.setdefault("coverage_by_country", []).append(row)
+                        by_country[country_key] = row
+
                 existing["citations"] = self._dedupe_citations((existing.get("citations") or []) + citations)
 
         return list(families_by_id.values())
@@ -2281,7 +2557,7 @@ class CaseViewV2Generator:
     @staticmethod
     def _family_max_expiry_year(fam: Dict[str, Any]) -> Optional[int]:
         max_year: Optional[int] = None
-        cov_rows = fam.get("coverage_by_jurisdiction") or fam.get("coverage_by_country") or []
+        cov_rows = fam.get("coverage_by_country") or fam.get("coverage_by_jurisdiction") or []
         for cov in cov_rows:
             expires = cov.get("expires_at")
             if isinstance(expires, str) and len(expires) >= 4 and expires[:4].isdigit():
@@ -2305,9 +2581,9 @@ class CaseViewV2Generator:
         for c in _as_list(fam.get("countries")):
             if c:
                 jurisdictions.add(str(c).upper())
-        cov_rows = fam.get("coverage_by_jurisdiction") or fam.get("coverage_by_country") or []
+        cov_rows = fam.get("coverage_by_country") or fam.get("coverage_by_jurisdiction") or []
         for cov in cov_rows:
-            c = cov.get("jurisdiction") or cov.get("country")
+            c = cov.get("country") or cov.get("jurisdiction")
             if c:
                 jurisdictions.add(str(c).upper())
         score += min(len(jurisdictions), 60) * 0.05
@@ -2331,7 +2607,7 @@ class CaseViewV2Generator:
         # Prefer families that have a meaningful summary
         if isinstance(fam.get("summary"), str) and fam["summary"].strip():
             score += 0.4
-        if fam.get("coverage_by_jurisdiction") or fam.get("coverage_by_country"):
+        if fam.get("coverage_by_country") or fam.get("coverage_by_jurisdiction"):
             score += 0.2
         return score
 
@@ -2380,7 +2656,7 @@ class CaseViewV2Generator:
         max_year = None
         citations: List[Dict[str, Any]] = []
         for family in families:
-            cov_rows = family.get("coverage_by_jurisdiction") or family.get("coverage_by_country") or []
+            cov_rows = family.get("coverage_by_country") or family.get("coverage_by_jurisdiction") or []
             for cov in cov_rows:
                 expires = cov.get("expires_at")
                 if isinstance(expires, str) and len(expires) >= 4:
@@ -2408,6 +2684,87 @@ class CaseViewV2Generator:
         if not citations:
             return None
         return self._fact("Синтез", "Есть данные о синтезе", citations[:3])
+
+    def _generate_narrative_summary(self, passport: Dict[str, Any], regulatory: Dict[str, Any],
+                                     clinical: Dict[str, Any], patents: Dict[str, Any],
+                                     synthesis: Dict[str, Any]) -> str:
+        """
+        Generate a narrative summary (3-5 sentences) using LLM.
+        Input: Passport + Clinical conclusions + Patent status.
+        Output: Coherent Russian text describing the drug.
+        """
+        try:
+            # Collect key facts for summary
+            inn = passport.get("inn", {}).get("value", "N/A")
+            trade_name = passport.get("trade_names", {}).get("value", {})
+            drug_class = passport.get("drug_class", {}).get("value", "N/A")
+            fda_approval = passport.get("fda_approval", {}).get("value", "N/A")
+            registered_in = passport.get("registered_in", {}).get("value", {})
+
+            # Patent expiry
+            patent_wall = self._build_patent_wall_fact(patents)
+            patent_expiry_year = patent_wall.get("value") if patent_wall else "N/A"
+
+            # Clinical efficacy (simplified)
+            clinical_summary = "Клинические данные недоступны"
+            for bucket in ("global", "ru", "ongoing"):
+                phases = clinical.get(bucket, {})
+                if isinstance(phases, dict):
+                    for trials in phases.values():
+                        for tr in _as_list(trials):
+                            if isinstance(tr, dict) and tr.get("efficacy_key_points"):
+                                efficacy = tr.get("efficacy_key_points")
+                                if efficacy:
+                                    clinical_summary = f"Эффективность показана: {efficacy[0] if isinstance(efficacy, list) else efficacy}"
+                                    break
+                        if clinical_summary != "Клинические данные недоступны":
+                            break
+                if clinical_summary != "Клинические данные недоступны":
+                    break
+
+            # Build prompt for LLM
+            prompt = f"""Напиши связный текст-саммари (3-5 предложений) о препарате на русском языке.
+
+Факты:
+- МНН: {inn}
+- Торговые названия: {trade_name}
+- Класс: {drug_class}
+- Одобрение FDA: {fda_approval}
+- Регистрация: {registered_in}
+- Патентная защита до: {patent_expiry_year}
+- Клиника: {clinical_summary}
+
+Требования:
+1. Текст должен быть связным, без перечислений
+2. Начни с "Препарат [Название] (МНН: [МНН]) — это..."
+3. Упомяни ключевые факты: класс, одобрение, патенты, эффективность
+4. 3-5 предложений, стиль деловой/научный
+5. Только факты, никаких домыслов"""
+
+            try:
+                response = self.api.send_message(
+                    system_content="Ты - медицинский писатель, генерирующий краткие саммари о препаратах.",
+                    human_content=prompt,
+                    model=self.answering_model or "gpt-4o",
+                    temperature=0.3,
+                    is_structured=False,
+                )
+            except Exception as api_error:
+                # Handle 401 Unauthorized and other API errors gracefully
+                if "401" in str(api_error) or "Unauthorized" in str(api_error):
+                    logger.error(f"OpenAI API authentication failed (401 Unauthorized). Check OPENAI_API_KEY: {api_error}")
+                else:
+                    logger.error(f"OpenAI API error during summary generation: {api_error}")
+                return ""
+
+            if response and isinstance(response, str) and len(response.strip()) > 50:
+                return response.strip()
+            else:
+                logger.warning("LLM returned empty or short summary, falling back to simple lines")
+                return ""
+        except Exception as e:
+            logger.warning(f"Failed to generate narrative summary with LLM: {e}")
+            return ""
 
     def _build_summary_lines(self, passport: Dict[str, Any], regulatory: Dict[str, Any],
                               clinical: Dict[str, Any], patents: Dict[str, Any],
@@ -2550,7 +2907,7 @@ class CaseViewV2Generator:
             }
             blocking = [fam_by_id.get(str(fid)) for fid in ids if fam_by_id.get(str(fid))]
         blocking_ok = any(
-            isinstance(f, dict) and (f.get("coverage_by_jurisdiction") or f.get("coverage_by_country"))
+            isinstance(f, dict) and (f.get("coverage_by_country") or f.get("coverage_by_jurisdiction"))
             for f in blocking
         )
         patents["data_quality"] = "ok" if blocking_ok else ("partial" if blocking else "empty")
@@ -2604,7 +2961,7 @@ class CaseViewV2Generator:
             }
             blocking = [fam_by_id.get(str(fid)) for fid in ids if fam_by_id.get(str(fid))]
         blocking_ok = any(
-            isinstance(fam, dict) and (fam.get("coverage_by_jurisdiction") or fam.get("coverage_by_country"))
+            isinstance(fam, dict) and (fam.get("coverage_by_country") or fam.get("coverage_by_jurisdiction"))
             for fam in blocking
         )
         patents_gate = {

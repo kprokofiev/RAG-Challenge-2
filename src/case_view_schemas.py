@@ -39,6 +39,29 @@ class RegulatoryMarketExtraction(BaseModel):
     notes: Optional[str] = None
 
 
+class RuRegulatoryEntryExtraction(BaseModel):
+    """
+    Extracted RU regulatory entry (GRLS/EAES).
+    """
+
+    trade_name: Optional[EvidenceLockedValue] = None
+    holder: Optional[EvidenceLockedValue] = None
+    reg_number: Optional[EvidenceLockedValue] = None
+    reg_date: Optional[EvidenceLockedValue] = None
+    dosage_forms: Optional[EvidenceLockedValue] = None
+    status: Optional[EvidenceLockedValue] = None
+    notes: Optional[str] = None
+
+
+class RuRegulatoryExtraction(BaseModel):
+    """
+    Extracted RU regulatory facts (list of registration entries).
+    """
+
+    entries: List[RuRegulatoryEntryExtraction] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+
 class PassportExtraction(BaseModel):
     """
     Missing passport fields extracted from authoritative documents.

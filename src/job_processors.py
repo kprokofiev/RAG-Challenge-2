@@ -910,6 +910,15 @@ class CaseViewGenerateProcessor:
                     "region": "us",
                 }
             )
+            # API gateway aggregation can include approval and label links in one payload.
+            sources.append(
+                {
+                    "url": f"{self._gateway_base_url()}/api/v1/regulation/us?inn={quote(inn)}",
+                    "doc_kind": "us_fda",
+                    "title": f"US regulatory summary: {inn}",
+                    "region": "us",
+                }
+            )
 
         # EU best-effort: if the API gateway can provide direct SmPC/PIL URLs, attach them.
         if not ({"smpc", "pil", "assessment_report", "epar"} & kinds):
@@ -922,25 +931,41 @@ class CaseViewGenerateProcessor:
                     if eu_resp.headers.get("content-type", "").startswith("application/json")
                     else json.loads(eu_resp.text)
                 )
+                eu_added = False
                 eu_auth = eu_data.get("eu_authorization") or {}
                 if isinstance(eu_auth, dict):
                     if eu_auth.get("smpc_url"):
                         sources.append({"url": eu_auth["smpc_url"], "doc_kind": "smpc", "title": f"EU SmPC: {inn}", "region": "eu"})
+                        eu_added = True
                     if eu_auth.get("pil_url"):
                         sources.append({"url": eu_auth["pil_url"], "doc_kind": "pil", "title": f"EU PIL: {inn}", "region": "eu"})
+                        eu_added = True
                     if eu_auth.get("epar_url"):
                         # Some procedures return only an overview link; still useful as a UI evidence target.
                         sources.append({"url": eu_auth["epar_url"], "doc_kind": "epar", "title": f"EU EPAR/Overview: {inn}", "region": "eu"})
+                        eu_added = True
                 ema = eu_data.get("ema_centralized") or {}
                 if isinstance(ema, dict):
                     for link in ema.get("smcp_links") or []:
                         if link:
                             sources.append({"url": link, "doc_kind": "smpc", "title": f"EU SmPC (EMA): {inn}", "region": "eu"})
+                            eu_added = True
                     for link in ema.get("pil_links") or []:
                         if link:
                             sources.append({"url": link, "doc_kind": "pil", "title": f"EU PIL (EMA): {inn}", "region": "eu"})
+                            eu_added = True
                     if ema.get("epar_url"):
                         sources.append({"url": ema["epar_url"], "doc_kind": "epar", "title": f"EU EPAR (EMA): {inn}", "region": "eu"})
+                        eu_added = True
+                if not eu_added:
+                    sources.append(
+                        {
+                            "url": eu_url,
+                            "doc_kind": "epar",
+                            "title": f"EU regulatory summary: {inn}",
+                            "region": "eu",
+                        }
+                    )
             except Exception as exc:
                 logger.info("EU regulatory preflight skipped: %s", exc)
 
@@ -957,6 +982,96 @@ class CaseViewGenerateProcessor:
                             "region": "ru",
                         }
                     )
+
+        # RU regulatory (GRLS) JSON + card/instruction links if available
+        if not ({"grls", "grls_card"} & kinds):
+            try:
+                ru_reg_url = f"{self._gateway_base_url()}/v1/ru/drugs/{quote(inn)}/regulatory"
+                ru_resp = requests.get(ru_reg_url, timeout=60)
+                ru_resp.raise_for_status()
+                ru_data = (
+                    ru_resp.json()
+                    if ru_resp.headers.get("content-type", "").startswith("application/json")
+                    else json.loads(ru_resp.text)
+                )
+                sources.append(
+                    {
+                        "url": ru_reg_url,
+                        "doc_kind": "grls",
+                        "title": f"RU regulatory (GRLS): {inn}",
+                        "region": "ru",
+                    }
+                )
+                reg_block = (ru_data.get("regulatory") or {}) if isinstance(ru_data, dict) else {}
+                registrations = reg_block.get("registrations") or []
+                for reg in registrations if isinstance(registrations, list) else []:
+                    if not isinstance(reg, dict):
+                        continue
+                    card = reg.get("card_url")
+                    if isinstance(card, str) and card.startswith("http"):
+                        sources.append({"url": card, "doc_kind": "grls_card", "title": f"GRLS card: {inn}", "region": "ru"})
+                    instr = reg.get("instruction_url")
+                    if isinstance(instr, str) and instr.startswith("http"):
+                        sources.append({"url": instr, "doc_kind": "ru_instruction", "title": f"RU instruction: {inn}", "region": "ru"})
+                links = reg_block.get("links") or {}
+                if isinstance(links, dict):
+                    deeplink = links.get("grls_deeplink")
+                    if isinstance(deeplink, str) and deeplink.startswith("http"):
+                        sources.append({"url": deeplink, "doc_kind": "grls_card", "title": f"GRLS card: {inn}", "region": "ru"})
+            except Exception as exc:
+                logger.info("RU regulatory preflight skipped: %s", exc)
+
+        # RU clinical registry (JSON)
+        if "ru_clinical_permission" not in kinds:
+            try:
+                ru_clin_url = f"{self._gateway_base_url()}/v1/ru/drugs/{quote(inn)}/clinical"
+                ru_clin_resp = requests.get(ru_clin_url, timeout=60)
+                ru_clin_resp.raise_for_status()
+                sources.append(
+                    {
+                        "url": ru_clin_url,
+                        "doc_kind": "ru_clinical_permission",
+                        "title": f"RU clinical registry: {inn}",
+                        "region": "ru",
+                    }
+                )
+            except Exception as exc:
+                logger.info("RU clinical preflight skipped: %s", exc)
+
+        # RU patents (FIPS/registry) JSON
+        if "ru_patent_fips" not in kinds:
+            try:
+                ru_pat_url = f"{self._gateway_base_url()}/v1/ru/drugs/{quote(inn)}/patents"
+                ru_pat_resp = requests.get(ru_pat_url, timeout=60)
+                ru_pat_resp.raise_for_status()
+                sources.append(
+                    {
+                        "url": ru_pat_url,
+                        "doc_kind": "ru_patent_fips",
+                        "title": f"RU patents registry: {inn}",
+                        "region": "ru",
+                    }
+                )
+            except Exception as exc:
+                logger.info("RU patents preflight skipped: %s", exc)
+
+        # Chemistry profile (PubChem) for formula/class when missing in labels
+        if "drug_monograph" not in kinds:
+            enabled_raw = os.getenv("DDKIT_PUBCHEM_ENABLED", "1").strip().lower()
+            pubchem_enabled = enabled_raw not in {"0", "false", "no", "off"}
+            if pubchem_enabled:
+                pubchem_url = (
+                    "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"
+                    f"{quote(inn)}/property/MolecularFormula,CanonicalSMILES,InChIKey/JSON"
+                )
+                sources.append(
+                    {
+                        "url": pubchem_url,
+                        "doc_kind": "drug_monograph",
+                        "title": f"PubChem compound profile: {inn}",
+                        "region": "global",
+                    }
+                )
 
         # Clinical: attach 1-2 CTGov studies (registry page)
         if not any(k.startswith("ctgov") for k in kinds):
