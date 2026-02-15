@@ -7,6 +7,9 @@ data/test_set/debug_data
 data/test_set/databases
 data/test_set/databases_ser_tab
 
+# Dependency cache
+.deps-cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
