@@ -180,13 +180,17 @@ class DocParseIndexProcessor:
             # Must include all blocked/error statuses so paywalled docs don't block the pipeline.
             terminal = {"indexed", "failed", "parsed", "skipped", "unsupported",
                         "blocked_paywall", "captcha", "forbidden_403", "rate_limited_429",
-                        "requires_login", "robots_denied", "timeout"}
+                        "requires_login", "robots_denied", "timeout",
+                        "parsed_empty",  # Sprint-2: docs that parsed but produced no text
+                        }
             in_progress = [d for d in docs if str(d.get("status", "")).lower() not in terminal]
             indexed_or_parsed = [
                 d for d in docs
                 if str(d.get("status", "")).lower() in {"indexed", "parsed"}
             ]
-            failed = [d for d in docs if str(d.get("status", "")).lower() in {"failed", "skipped", "unsupported"}]
+            failed = [d for d in docs if str(d.get("status", "")).lower() in {
+                "failed", "skipped", "unsupported", "parsed_empty",
+            }]
             if in_progress:
                 # Check whether the parse queue is drained — if so, any remaining
                 # 'rendered' (or other pre-queue) docs are effectively stuck and
@@ -1013,7 +1017,9 @@ class ReportGenerateProcessor:
                     # Includes blocked/paywall statuses so they don't hold up the pipeline forever.
                     terminal = {"indexed", "failed", "parsed", "skipped", "unsupported",
                                 "blocked_paywall", "captcha", "forbidden_403", "rate_limited_429",
-                                "requires_login", "robots_denied", "timeout"}
+                                "requires_login", "robots_denied", "timeout",
+                                "parsed_empty",  # Sprint-2
+                                }
                     in_progress = [d for d in docs if str(d.get("status", "")).lower() not in terminal]
                     indexed = [d for d in docs if str(d.get("status", "")).lower() == "indexed"]
                     if in_progress:
