@@ -40,11 +40,19 @@ class PDFParser:
         csv_metadata_path: Path = None,
         docling_do_ocr: Optional[bool] = None,
         docling_do_tables: Optional[bool] = None,
+        # Sprint-2: language list for EasyOCR, e.g. ["en", "ru"]
+        ocr_lang: Optional[List[str]] = None,
     ):
         self.pdf_backend = pdf_backend
         self.output_dir = output_dir
         self._docling_do_ocr = docling_do_ocr
         self._docling_do_tables = docling_do_tables
+        # Parse OCR languages from settings if not explicitly provided
+        if ocr_lang is not None:
+            self._ocr_lang = ocr_lang
+        else:
+            raw = settings.docling_ocr_lang or "en,ru"
+            self._ocr_lang = [l.strip() for l in raw.split(",") if l.strip()]
         self.doc_converter = self._create_document_converter()
         self.num_threads = num_threads
         self.metadata_lookup = {}
@@ -98,10 +106,13 @@ class PDFParser:
         
         pipeline_options = PdfPipelineOptions()
         pipeline_options.do_ocr = settings.docling_do_ocr if self._docling_do_ocr is None else self._docling_do_ocr
-        ocr_options = EasyOcrOptions(lang=['en'], force_full_page_ocr=False)
+        # Sprint-2: use configurable language list (default en+ru) for EasyOCR
+        ocr_lang = self._ocr_lang if self._ocr_lang else ["en", "ru"]
+        ocr_options = EasyOcrOptions(lang=ocr_lang, force_full_page_ocr=False)
         pipeline_options.ocr_options = ocr_options
-        pipeline_options.do_table_structure = settings.docling_do_tables if self._docling_do_tables is None else self._docling_do_tables
-        if settings.docling_do_tables:
+        do_tables = settings.docling_do_tables if self._docling_do_tables is None else self._docling_do_tables
+        pipeline_options.do_table_structure = do_tables
+        if do_tables:
             pipeline_options.table_structure_options.do_cell_matching = True
             pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
         

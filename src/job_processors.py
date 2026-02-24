@@ -278,26 +278,65 @@ class DocParseIndexProcessor:
             logger.warning("_set_index_done_if_ready failed (non-fatal): %s", exc)
 
     def _detect_text_layer(self, pdf_path: Path, max_pages: int = 3, min_chars: int = 200) -> Dict[str, Any]:
-        """Detect whether PDF has a usable text layer."""
+        """Detect whether PDF has a usable text layer.
+
+        Sprint-2 improvements:
+        - Sample pages more representatively (first, middle, last up to max_pages)
+        - Track Cyrillic character ratio to detect RU-language scans with partial text layer
+        - Detect likely tabular/column layout via whitespace ratio
+        """
         result = {
             "has_text_layer": False,
             "pages_total": 0,
             "pages_checked": 0,
-            "text_chars": 0
+            "text_chars": 0,
+            "cyrillic_ratio": 0.0,
+            "whitespace_ratio": 0.0,
         }
         try:
             reader = PdfReader(str(pdf_path))
             pages_total = len(reader.pages)
-            pages_checked = min(max_pages, pages_total)
+            if pages_total == 0:
+                return result
+
+            # Sample: first page, last page, and middle pages up to max_pages
+            indices = set()
+            indices.add(0)
+            if pages_total > 1:
+                indices.add(pages_total - 1)
+            if pages_total > 2:
+                indices.add(pages_total // 2)
+            # Fill remaining slots from beginning
+            for i in range(pages_total):
+                if len(indices) >= max_pages:
+                    break
+                indices.add(i)
+            sample_indices = sorted(indices)[:max_pages]
+
             text_chars = 0
-            for idx in range(pages_checked):
+            cyrillic_chars = 0
+            whitespace_chars = 0
+            total_extracted = 0
+            for idx in sample_indices:
                 page_text = reader.pages[idx].extract_text() or ""
-                text_chars += len(page_text.strip())
+                stripped = page_text.strip()
+                text_chars += len(stripped)
+                total_extracted += len(page_text)
+                for ch in page_text:
+                    if '\u0400' <= ch <= '\u04FF':
+                        cyrillic_chars += 1
+                    if ch in ' \t':
+                        whitespace_chars += 1
+
+            cyrillic_ratio = cyrillic_chars / total_extracted if total_extracted > 0 else 0.0
+            whitespace_ratio = whitespace_chars / total_extracted if total_extracted > 0 else 0.0
             result.update({
                 "has_text_layer": text_chars >= min_chars,
                 "pages_total": pages_total,
-                "pages_checked": pages_checked,
-                "text_chars": text_chars
+                "pages_checked": len(sample_indices),
+                "text_chars": text_chars,
+                "cyrillic_ratio": round(cyrillic_ratio, 3),
+                "whitespace_ratio": round(whitespace_ratio, 3),
             })
         except Exception:
             return result
@@ -384,14 +423,59 @@ class DocParseIndexProcessor:
                     "pages": text_layer.get("pages_total"),
                     "text_layer_chars": text_layer.get("text_chars"),
                     "text_layer_pages_checked": text_layer.get("pages_checked"),
+                    "cyrillic_ratio": text_layer.get("cyrillic_ratio"),
+                    "whitespace_ratio": text_layer.get("whitespace_ratio"),
                 })
-                parser_mode = "fast_text" if text_layer.get("has_text_layer") else "docling"
-                docling_do_ocr = not text_layer.get("has_text_layer")
-                docling_do_tables = bool(settings.docling_do_tables) if parser_mode == "docling" else False
+
+                # Sprint-2: doc_kind-aware parser selection.
+                # Some doc_kinds always need Docling+OCR (scanned RU instructions, patents)
+                # regardless of whether PyPDF2 finds a text layer.
+                _ocr_doc_kinds = {
+                    k.strip().lower()
+                    for k in settings.docling_ocr_doc_kinds.split(",")
+                    if k.strip()
+                }
+                _tables_doc_kinds = {
+                    k.strip().lower()
+                    for k in settings.docling_tables_doc_kinds.split(",")
+                    if k.strip()
+                }
+                _dk = (doc_kind or "").lower()
+
+                force_docling_ocr = _dk in _ocr_doc_kinds
+                force_tables = _dk in _tables_doc_kinds
+
+                if force_docling_ocr and not text_layer.get("has_text_layer"):
+                    # Scan doc: Docling + OCR
+                    parser_mode = "docling"
+                    docling_do_ocr = True
+                elif force_docling_ocr and text_layer.get("has_text_layer"):
+                    # OCR-mandatory kind but has text — still use Docling for layout/tables
+                    parser_mode = "docling"
+                    docling_do_ocr = False  # text layer present; skip OCR for speed
+                elif not text_layer.get("has_text_layer"):
+                    # Generic scan: Docling + OCR
+                    parser_mode = "docling"
+                    docling_do_ocr = True
+                else:
+                    # Has text layer, not a forced-OCR kind: fast path
+                    parser_mode = "fast_text"
+                    docling_do_ocr = False
+
+                # Tables: always Docling path + tables for table-required doc_kinds
+                if force_tables and parser_mode == "fast_text":
+                    # Upgrade to Docling (no OCR needed if text layer exists)
+                    parser_mode = "docling"
+                    docling_do_ocr = False
+
+                docling_do_tables = force_tables or (bool(settings.docling_do_tables) and parser_mode == "docling")
+
                 metrics["parser_path"] = parser_mode
                 metrics["parser_used"] = parser_mode
                 metrics["docling_do_ocr"] = docling_do_ocr
                 metrics["docling_do_tables"] = docling_do_tables
+                metrics["force_docling_ocr"] = force_docling_ocr
+                metrics["force_tables"] = force_tables
 
                 # Process single PDF through the pipeline with timeout isolation
                 success, parsed_key, error_message, stage_metrics = self._process_single_document_with_timeout(
@@ -440,6 +524,26 @@ class DocParseIndexProcessor:
                         metrics["upload_bytes_total"] = upload_metrics.get("upload_bytes_total")
 
                 if success:
+                    # Sprint-2: compute quality metrics from parsed result
+                    quality = self._compute_parse_quality(metrics)
+                    metrics["parse_quality"] = quality
+
+                    if quality.get("is_empty"):
+                        # Document parsed but produced no usable text — treat as parsed_empty
+                        logger.warning(
+                            "doc_parse_index_empty doc=%s reason=%s chars=%d",
+                            doc_id, quality.get("empty_reason"), quality.get("text_chars_total", 0),
+                        )
+                        if job_id and self.ddkit_db.is_configured():
+                            self.ddkit_db.mark_job_failed(job_id, "parsed_empty:" + (quality.get("empty_reason") or ""))
+                        job_data["status"] = "parsed_empty"
+                        job_data["error_message"] = "parsed_empty:" + (quality.get("empty_reason") or "")
+                        metrics["error"] = job_data["error_message"]
+                        job_data["metrics"] = metrics
+                        logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
+                        self._set_index_done_if_ready(tenant_id, case_id, run_id)
+                        return False
+
                     if job_id and self.ddkit_db.is_configured():
                         self.ddkit_db.mark_job_succeeded(job_id)
                     if parsed_key:
@@ -447,7 +551,15 @@ class DocParseIndexProcessor:
                     job_data["status"] = "succeeded"
                     job_data["metrics"] = metrics
                     logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
-                    logger.info(f"Successfully processed document {doc_id}")
+                    logger.info(
+                        "doc_parse_index_ok doc=%s parser=%s ocr=%s tables=%s "
+                        "chars=%d pages=%d tables_count=%d garbage_ratio=%.3f",
+                        doc_id, parser_mode, docling_do_ocr, docling_do_tables,
+                        quality.get("text_chars_total", 0),
+                        quality.get("pages_total", 0),
+                        quality.get("tables_count", 0),
+                        quality.get("garbage_ratio", 0.0),
+                    )
                     # After each terminal outcome (success or failure), check if the full corpus
                     # is settled and set index_done if so. This ensures the flag is set even
                     # when some docs fail — partial corpus → partial report is still valid.
@@ -681,6 +793,68 @@ class DocParseIndexProcessor:
         metrics = result.get("metrics") or {"stages": {}}
         metrics["stages"]["subprocess_ms"] = _ms_since(proc_start)
         return False, None, result.get("error", "processing_failed"), metrics
+
+    def _compute_parse_quality(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Sprint-2: compute sanity metrics from job metrics after successful parsing.
+
+        Returns a dict with:
+          text_chars_total      — total extracted characters (chunks × avg tokens * ~4)
+          pages_total           — page count from PDF detection
+          pages_with_text_ratio — fraction of pages that contributed text
+          tables_count          — number of tables extracted (if available)
+          ocr_used              — whether OCR was enabled for this doc
+          garbage_ratio         — fraction of suspicious chars (replacement char / non-printable)
+          is_empty              — True if doc effectively produced no usable text
+          empty_reason          — explanation if is_empty
+        """
+        quality: Dict[str, Any] = {
+            "text_chars_total": 0,
+            "pages_total": metrics.get("pages") or 0,
+            "pages_with_text_ratio": 0.0,
+            "tables_count": 0,
+            "ocr_used": bool(metrics.get("docling_do_ocr")),
+            "garbage_ratio": 0.0,
+            "is_empty": False,
+            "empty_reason": None,
+        }
+
+        # Estimate total chars from chunk metrics (chunks_count × avg_tokens × ~4 chars/token)
+        chunks_count = metrics.get("chunks_count") or 0
+        avg_tokens = metrics.get("avg_tokens_per_chunk") or 0
+        if chunks_count and avg_tokens:
+            quality["text_chars_total"] = int(chunks_count * avg_tokens * 4)
+        elif metrics.get("text_layer_chars"):
+            quality["text_chars_total"] = metrics["text_layer_chars"]
+
+        # tables_count from Docling stage if present in stage_metrics
+        embed_m = metrics.get("embeddings") if isinstance(metrics.get("embeddings"), dict) else {}
+        quality["tables_count"] = embed_m.get("tables_count", 0)
+
+        # pages_with_text_ratio (approximation: if we got chunks, assume all sampled pages had text)
+        pages_total = quality["pages_total"] or 1
+        if quality["text_chars_total"] > 0:
+            quality["pages_with_text_ratio"] = min(1.0, chunks_count / max(pages_total, 1))
+
+        # Garbage ratio: from text_layer detection if available
+        # (exact ratio requires reading parsed JSON — use heuristic from cyrillic/whitespace metrics)
+        # If docling/ocr produced very low char count vs page count → suspicious
+        chars_per_page = quality["text_chars_total"] / max(pages_total, 1)
+        if chars_per_page < 50 and quality["text_chars_total"] < settings.parse_quality_min_chars:
+            quality["garbage_ratio"] = 1.0
+        else:
+            quality["garbage_ratio"] = 0.0
+
+        # is_empty check
+        if quality["text_chars_total"] < settings.parse_quality_min_chars:
+            quality["is_empty"] = True
+            quality["empty_reason"] = (
+                f"text_chars_total={quality['text_chars_total']} < threshold={settings.parse_quality_min_chars}"
+            )
+        elif chunks_count == 0:
+            quality["is_empty"] = True
+            quality["empty_reason"] = "chunks_count=0"
+
+        return quality
 
     def _validate_pdf_file(self, pdf_path: Path) -> Optional[str]:
         if not pdf_path.exists():

@@ -57,8 +57,18 @@ services:
       - CHUNK_DEDUP=true
       - MIN_PDF_BYTES=5000
       - DOCLING_DO_OCR=false
-      - DOCLING_DO_TABLES=false
+      # Sprint-2: tables enabled by default; doc_kind-aware logic in job_processors.py
+      - DOCLING_DO_TABLES=true
       - DOCLING_DO_PICTURES=false
+      # Sprint-2: OCR language list (en + ru for RU regulatory docs)
+      - DOCLING_OCR_LANG=en,ru
+      # Sprint-2: doc_kinds that always use Docling+OCR path
+      - DOCLING_OCR_DOC_KINDS=ru_instruction,grls_card,smpc,patent_pdf
+      # Sprint-2: doc_kinds that always get table extraction
+      - DOCLING_TABLES_DOC_KINDS=ctgov_results,ru_instruction,grls_card,smpc,epar,patent,patent_pdf,publication,pmc
+      # Sprint-2: parse quality thresholds
+      - PARSE_QUALITY_MIN_CHARS=100
+      - PARSE_QUALITY_GARBAGE_THRESHOLD=0.15
 
       # Optional
       - LOG_LEVEL=INFO
@@ -97,7 +107,7 @@ services:
       - WORKER_MODE=doc_parse_index
       - WORKER_CONCURRENCY=4
       - DDKIT_LLM_TIMEOUT_SECONDS=120
-      - JOB_TIMEOUT_SECONDS=900
+      - JOB_TIMEOUT_SECONDS=300
       - EMBEDDINGS_BATCH_SIZE=128
       - EMBEDDINGS_MAX_CONCURRENCY=4
       - CHUNK_SIZE_TOKENS=800
@@ -105,8 +115,13 @@ services:
       - CHUNK_DEDUP=true
       - MIN_PDF_BYTES=5000
       - DOCLING_DO_OCR=false
-      - DOCLING_DO_TABLES=false
+      - DOCLING_DO_TABLES=true
       - DOCLING_DO_PICTURES=false
+      - DOCLING_OCR_LANG=en,ru
+      - DOCLING_OCR_DOC_KINDS=ru_instruction,grls_card,smpc,patent_pdf
+      - DOCLING_TABLES_DOC_KINDS=ctgov_results,ru_instruction,grls_card,smpc,epar,patent,patent_pdf,publication,pmc
+      - PARSE_QUALITY_MIN_CHARS=100
+      - PARSE_QUALITY_GARBAGE_THRESHOLD=0.15
       - LOG_LEVEL=INFO
       - QUEUE_DOC_PARSE_INDEX=ddkit:doc_parse_index
       - QUEUE_REPORT_GENERATE=ddkit:report_generate
@@ -147,8 +162,13 @@ services:
       - CHUNK_DEDUP=true
       - MIN_PDF_BYTES=5000
       - DOCLING_DO_OCR=false
-      - DOCLING_DO_TABLES=false
+      - DOCLING_DO_TABLES=true
       - DOCLING_DO_PICTURES=false
+      - DOCLING_OCR_LANG=en,ru
+      - DOCLING_OCR_DOC_KINDS=ru_instruction,grls_card,smpc,patent_pdf
+      - DOCLING_TABLES_DOC_KINDS=ctgov_results,ru_instruction,grls_card,smpc,epar,patent,patent_pdf,publication,pmc
+      - PARSE_QUALITY_MIN_CHARS=100
+      - PARSE_QUALITY_GARBAGE_THRESHOLD=0.15
       - LOG_LEVEL=INFO
       - QUEUE_DOC_PARSE_INDEX=ddkit:doc_parse_index
       - QUEUE_REPORT_GENERATE=ddkit:report_generate

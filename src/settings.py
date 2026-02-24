@@ -57,8 +57,31 @@ class WorkerSettings(BaseSettings):
 
     # Docling tuning
     docling_do_ocr: bool = Field(False, env="DOCLING_DO_OCR")
-    docling_do_tables: bool = Field(False, env="DOCLING_DO_TABLES")
+    docling_do_tables: bool = Field(True, env="DOCLING_DO_TABLES")
     docling_do_pictures: bool = Field(True, env="DOCLING_DO_PICTURES")
+
+    # Sprint-2: OCR language list (comma-separated, e.g. "en,ru")
+    docling_ocr_lang: str = Field("en,ru", env="DOCLING_OCR_LANG")
+
+    # Sprint-2: doc_kinds that ALWAYS get Docling+OCR regardless of text-layer detection
+    # (comma-separated, e.g. "ru_instruction,grls_card,smpc,patent_pdf")
+    docling_ocr_doc_kinds: str = Field(
+        "ru_instruction,grls_card,smpc,patent_pdf",
+        env="DOCLING_OCR_DOC_KINDS",
+    )
+
+    # Sprint-2: doc_kinds that ALWAYS get Docling table extraction
+    # (comma-separated)
+    docling_tables_doc_kinds: str = Field(
+        "ctgov_results,ru_instruction,grls_card,smpc,epar,patent,patent_pdf,publication,pmc",
+        env="DOCLING_TABLES_DOC_KINDS",
+    )
+
+    # Sprint-2: minimum "suspicious garbage" threshold — ratio of replacement chars + non-printables
+    parse_quality_garbage_threshold: float = Field(0.15, env="PARSE_QUALITY_GARBAGE_THRESHOLD")
+
+    # Sprint-2: minimum text chars total for a parsed doc to be considered non-empty
+    parse_quality_min_chars: int = Field(100, env="PARSE_QUALITY_MIN_CHARS")
 
     # PDF validation
     min_pdf_bytes: int = Field(5000, env="MIN_PDF_BYTES")
