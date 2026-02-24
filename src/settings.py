@@ -38,6 +38,11 @@ class WorkerSettings(BaseSettings):
     worker_concurrency: int = Field(1, env="WORKER_CONCURRENCY")
     worker_poll_timeout: int = Field(2, env="WORKER_POLL_TIMEOUT")
 
+    # Watchdog settings for stale-job reclaim (#1)
+    queue_visibility_timeout_s: int = Field(600, env="DDKIT_QUEUE_VISIBILITY_TIMEOUT_S")
+    watchdog_interval_s: int = Field(60, env="DDKIT_WATCHDOG_INTERVAL_S")
+    watchdog_max_reclaims: int = Field(3, env="DDKIT_WATCHDOG_MAX_RECLAIMS")
+
     # Embeddings settings
     embeddings_model: str = Field("text-embedding-3-large", env="EMBEDDINGS_MODEL")
     embeddings_batch_size: int = Field(128, env="EMBEDDINGS_BATCH_SIZE")

@@ -4,9 +4,10 @@ import os
 import signal
 import sys
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional, Set, List
 
 from src.queue_handler import JobQueueHandler
 from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, CaseViewGenerateProcessor, JobCallback
@@ -29,6 +30,7 @@ class DDKitWorker:
         self.job_attempts_lock = Lock()
         self.mode = settings.worker_mode
         self.concurrency = max(1, settings.worker_concurrency)
+        self._watchdog_thread: Optional[threading.Thread] = None
 
     def start(self):
         """Start the worker loop."""
@@ -43,6 +45,9 @@ class DDKitWorker:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
+        # Start watchdog in a background daemon thread (#1)
+        self._start_watchdog()
+
         try:
             self._worker_loop()
         except Exception as e:
@@ -50,6 +55,52 @@ class DDKitWorker:
             sys.exit(1)
         finally:
             logger.info("Worker stopped")
+
+    def _start_watchdog(self) -> None:
+        """Start the background watchdog thread that reclaims stale jobs (#1)."""
+        self._watchdog_thread = threading.Thread(
+            target=self._watchdog_loop,
+            name="ddkit-watchdog",
+            daemon=True,  # exits when main thread exits
+        )
+        self._watchdog_thread.start()
+        logger.info(
+            "queue_watchdog_started interval_s=%d visibility_s=%d max_reclaims=%d",
+            settings.watchdog_interval_s,
+            settings.queue_visibility_timeout_s,
+            settings.watchdog_max_reclaims,
+        )
+
+    def _watchdog_loop(self) -> None:
+        """
+        Background loop: periodically scan processing lists and reclaim stale jobs.
+
+        Runs every DDKIT_WATCHDOG_INTERVAL_S seconds. Uses a distributed Redis
+        lock (SET NX) inside watchdog_tick() so only one worker instance
+        performs the reclaim at a time.
+        """
+        # Queues to watch depend on worker mode
+        all_queues = [
+            settings.queue_doc_parse_index,
+            settings.queue_report_generate,
+            settings.queue_case_view_generate,
+        ]
+        mode_queues: List[str] = {
+            "doc_parse_index": [settings.queue_doc_parse_index],
+            "report_generate": [settings.queue_report_generate],
+            "case_view_generate": [settings.queue_case_view_generate],
+        }.get(self.mode, all_queues)
+
+        while self.running:
+            time.sleep(settings.watchdog_interval_s)
+            if not self.running:
+                break
+            try:
+                reclaimed = self.queue_handler.watchdog_tick(mode_queues)
+                if reclaimed:
+                    logger.info("queue_watchdog_tick_done reclaimed=%d", reclaimed)
+            except Exception as exc:
+                logger.error("queue_watchdog_tick_error: %s", exc)
 
     def stop(self):
         """Stop the worker."""
@@ -132,24 +183,39 @@ class DDKitWorker:
             self.job_attempts[job_id] += 1
             attempt = self.job_attempts[job_id]
 
-        logger.info(f"Processing job {job_id} (attempt {attempt}/{settings.max_job_attempts})")
+        logger.info(
+            "job_start job=%s attempt=%d/%d trace=%s run=%s",
+            job_id, attempt, settings.max_job_attempts,
+            job_data.get("trace_id"), job_data.get("run_id"),
+        )
 
         try:
             success = self._execute_job_processor(job_type, job_data)
 
             if success:
-                logger.info(f"Job {job_id} completed successfully")
+                logger.info(
+                    "job_succeeded job=%s attempt=%d/%d",
+                    job_id, attempt, settings.max_job_attempts,
+                )
+                # ACK: remove from processing list (#1)
+                self.queue_handler.ack_job(job_data)
                 self._send_callback(job_data, True)
                 # Clean up attempt counter on success
                 with self.job_attempts_lock:
                     if job_id in self.job_attempts:
                         del self.job_attempts[job_id]
             else:
-                logger.error(f"Job {job_id} failed on attempt {attempt}")
+                logger.error(
+                    "job_failed job=%s attempt=%d/%d",
+                    job_id, attempt, settings.max_job_attempts,
+                )
+                # ACK the current dequeue; _handle_job_failure re-enqueues with backoff if retries remain.
+                self.queue_handler.ack_job(job_data)
                 self._handle_job_failure(job_data, job_id, attempt)
 
         except Exception as e:
-            logger.error(f"Job {job_id} failed with exception: {e}")
+            logger.error("job_exception job=%s attempt=%d: %s", job_id, attempt, e)
+            self.queue_handler.ack_job(job_data)
             self._handle_job_failure(job_data, job_id, attempt, str(e))
 
     def _execute_job_processor(self, job_type: str, job_data: Dict[str, Any]) -> bool:
@@ -164,18 +230,75 @@ class DDKitWorker:
             logger.error(f"Unknown job type: {job_type}")
             return False
 
+    # Exponential backoff delays in seconds for retries (#3).
+    _RETRY_BACKOFF = [30, 60, 120, 180, 300]
+
     def _handle_job_failure(self, job_data: Dict[str, Any], job_id: str, attempt: int, error_msg: Optional[str] = None):
-        """Handle job failure, possibly re-queue or send callback."""
+        """Handle job failure: re-queue with backoff or send to DLQ after max attempts (#3)."""
         if attempt >= settings.max_job_attempts:
-            logger.error(f"Job {job_id} failed permanently after {attempt} attempts")
+            logger.error(
+                "job_failed_terminal job=%s attempt=%d/%d error=%s — sending to DLQ",
+                job_id, attempt, settings.max_job_attempts, error_msg,
+            )
             self._send_callback(job_data, False, error_msg)
+            self._enqueue_dlq(job_data, error_msg)
             # Clean up attempt counter
             with self.job_attempts_lock:
                 if job_id in self.job_attempts:
                     del self.job_attempts[job_id]
         else:
-            logger.warning(f"Job {job_id} failed, will retry (attempt {attempt + 1})")
-            # Re-queue the job (implement if needed - for now just log)
+            # Exponential backoff delay before re-queueing (#3)
+            backoff_idx = min(attempt - 1, len(self._RETRY_BACKOFF) - 1)
+            delay_s = self._RETRY_BACKOFF[backoff_idx]
+            logger.warning(
+                "job_retrying job=%s attempt=%d/%d delay=%ds error=%s",
+                job_id, attempt, settings.max_job_attempts, delay_s, error_msg,
+            )
+            time.sleep(delay_s)
+            # Update attempt count in job payload so workers can propagate it
+            job_data["attempt"] = attempt + 1
+            self._requeue_job(job_data)
+
+    def _requeue_job(self, job_data: Dict[str, Any]) -> None:
+        """Re-push a failed job back to its source queue for retry (#3)."""
+        try:
+            queued = self.queue_handler.enqueue_job(job_data)
+            if queued:
+                logger.info(
+                    "job_requeued job_type=%s job_id=%s attempt=%d",
+                    job_data.get("job_type"), job_data.get("job_id"), job_data.get("attempt"),
+                )
+            else:
+                logger.error(
+                    "job_requeue_failed job_type=%s job_id=%s — falling back to DLQ",
+                    job_data.get("job_type"), job_data.get("job_id"),
+                )
+                self._enqueue_dlq(job_data, "requeue_failed")
+        except Exception as exc:
+            logger.error("job_requeue_exception job_id=%s: %s", job_data.get("job_id"), exc)
+
+    def _enqueue_dlq(self, job_data: Dict[str, Any], error_msg: Optional[str]) -> None:
+        """
+        Push a job to the Dead Letter Queue list in Redis (#3).
+
+        DLQ key format: ddkit:dlq:{job_type}
+        Payload includes original job + error context.
+        """
+        job_type = job_data.get("job_type", "unknown")
+        dlq_key = f"ddkit:dlq:{job_type}"
+        dlq_entry = {
+            **job_data,
+            "dlq_reason": error_msg or "unknown",
+            "dlq_at": int(time.time()),
+        }
+        try:
+            self.queue_handler.redis_client.lpush(dlq_key, json.dumps(dlq_entry))
+            logger.info(
+                "job_dlq_enqueued job_type=%s job_id=%s queue=%s",
+                job_type, job_data.get("job_id"), dlq_key,
+            )
+        except Exception as exc:
+            logger.error("job_dlq_failed job_id=%s: %s", job_data.get("job_id"), exc)
 
     def _get_job_id(self, job_data: Dict[str, Any]) -> Optional[str]:
         """Generate a unique job ID for tracking attempts."""
