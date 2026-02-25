@@ -289,6 +289,11 @@ class DDReportGenerator:
                 t0 = time.time()
                 # Adaptive top-K (#9, Sprint 3 §3.1): section type determines evidence depth.
                 adaptive_k = self._adaptive_top_k(section_id, doc_kind)
+                logger.info(
+                    "adaptive_k=%d for section=%s doc_kind=%s",
+                    adaptive_k, section_id,
+                    ",".join(str(d) for d in doc_kind) if isinstance(doc_kind, list) else (doc_kind or "-"),
+                )
                 # Retrieve more candidates when focus_terms are present (broader recall needed).
                 retrieve_limit = max(adaptive_k, 30) if focus_terms else adaptive_k
                 retrieved = self.retriever.retrieve_by_case(

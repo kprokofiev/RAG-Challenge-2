@@ -180,7 +180,7 @@ class BM25Retriever:
 
         if _cached is not None:
             all_chunks, bm25_index = _cached
-            _log.debug("BM25 cache hit: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
+            _log.info("BM25 cache hit: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
         else:
             all_chunks = []
 
@@ -204,7 +204,10 @@ class BM25Retriever:
                 doc_id = metainfo.get("doc_id", doc_path.stem)
                 doc_title = metainfo.get("title") or metainfo.get("company_name") or doc_id
 
-                for chunk in doc.get("content", {}).get("chunks", []):
+                content = doc.get("content", {})
+                # Support both formats: content.chunks (new) and content.pages (legacy)
+                raw_items = content.get("chunks") or content.get("pages") or []
+                for chunk in raw_items:
                     all_chunks.append({
                         "_text": chunk.get("text", ""),
                         "_chunk": chunk,
@@ -214,7 +217,7 @@ class BM25Retriever:
                     })
 
             if not all_chunks:
-                _log.debug("BM25 retrieve_by_case: no chunks found (case=%s, doc_kind=%s)", case_id, doc_kind)
+                _log.info("BM25 retrieve_by_case: no chunks found (case=%s, doc_kind=%s)", case_id, doc_kind)
                 return []
 
             # Tokenise and build BM25 index on the fly
@@ -227,7 +230,7 @@ class BM25Retriever:
 
             # Store in process-level cache
             _BM25_CACHE[_cache_key] = (all_chunks, bm25_index)
-            _log.debug("BM25 cache stored: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
+            _log.info("BM25 cache stored: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
 
         tokenized_query = query.lower().split()
         scores = bm25_index.get_scores(tokenized_query)
