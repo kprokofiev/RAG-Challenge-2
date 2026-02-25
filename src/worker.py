@@ -233,12 +233,25 @@ class DDKitWorker:
     # Exponential backoff delays in seconds for retries (#3).
     _RETRY_BACKOFF = [30, 60, 120, 180, 300]
 
+    # Statuses set by processors that are "terminal by design" — no retry makes sense.
+    _TERMINAL_STATUSES = {"parsed_empty", "unsupported", "skipped"}
+
     def _handle_job_failure(self, job_data: Dict[str, Any], job_id: str, attempt: int, error_msg: Optional[str] = None):
-        """Handle job failure: re-queue with backoff or send to DLQ after max attempts (#3)."""
-        if attempt >= settings.max_job_attempts:
+        """Handle job failure: re-queue with backoff or send to DLQ after max attempts (#3).
+
+        Jobs whose status is in _TERMINAL_STATUSES (e.g. parsed_empty) are sent straight to
+        DLQ on first failure — retrying will always produce the same result.
+        """
+        job_status = job_data.get("status", "")
+        is_terminal = (
+            job_status in self._TERMINAL_STATUSES
+            or (error_msg or "").startswith("terminal:")
+        )
+        if is_terminal or attempt >= settings.max_job_attempts:
+            reason = "terminal_status" if is_terminal else "max_attempts_exceeded"
             logger.error(
-                "job_failed_terminal job=%s attempt=%d/%d error=%s — sending to DLQ",
-                job_id, attempt, settings.max_job_attempts, error_msg,
+                "job_failed_terminal job=%s attempt=%d/%d reason=%s error=%s — sending to DLQ",
+                job_id, attempt, settings.max_job_attempts, reason, error_msg,
             )
             self._send_callback(job_data, False, error_msg)
             self._enqueue_dlq(job_data, error_msg)
