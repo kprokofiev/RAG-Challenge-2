@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Tuple, Dict, Union
+from typing import Any, List, Tuple, Dict, Optional, Union
 from rank_bm25 import BM25Okapi
 import pickle
 from pathlib import Path
@@ -12,6 +12,81 @@ import numpy as np
 from src.reranking import LLMReranker
 
 _log = logging.getLogger(__name__)
+
+# ── BM25 in-process cache (P1): avoids rebuilding index on every question ──────────
+# Key: (case_id, tenant_id, doc_kind_key) → (corpus_chunks_list, BM25Okapi_instance)
+# Invalidated when the number of chunks changes (new documents indexed mid-run is rare).
+_BM25_CACHE: Dict[tuple, Any] = {}
+
+
+# ── Authority tiers: maps section scope → (tier-1 doc_kinds, tier-2 doc_kinds) ──────
+# Retriever first fills quota from tier-1; supplements with tier-2 when tier-1 < threshold.
+AUTHORITY_TIERS: Dict[str, Dict[str, List[str]]] = {
+    # Regulatory registers / instructions
+    "EU_REG": {
+        "tier_1": ["epar", "smpc", "assessment_report", "pil"],
+        "tier_2": ["label", "us_fda", "grls_card", "grls", "ru_instruction"],
+    },
+    "US_REG": {
+        "tier_1": ["label", "us_fda", "approval_letter"],
+        "tier_2": ["epar", "smpc", "grls_card"],
+    },
+    "RU_REG": {
+        "tier_1": ["grls_card", "grls", "ru_instruction"],
+        "tier_2": ["smpc", "epar", "label"],
+    },
+    # Clinical
+    "CLINICAL": {
+        "tier_1": ["ctgov_results", "ctgov_protocol", "ctgov", "ctgov_lay_summary", "clinical_trials"],
+        "tier_2": ["scientific_pmc", "scientific_pdf", "publication", "congress_abstract"],
+    },
+    "CLINICAL_US": {
+        "tier_1": ["ctgov_protocol", "ctgov", "ctgov_results"],
+        "tier_2": ["label", "us_fda", "publication"],
+    },
+    "PUBLICATIONS": {
+        "tier_1": ["scientific_pmc", "scientific_pdf", "publication"],
+        "tier_2": ["congress_abstract", "preprint", "rwe_study"],
+    },
+    "CONGRESS": {
+        "tier_1": ["congress_abstract", "poster"],
+        "tier_2": ["scientific_pdf", "scientific_pmc", "publication"],
+    },
+    "PREPRINTS": {
+        "tier_1": ["preprint"],
+        "tier_2": ["scientific_pmc", "publication"],
+    },
+    "RWE": {
+        "tier_1": ["rwe_study", "rwe_safety"],
+        "tier_2": ["scientific_pmc", "publication", "congress_abstract"],
+    },
+    "TRIAL_REGISTRY": {
+        "tier_1": ["trial_registry", "ctgov_protocol", "ctgov"],
+        "tier_2": ["publication", "congress_abstract"],
+    },
+    # Patents / chemistry
+    "PATENTS": {
+        "tier_1": ["patent_family", "ops", "patent_pdf"],
+        "tier_2": ["patent", "patent_text", "drug_monograph"],
+    },
+    "CHEMISTRY": {
+        "tier_1": ["patent_pdf", "drug_monograph"],
+        "tier_2": ["patent_family", "scientific_pdf"],
+    },
+    # Safety
+    "SAFETY": {
+        "tier_1": ["label", "smpc", "epar", "us_fda", "pil"],
+        "tier_2": ["rwe_safety", "scientific_pdf", "congress_abstract"],
+    },
+    # Manufacturing
+    "MANUFACTURING": {
+        "tier_1": ["manufacturers", "epar"],
+        "tier_2": ["smpc", "label", "grls_card"],
+    },
+}
+
+# Minimum number of tier-1 results to consider tier-1 "sufficient" (below → supplement w/ tier-2)
+_TIER1_SUFFICIENT_THRESHOLD = 3
 
 
 def _get_llm_timeout_seconds() -> float:
@@ -25,7 +100,7 @@ class BM25Retriever:
     def __init__(self, bm25_db_dir: Path, documents_dir: Path):
         self.bm25_db_dir = bm25_db_dir
         self.documents_dir = documents_dir
-        
+
     def retrieve_by_company_name(self, company_name: str, query: str, top_n: int = 3, return_parent_pages: bool = False) -> List[Dict]:
         document_path = None
         for path in self.documents_dir.glob("*.json"):
@@ -83,6 +158,110 @@ class BM25Retriever:
         
         return retrieval_results
 
+    def retrieve_by_case(
+        self,
+        query: str,
+        top_n: int = 20,
+        tenant_id: Optional[str] = None,
+        case_id: Optional[str] = None,
+        doc_kind: Optional[Union[str, List[str]]] = None,
+    ) -> List[Dict]:
+        """
+        Retrieve top-N BM25 chunks across all chunk JSON files for the given case.
+
+        Builds an in-memory BM25 index from all chunks in documents_dir that match
+        the tenant/case/doc_kind filters.  Returns scored dicts compatible with
+        VectorRetriever.retrieve_by_case() output so results can be merged and reranked.
+        """
+        # ── P1 cache key: (case_id, tenant_id, normalised doc_kind string) ──────────────
+        _dk_key = ",".join(sorted(doc_kind)) if isinstance(doc_kind, list) else (doc_kind or "")
+        _cache_key = (case_id or "", tenant_id or "", _dk_key)
+        _cached = _BM25_CACHE.get(_cache_key)
+
+        if _cached is not None:
+            all_chunks, bm25_index = _cached
+            _log.info("BM25 cache hit: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
+        else:
+            all_chunks = []
+
+            for doc_path in self.documents_dir.glob("*.json"):
+                try:
+                    with open(doc_path, "r", encoding="utf-8") as f:
+                        doc = json.load(f)
+                except Exception as exc:
+                    _log.debug("BM25: skip %s — %s", doc_path.name, exc)
+                    continue
+
+                metainfo = doc.get("metainfo", {})
+                if tenant_id and metainfo.get("tenant_id") != tenant_id:
+                    continue
+                if case_id and metainfo.get("case_id") != case_id:
+                    continue
+                if doc_kind:
+                    if not VectorRetriever._doc_kind_matches(metainfo.get("doc_kind", ""), doc_kind):
+                        continue
+
+                doc_id = metainfo.get("doc_id", doc_path.stem)
+                doc_title = metainfo.get("title") or metainfo.get("company_name") or doc_id
+
+                content = doc.get("content", {})
+                # Support both formats: content.chunks (new) and content.pages (legacy)
+                raw_items = content.get("chunks") or content.get("pages") or []
+                for chunk in raw_items:
+                    all_chunks.append({
+                        "_text": chunk.get("text", ""),
+                        "_chunk": chunk,
+                        "_doc_id": doc_id,
+                        "_doc_title": doc_title,
+                        "_metainfo": metainfo,
+                    })
+
+            if not all_chunks:
+                _log.info("BM25 retrieve_by_case: no chunks found (case=%s, doc_kind=%s)", case_id, doc_kind)
+                return []
+
+            # Tokenise and build BM25 index on the fly
+            tokenized_corpus = [c["_text"].lower().split() for c in all_chunks]
+            try:
+                bm25_index = BM25Okapi(tokenized_corpus)
+            except Exception as exc:
+                _log.warning("BM25 index build failed: %s", exc)
+                return []
+
+            # Store in process-level cache
+            _BM25_CACHE[_cache_key] = (all_chunks, bm25_index)
+            _log.info("BM25 cache stored: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
+
+        tokenized_query = query.lower().split()
+        scores = bm25_index.get_scores(tokenized_query)
+
+        actual_top_n = min(top_n, len(all_chunks))
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:actual_top_n]
+
+        results: List[Dict] = []
+        for idx in top_indices:
+            score = round(float(scores[idx]), 4)
+            if score <= 0.0:
+                continue  # skip zero-score entries
+            item = all_chunks[idx]
+            chunk = item["_chunk"]
+            page_num = chunk.get("page", chunk.get("page_from", 0))
+            results.append({
+                "distance": score,
+                "page": page_num,
+                "text": chunk.get("text", ""),
+                "type": chunk.get("type", "content"),
+                "doc_id": item["_doc_id"],
+                "doc_title": item["_doc_title"],
+                "_retrieval_source": "bm25",
+            })
+
+        _log.info(
+            "BM25 retrieve_by_case: case=%s doc_kind=%s → %d chunks indexed, %d results (top score=%.3f)",
+            case_id, doc_kind, len(all_chunks), len(results),
+            results[0]["distance"] if results else 0.0,
+        )
+        return results
 
 
 class VectorRetriever:
@@ -211,8 +390,12 @@ class VectorRetriever:
         )
         embedding = embedding.data[0].embedding
         embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+        # L2-normalize query vector to match normalized index vectors (#6).
+        norm = np.linalg.norm(embedding_array)
+        if norm > 0:
+            embedding_array = embedding_array / norm
         distances, indices = vector_db.search(x=embedding_array, k=actual_top_n)
-    
+
         retrieval_results = []
         seen_pages = set()
         
@@ -257,6 +440,10 @@ class VectorRetriever:
         )
         embedding = embedding.data[0].embedding
         embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+        # L2-normalize query vector to match normalized index vectors (#6).
+        norm = np.linalg.norm(embedding_array)
+        if norm > 0:
+            embedding_array = embedding_array / norm
 
         candidates: List[Dict] = []
         for report in self.all_dbs:
@@ -320,11 +507,74 @@ class VectorRetriever:
         return all_pages
 
 
+def _merge_dense_sparse(
+    dense: List[Dict],
+    sparse: List[Dict],
+    dense_weight: float = 0.6,
+    sparse_weight: float = 0.4,
+) -> List[Dict]:
+    """
+    Merge dense (FAISS cosine) and sparse (BM25) results into a single ranked list.
+
+    Scores are normalized within each list to [0,1] then combined with weights.
+    Duplicates (same doc_id + page) are merged, keeping the higher combined score.
+    """
+    def _normalize_scores(items: List[Dict], key: str = "distance") -> List[Dict]:
+        vals = [x[key] for x in items]
+        mn, mx = min(vals, default=0.0), max(vals, default=1.0)
+        span = mx - mn if mx != mn else 1.0
+        for x in items:
+            x["_norm_score"] = (x[key] - mn) / span
+        return items
+
+    dense = _normalize_scores([d.copy() for d in dense])
+    sparse = _normalize_scores([s.copy() for s in sparse])
+
+    merged: Dict[str, Dict] = {}
+    for item in dense:
+        key = f"{item.get('doc_id','?')}::{item.get('page', 0)}"
+        item["_combined"] = dense_weight * item["_norm_score"]
+        item.setdefault("_retrieval_source", "dense")
+        merged[key] = item
+    for item in sparse:
+        key = f"{item.get('doc_id','?')}::{item.get('page', 0)}"
+        contrib = sparse_weight * item["_norm_score"]
+        if key in merged:
+            merged[key]["_combined"] += contrib
+            merged[key]["_retrieval_source"] = "dense+sparse"
+        else:
+            item["_combined"] = contrib
+            item.setdefault("_retrieval_source", "sparse")
+            merged[key] = item
+
+    result = sorted(merged.values(), key=lambda x: x["_combined"], reverse=True)
+    # Copy combined score into "distance" field so downstream code works unchanged
+    for item in result:
+        item["distance"] = round(item["_combined"], 4)
+    return result
+
+
 class HybridRetriever:
+    """
+    Hybrid dense+sparse retriever with LLM reranking and authority-tiering.
+
+    Retrieval parameter contract (Sprint 3):
+      dense_k          — chunks fetched from FAISS per doc_kind filter (default 50)
+      sparse_k         — chunks fetched from BM25 (default 50)
+      rerank_sample_k  — total candidates sent to LLM reranker (default 80)
+      final_candidates_k — returned after reranking (default 40); consumed by report generator
+
+    The `top_n` param is kept as an alias for final_candidates_k for backward compat.
+    """
+
     def __init__(self, vector_db_dir: Path, documents_dir: Path):
         self.vector_retriever = VectorRetriever(vector_db_dir, documents_dir)
+        self.bm25_retriever = BM25Retriever(
+            bm25_db_dir=vector_db_dir,   # not used for case retrieval; dir kept for compat
+            documents_dir=documents_dir,
+        )
         self.reranker = LLMReranker()
-        
+
     def retrieve_by_company_name(
         self,
         company_name: str,
@@ -338,22 +588,7 @@ class HybridRetriever:
         case_id: str = None,
         doc_kind: str = None
     ) -> List[Dict]:
-        """
-        Retrieve and rerank documents using hybrid approach.
-        
-        Args:
-            company_name: Name of the company to search documents for
-            query: Search query
-            llm_reranking_sample_size: Number of initial results to retrieve from vector DB
-            documents_batch_size: Number of documents to analyze in one LLM prompt
-            top_n: Number of final results to return after reranking
-            llm_weight: Weight given to LLM scores (0-1)
-            return_parent_pages: Whether to return full pages instead of chunks
-            
-        Returns:
-            List of reranked document dictionaries with scores
-        """
-        # Get initial results from vector retriever
+        """Backward-compatible single-company retrieval (dense only + rerank)."""
         vector_results = self.vector_retriever.retrieve_by_company_name(
             company_name=company_name,
             query=query,
@@ -361,43 +596,128 @@ class HybridRetriever:
             return_parent_pages=return_parent_pages,
             tenant_id=tenant_id,
             case_id=case_id,
-            doc_kind=doc_kind
+            doc_kind=doc_kind,
         )
-        
-        # Rerank results using LLM
         reranked_results = self.reranker.rerank_documents(
             query=query,
             documents=vector_results,
             documents_batch_size=documents_batch_size,
-            llm_weight=llm_weight
+            llm_weight=llm_weight,
         )
-        
         return reranked_results[:top_n]
 
     def retrieve_by_case(
         self,
         query: str,
-        llm_reranking_sample_size: int = 28,
+        # ── Sprint-3 explicit param contract ─────────────────────────────────
+        dense_k: int = 50,
+        sparse_k: int = 50,
+        rerank_sample_k: int = 80,
+        final_candidates_k: int = 40,
+        # ── Kept for backward compat (maps to final_candidates_k) ─────────────
+        top_n: Optional[int] = None,
+        llm_reranking_sample_size: Optional[int] = None,   # legacy alias → rerank_sample_k
+        # ── Shared options ─────────────────────────────────────────────────────
         documents_batch_size: int = 2,
-        top_n: int = 6,
         llm_weight: float = 0.7,
         return_parent_pages: bool = False,
-        tenant_id: str = None,
-        case_id: str = None,
-        doc_kind: str = None
+        tenant_id: Optional[str] = None,
+        case_id: Optional[str] = None,
+        doc_kind: Optional[Union[str, List[str]]] = None,
+        authority_scope: Optional[str] = None,
     ) -> List[Dict]:
-        vector_results = self.vector_retriever.retrieve_by_case(
+        """
+        Hybrid dense+sparse retrieval with LLM reranking and authority-tiering.
+
+        Steps:
+          1. Authority-tiering: if authority_scope given and doc_kind is None,
+             first search tier-1 doc_kinds; supplement with tier-2 if insufficient.
+          2. Dense retrieval (FAISS cosine, top dense_k).
+          3. Sparse retrieval (BM25, top sparse_k).
+          4. Merge + normalize scores (dense_weight=0.6, sparse_weight=0.4).
+          5. LLM reranking on top rerank_sample_k merged candidates.
+          6. Return top final_candidates_k.
+        """
+        # Backward compat aliases
+        if top_n is not None:
+            final_candidates_k = top_n
+        if llm_reranking_sample_size is not None:
+            rerank_sample_k = llm_reranking_sample_size
+
+        effective_doc_kind = doc_kind
+
+        # ── 1. Authority-tiering ────────────────────────────────────────────────
+        tier_info = AUTHORITY_TIERS.get(authority_scope or "") if not doc_kind else None
+        tier_1_kinds = tier_info["tier_1"] if tier_info else None
+        tier_2_kinds = tier_info["tier_2"] if tier_info else None
+
+        if tier_1_kinds:
+            effective_doc_kind = tier_1_kinds
+
+        # ── 2. Dense retrieval ──────────────────────────────────────────────────
+        dense_results = self.vector_retriever.retrieve_by_case(
             query=query,
-            top_n=llm_reranking_sample_size,
+            top_n=dense_k,
             return_parent_pages=return_parent_pages,
             tenant_id=tenant_id,
             case_id=case_id,
-            doc_kind=doc_kind
+            doc_kind=effective_doc_kind,
         )
+
+        # ── 3. Sparse (BM25) retrieval ──────────────────────────────────────────
+        sparse_results = self.bm25_retriever.retrieve_by_case(
+            query=query,
+            top_n=sparse_k,
+            tenant_id=tenant_id,
+            case_id=case_id,
+            doc_kind=effective_doc_kind,
+        )
+
+        # Authority supplement: if tier-1 results < threshold, add tier-2
+        if tier_2_kinds and (len(dense_results) + len(sparse_results)) < _TIER1_SUFFICIENT_THRESHOLD * 2:
+            _log.info(
+                "authority-tiering: tier-1 (%s) returned %d dense + %d sparse — supplementing with tier-2 (%s)",
+                tier_1_kinds, len(dense_results), len(sparse_results), tier_2_kinds,
+            )
+            dense_results += self.vector_retriever.retrieve_by_case(
+                query=query,
+                top_n=dense_k // 2,
+                return_parent_pages=return_parent_pages,
+                tenant_id=tenant_id,
+                case_id=case_id,
+                doc_kind=tier_2_kinds,
+            )
+            sparse_results += self.bm25_retriever.retrieve_by_case(
+                query=query,
+                top_n=sparse_k // 2,
+                tenant_id=tenant_id,
+                case_id=case_id,
+                doc_kind=tier_2_kinds,
+            )
+
+        _log.info(
+            "HybridRetriever.retrieve_by_case: dense=%d sparse=%d (case=%s doc_kind=%s scope=%s)",
+            len(dense_results), len(sparse_results),
+            case_id, effective_doc_kind, authority_scope,
+        )
+
+        # ── 4. Merge dense + sparse ─────────────────────────────────────────────
+        merged = _merge_dense_sparse(dense_results, sparse_results)
+
+        # Limit to rerank_sample_k before sending to LLM reranker (cost guardrail)
+        candidates_for_rerank = merged[:rerank_sample_k]
+
+        if not candidates_for_rerank:
+            _log.warning("HybridRetriever: no candidates to rerank (case=%s)", case_id)
+            return []
+
+        # ── 5. LLM reranking ────────────────────────────────────────────────────
         reranked_results = self.reranker.rerank_documents(
             query=query,
-            documents=vector_results,
+            documents=candidates_for_rerank,
             documents_batch_size=documents_batch_size,
-            llm_weight=llm_weight
+            llm_weight=llm_weight,
         )
-        return reranked_results[:top_n]
+
+        # ── 6. Return top final_candidates_k ────────────────────────────────────
+        return reranked_results[:final_candidates_k]

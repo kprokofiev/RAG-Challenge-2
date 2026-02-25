@@ -1,0 +1,359 @@
+{
+  "_meta": {
+    "generated": "2026-02-25",
+    "sprint": 3,
+    "description": "Sprint 3 golden case baseline metrics \u2014 before Sprint 4. Use as regression floor.",
+    "note": "F2 WARN (adaptive_k=55) expected: no patent doc_kinds in any corpus (discovery gap, not retriever bug).",
+    "sprint_3_accepted": true
+  },
+  "dlq": {
+    "doc_fetch_render": {
+      "total": 36,
+      "by_reason": {
+        "failed_terminal:forbidden_403": 20,
+        "max_attempts_exceeded": 13,
+        "failed_terminal:source_not_found_404": 3
+      }
+    },
+    "doc_parse_index": {
+      "total": 0,
+      "by_reason": {}
+    },
+    "report_generate": {
+      "total": 0,
+      "by_reason": {}
+    }
+  },
+  "golden_cases": {
+    "trimebutine": {
+      "case_id": "9d757f44-9564-4154-98de-fc555acc838f",
+      "report_id": "3feba951-3ce8-490a-9998-28a3a841f29a",
+      "sections_plan_version": "2.1",
+      "sections_count": 14,
+      "docs": {
+        "total": 63,
+        "indexed": 51,
+        "failed": 12,
+        "coverage_pct": 81.0
+      },
+      "report": {
+        "total_claims": 4,
+        "total_unknowns": 24,
+        "completeness_ratio": 1.0,
+        "is_partial": false,
+        "latency_s": 220
+      },
+      "bm25": {
+        "retrieve_calls": 27,
+        "cache_build": 4,
+        "cache_hits": 2
+      },
+      "gate": {
+        "result": "PASS",
+        "pass": 13,
+        "warn": 1,
+        "fail": 0,
+        "total": 14
+      },
+      "coverage_by_doc_kind": {
+        "case_report": {
+          "indexed": 8,
+          "failed": 2,
+          "total": 10
+        },
+        "congress_abstract": {
+          "indexed": 6,
+          "failed": 2,
+          "total": 8
+        },
+        "ddi_overview": {
+          "indexed": 5,
+          "failed": 0,
+          "total": 5
+        },
+        "moa_overview": {
+          "indexed": 10,
+          "failed": 1,
+          "total": 11
+        },
+        "press_release": {
+          "indexed": 3,
+          "failed": 4,
+          "total": 7
+        },
+        "publication": {
+          "indexed": 4,
+          "failed": 0,
+          "total": 4
+        },
+        "rwe_safety": {
+          "indexed": 3,
+          "failed": 0,
+          "total": 3
+        },
+        "rwe_study": {
+          "indexed": 3,
+          "failed": 0,
+          "total": 3
+        },
+        "trial_registry": {
+          "indexed": 9,
+          "failed": 3,
+          "total": 12
+        }
+      },
+      "unknown_count_by_section": {
+        "clinical_congress_abstracts": 1,
+        "clinical_efficacy_publications": 0,
+        "clinical_preprints": 1,
+        "clinical_results": 2,
+        "clinical_trials_overview": 2,
+        "manufacturers": 1,
+        "patents": 3,
+        "regulatory_status_eu": 3,
+        "regulatory_status_ru": 3,
+        "regulatory_status_us": 3,
+        "rwe_evidence": 1,
+        "safety_profile": 2,
+        "synthesis": 1,
+        "trial_registry": 1
+      },
+      "claims_count_by_section": {
+        "clinical_congress_abstracts": 0,
+        "clinical_efficacy_publications": 3,
+        "clinical_preprints": 0,
+        "clinical_results": 0,
+        "clinical_trials_overview": 0,
+        "manufacturers": 0,
+        "patents": 0,
+        "regulatory_status_eu": 0,
+        "regulatory_status_ru": 0,
+        "regulatory_status_us": 0,
+        "rwe_evidence": 1,
+        "safety_profile": 0,
+        "synthesis": 0,
+        "trial_registry": 0
+      }
+    },
+    "rivaroxaban": {
+      "case_id": "d5eda949-a2fd-4bd2-9909-1c49da1a3a22",
+      "report_id": "5c6f5f98-92a4-4281-b0a0-ebda70a14ea1",
+      "sections_plan_version": "2.1",
+      "sections_count": 14,
+      "docs": {
+        "total": 81,
+        "indexed": 67,
+        "failed": 14,
+        "coverage_pct": 82.7
+      },
+      "report": {
+        "total_claims": 18,
+        "total_unknowns": 21,
+        "completeness_ratio": 1.0,
+        "is_partial": false,
+        "latency_s": 349
+      },
+      "bm25": {
+        "retrieve_calls": 70,
+        "cache_build": 19,
+        "cache_hits": 9
+      },
+      "gate": {
+        "result": "PASS",
+        "pass": 14,
+        "warn": 1,
+        "fail": 0,
+        "total": 15
+      },
+      "coverage_by_doc_kind": {
+        "ddi_overview": {
+          "indexed": 11,
+          "failed": 1,
+          "total": 12
+        },
+        "moa_overview": {
+          "indexed": 8,
+          "failed": 3,
+          "total": 11
+        },
+        "preprint": {
+          "indexed": 5,
+          "failed": 2,
+          "total": 7
+        },
+        "press_release": {
+          "indexed": 6,
+          "failed": 2,
+          "total": 8
+        },
+        "publication": {
+          "indexed": 11,
+          "failed": 2,
+          "total": 13
+        },
+        "rwe_safety": {
+          "indexed": 7,
+          "failed": 1,
+          "total": 8
+        },
+        "rwe_study": {
+          "indexed": 11,
+          "failed": 2,
+          "total": 13
+        },
+        "trial_registry": {
+          "indexed": 8,
+          "failed": 1,
+          "total": 9
+        }
+      },
+      "unknown_count_by_section": {
+        "clinical_congress_abstracts": 1,
+        "clinical_efficacy_publications": 0,
+        "clinical_preprints": 0,
+        "clinical_results": 2,
+        "clinical_trials_overview": 2,
+        "manufacturers": 1,
+        "patents": 3,
+        "regulatory_status_eu": 3,
+        "regulatory_status_ru": 3,
+        "regulatory_status_us": 3,
+        "rwe_evidence": 0,
+        "safety_profile": 2,
+        "synthesis": 1,
+        "trial_registry": 0
+      },
+      "claims_count_by_section": {
+        "clinical_congress_abstracts": 0,
+        "clinical_efficacy_publications": 6,
+        "clinical_preprints": 3,
+        "clinical_results": 0,
+        "clinical_trials_overview": 0,
+        "manufacturers": 0,
+        "patents": 0,
+        "regulatory_status_eu": 0,
+        "regulatory_status_ru": 0,
+        "regulatory_status_us": 0,
+        "rwe_evidence": 6,
+        "safety_profile": 0,
+        "synthesis": 0,
+        "trial_registry": 3
+      }
+    },
+    "semaglutide": {
+      "case_id": "c55904fc-620f-48dc-bc78-7b6c8d463204",
+      "report_id": "8429ffca-f5ac-4e11-bf88-dfdebae207e3",
+      "sections_plan_version": "2.1",
+      "sections_count": 14,
+      "docs": {
+        "total": 100,
+        "indexed": 83,
+        "failed": 17,
+        "coverage_pct": 83.0
+      },
+      "report": {
+        "total_claims": 20,
+        "total_unknowns": 20,
+        "completeness_ratio": 1.0,
+        "is_partial": true,
+        "latency_s": 632
+      },
+      "bm25": {
+        "retrieve_calls": 97,
+        "cache_build": 24,
+        "cache_hits": 11
+      },
+      "gate": {
+        "result": "PASS",
+        "pass": 14,
+        "warn": 1,
+        "fail": 0,
+        "total": 15
+      },
+      "coverage_by_doc_kind": {
+        "case_report": {
+          "indexed": 9,
+          "failed": 3,
+          "total": 12
+        },
+        "congress_abstract": {
+          "indexed": 6,
+          "failed": 4,
+          "total": 10
+        },
+        "ddi_overview": {
+          "indexed": 0,
+          "failed": 1,
+          "total": 1
+        },
+        "moa_overview": {
+          "indexed": 9,
+          "failed": 1,
+          "total": 10
+        },
+        "preprint": {
+          "indexed": 6,
+          "failed": 0,
+          "total": 6
+        },
+        "press_release": {
+          "indexed": 11,
+          "failed": 2,
+          "total": 13
+        },
+        "publication": {
+          "indexed": 10,
+          "failed": 0,
+          "total": 10
+        },
+        "rwe_safety": {
+          "indexed": 16,
+          "failed": 0,
+          "total": 16
+        },
+        "rwe_study": {
+          "indexed": 8,
+          "failed": 5,
+          "total": 13
+        },
+        "trial_registry": {
+          "indexed": 8,
+          "failed": 1,
+          "total": 9
+        }
+      },
+      "unknown_count_by_section": {
+        "clinical_congress_abstracts": 0,
+        "clinical_efficacy_publications": 0,
+        "clinical_preprints": 0,
+        "clinical_results": 2,
+        "clinical_trials_overview": 2,
+        "manufacturers": 1,
+        "patents": 3,
+        "regulatory_status_eu": 3,
+        "regulatory_status_ru": 3,
+        "regulatory_status_us": 3,
+        "rwe_evidence": 0,
+        "safety_profile": 2,
+        "synthesis": 1,
+        "trial_registry": 0
+      },
+      "claims_count_by_section": {
+        "clinical_congress_abstracts": 2,
+        "clinical_efficacy_publications": 7,
+        "clinical_preprints": 3,
+        "clinical_results": 0,
+        "clinical_trials_overview": 0,
+        "manufacturers": 0,
+        "patents": 0,
+        "regulatory_status_eu": 0,
+        "regulatory_status_ru": 0,
+        "regulatory_status_us": 0,
+        "rwe_evidence": 6,
+        "safety_profile": 0,
+        "synthesis": 0,
+        "trial_registry": 2
+      }
+    }
+  }
+}

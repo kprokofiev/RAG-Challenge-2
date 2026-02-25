@@ -224,6 +224,16 @@ class DDKitDB:
             )
         return out
 
+    def get_case_inn(self, tenant_id: str, case_id: str) -> Optional[str]:
+        """Return the INN (drug name) stored in case_views for this case, or None."""
+        row = self._query_one(
+            "SELECT inn FROM case_views WHERE tenant_id=%s AND case_id=%s::uuid",
+            (tenant_id, case_id),
+        )
+        if row and row[0]:
+            return str(row[0]).strip() or None
+        return None
+
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
         row = self._query_one(
             """

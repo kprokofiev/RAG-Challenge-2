@@ -1,0 +1,326 @@
+{
+  "_meta": {
+    "sections_plan_version": "2.1",
+    "description": "DD-oriented sections plan v2. Covers regulatory, clinical (publications/abstracts/rwe/trial_registry), patents, instruction. Each question targets a specific doc_kind — no mixing.",
+    "changelog": [
+      "2.0: Initial pharmsearch sections_plan",
+      "2.1 (Sprint 3): Added publications, preprints, congress_abstracts, rwe_study, rwe_safety, trial_registry sections; authority-first doc_kind per question; patent compound/formulation/use/synthesis extraction; instruction dosing/forms/indications"
+    ]
+  },
+
+  "regulatory_status_eu": {
+    "section_id": "regulatory_status_eu",
+    "title": "EU Regulatory Status",
+    "authority_scope": "EU_REG",
+    "tier_1_doc_kinds": ["epar", "smpc", "assessment_report"],
+    "questions": [
+      {
+        "scope": "EU_REG",
+        "question": "What is the indication, MAH, approval date, and authorization number in the EPAR?",
+        "answer_type": "facts",
+        "doc_kind_preference": "epar",
+        "focus_terms": ["indication", "marketing authorisation holder", "approval date", "procedure number"]
+      },
+      {
+        "scope": "EU_REG",
+        "question": "What are the SmPC contraindications, special warnings, and undesirable effects?",
+        "answer_type": "facts",
+        "doc_kind_preference": "smpc",
+        "focus_terms": ["contraindication", "warning", "undesirable effect", "special precaution"]
+      },
+      {
+        "scope": "EU_REG",
+        "question": "What is the dosing regimen, route of administration, and available pharmaceutical forms per SmPC?",
+        "answer_type": "facts",
+        "doc_kind_preference": "smpc",
+        "focus_terms": ["dose", "dosing", "route of administration", "pharmaceutical form", "tablet", "capsule", "injection"]
+      }
+    ]
+  },
+
+  "regulatory_status_us": {
+    "section_id": "regulatory_status_us",
+    "title": "US Regulatory Status",
+    "authority_scope": "US_REG",
+    "tier_1_doc_kinds": ["label", "us_fda", "approval_letter"],
+    "questions": [
+      {
+        "scope": "US_REG",
+        "question": "What is the FDA approval status, NDA/BLA number, indication, and sponsor?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["label", "us_fda"],
+        "focus_terms": ["indication", "approval", "NDA", "BLA", "sponsor", "applicant"]
+      },
+      {
+        "scope": "US_REG",
+        "question": "What are the boxed warnings and key contraindications in the FDA label?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["label", "us_fda"],
+        "focus_terms": ["boxed warning", "black box", "contraindication", "WARNING"]
+      },
+      {
+        "scope": "US_REG",
+        "question": "What dosing regimens, strengths, and dosage forms are approved per FDA label?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["label", "us_fda"],
+        "focus_terms": ["dosage", "dose", "strength", "administration", "form", "tablet", "mg", "mL"]
+      }
+    ]
+  },
+
+  "regulatory_status_ru": {
+    "section_id": "regulatory_status_ru",
+    "title": "RU Regulatory Status",
+    "authority_scope": "RU_REG",
+    "tier_1_doc_kinds": ["grls_card", "grls", "ru_instruction"],
+    "questions": [
+      {
+        "scope": "RU_REG",
+        "question": "What is the GRLS registration number, registration date, MAH, and current status?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["grls_card", "grls"],
+        "focus_terms": ["регистрационный номер", "дата регистрации", "держатель", "статус", "registration number"]
+      },
+      {
+        "scope": "RU_REG",
+        "question": "What indications, dosing, and contraindications are listed in the Russian instruction (инструкция)?",
+        "answer_type": "facts",
+        "doc_kind_preference": "ru_instruction",
+        "focus_terms": ["показания", "дозирование", "противопоказания", "indication", "dosing", "contraindication"]
+      },
+      {
+        "scope": "RU_REG",
+        "question": "What pharmaceutical forms and route of administration are available per Russian instruction?",
+        "answer_type": "facts",
+        "doc_kind_preference": "ru_instruction",
+        "focus_terms": ["форма выпуска", "способ применения", "таблетки", "раствор", "pharmaceutical form", "administration"]
+      }
+    ]
+  },
+
+  "clinical_trials_overview": {
+    "section_id": "clinical_trials_overview",
+    "title": "Clinical Trials Overview",
+    "authority_scope": "CLINICAL",
+    "tier_1_doc_kinds": ["ctgov_protocol", "ctgov", "clinical_trials"],
+    "questions": [
+      {
+        "scope": "CLINICAL_US",
+        "question": "What are the key registered phase 2/3 trials on ClinicalTrials.gov: trial name, NCT ID, phase, status, population, comparator?",
+        "answer_type": "table",
+        "doc_kind_preference": ["ctgov_protocol", "ctgov"],
+        "focus_terms": ["NCT", "phase 3", "phase 2", "status", "trial name", "comparator", "population"]
+      },
+      {
+        "scope": "CLINICAL_US",
+        "question": "What are the primary and secondary endpoints of the pivotal trials?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["ctgov_protocol", "ctgov"],
+        "focus_terms": ["primary endpoint", "secondary endpoint", "outcome measure", "primary outcome"]
+      }
+    ]
+  },
+
+  "clinical_results": {
+    "section_id": "clinical_results",
+    "title": "Clinical Results (Pivotal Trials)",
+    "authority_scope": "CLINICAL",
+    "tier_1_doc_kinds": ["ctgov_results", "ctgov_lay_summary"],
+    "questions": [
+      {
+        "scope": "CLINICAL",
+        "question": "What were the primary endpoint results (absolute numbers, p-value, confidence interval) in the pivotal trial?",
+        "answer_type": "numbers",
+        "doc_kind_preference": ["ctgov_results", "ctgov_lay_summary"],
+        "focus_terms": ["primary endpoint", "p-value", "confidence interval", "relative risk", "hazard ratio", "odds ratio", "ARR", "RRR"]
+      },
+      {
+        "scope": "CLINICAL",
+        "question": "What key secondary endpoints showed significance, and what was the safety profile?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["ctgov_results", "ctgov_lay_summary"],
+        "focus_terms": ["secondary endpoint", "safety", "adverse event", "serious adverse event", "discontinuation"]
+      }
+    ]
+  },
+
+  "clinical_efficacy_publications": {
+    "section_id": "clinical_efficacy_publications",
+    "title": "Efficacy Evidence from Publications",
+    "authority_scope": "PUBLICATIONS",
+    "tier_1_doc_kinds": ["scientific_pmc", "scientific_pdf", "publication"],
+    "questions": [
+      {
+        "scope": "PUBLICATIONS",
+        "question": "What does published peer-reviewed literature report about clinical efficacy? Include study design, N, comparator, primary endpoint result.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["scientific_pmc", "scientific_pdf", "publication"],
+        "focus_terms": ["efficacy", "clinical trial", "randomized", "primary endpoint", "treatment effect", "effect size"]
+      },
+      {
+        "scope": "PUBLICATIONS",
+        "question": "What safety data (adverse events, serious adverse events, discontinuation rates) are reported in publications?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["scientific_pmc", "scientific_pdf", "publication"],
+        "focus_terms": ["adverse event", "safety", "discontinuation", "tolerability", "serious adverse", "AE", "SAE"]
+      }
+    ]
+  },
+
+  "clinical_congress_abstracts": {
+    "section_id": "clinical_congress_abstracts",
+    "title": "Congress Abstracts & Posters",
+    "authority_scope": "CONGRESS",
+    "tier_1_doc_kinds": ["congress_abstract", "poster"],
+    "questions": [
+      {
+        "scope": "CONGRESS",
+        "question": "What have congress abstracts or posters presented about clinical efficacy or safety? Include conference name, year, headline finding.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["congress_abstract", "poster"],
+        "focus_terms": ["abstract", "poster", "conference", "congress", "late-breaking", "headline efficacy", "subgroup"]
+      }
+    ]
+  },
+
+  "clinical_preprints": {
+    "section_id": "clinical_preprints",
+    "title": "Preprints (Early Evidence)",
+    "authority_scope": "PREPRINTS",
+    "tier_1_doc_kinds": ["preprint"],
+    "questions": [
+      {
+        "scope": "PREPRINTS",
+        "question": "What early-stage evidence from preprints (medRxiv/bioRxiv) exists on clinical outcomes or mechanism?",
+        "answer_type": "facts",
+        "doc_kind_preference": "preprint",
+        "focus_terms": ["preprint", "medrxiv", "biorxiv", "preliminary", "early results"],
+        "_note": "Preprints are NOT peer-reviewed; mark claims with low confidence and flag as unreviewed."
+      }
+    ]
+  },
+
+  "rwe_evidence": {
+    "section_id": "rwe_evidence",
+    "title": "Real-World Evidence",
+    "authority_scope": "RWE",
+    "tier_1_doc_kinds": ["rwe_study", "rwe_safety"],
+    "questions": [
+      {
+        "scope": "RWE",
+        "question": "What real-world studies (registries, claims databases, cohorts) report on effectiveness outcomes? Include data source, population size, and comparators.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["rwe_study", "rwe_safety"],
+        "focus_terms": ["real-world", "registry", "cohort", "claims database", "observational", "effectiveness", "outcomes"]
+      },
+      {
+        "scope": "RWE",
+        "question": "What real-world safety signals, discontinuation rates, or adherence data are reported?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["rwe_study", "rwe_safety"],
+        "focus_terms": ["real-world safety", "discontinuation", "adherence", "persistence", "tolerability", "adverse event"]
+      }
+    ]
+  },
+
+  "trial_registry": {
+    "section_id": "trial_registry",
+    "title": "Trial Registry Listings",
+    "authority_scope": "TRIAL_REGISTRY",
+    "tier_1_doc_kinds": ["trial_registry", "ctgov_protocol"],
+    "questions": [
+      {
+        "scope": "TRIAL_REGISTRY",
+        "question": "What trials are listed in registries (ClinicalTrials.gov, EUCTR, RU registries)? Include registry ID, phase, design (N, arms, countries), and recruitment status.",
+        "answer_type": "table",
+        "doc_kind_preference": ["trial_registry", "ctgov_protocol"],
+        "focus_terms": ["registry", "NCT", "EudraCT", "trial ID", "phase", "countries", "recruitment", "design"]
+      }
+    ]
+  },
+
+  "safety_profile": {
+    "section_id": "safety_profile",
+    "title": "Safety Profile & Contraindications",
+    "authority_scope": "SAFETY",
+    "tier_1_doc_kinds": ["label", "smpc", "epar", "us_fda", "pil"],
+    "questions": [
+      {
+        "scope": "EU_REG",
+        "question": "What contraindications and special warnings are listed in the EPAR/SmPC?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["epar", "smpc"],
+        "focus_terms": ["contraindication", "warning", "precaution", "interaction", "special population", "pregnancy", "hepatic", "renal"]
+      },
+      {
+        "scope": "US_REG",
+        "question": "What are the boxed warnings, contraindications, and REMS requirements in the FDA label?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["label", "us_fda"],
+        "focus_terms": ["boxed warning", "black box", "contraindication", "REMS", "risk mitigation", "serious risk"]
+      }
+    ]
+  },
+
+  "patents": {
+    "section_id": "patents",
+    "title": "Patent Landscape",
+    "authority_scope": "PATENTS",
+    "tier_1_doc_kinds": ["patent_family", "ops", "patent_pdf"],
+    "questions": [
+      {
+        "scope": "PATENTS",
+        "question": "What compound/composition patents cover the active ingredient? Include patent number, priority date, expiry, and jurisdictions.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["patent_family", "ops", "patent_pdf"],
+        "focus_terms": ["compound patent", "composition", "active ingredient", "expiry", "priority date", "jurisdiction", "patent number"]
+      },
+      {
+        "scope": "PATENTS",
+        "question": "What formulation, use/method-of-treatment, or synthesis patents exist? Identify what each closes off (e.g., dosage form, indication, synthesis route).",
+        "answer_type": "facts",
+        "doc_kind_preference": ["patent_family", "ops", "patent_pdf"],
+        "focus_terms": ["formulation patent", "method of treatment", "use patent", "synthesis", "process", "route of synthesis", "crystalline form", "polymorph"]
+      },
+      {
+        "scope": "PATENTS",
+        "question": "What is the estimated patent cliff (earliest compound patent expiry)? Are there any SPC (supplementary protection certificate) extensions?",
+        "answer_type": "numbers",
+        "doc_kind_preference": ["patent_family", "ops"],
+        "focus_terms": ["expiry date", "patent cliff", "SPC", "supplementary protection certificate", "extension", "term adjustment"]
+      }
+    ]
+  },
+
+  "synthesis": {
+    "section_id": "synthesis",
+    "title": "Synthesis & Chemistry",
+    "authority_scope": "CHEMISTRY",
+    "tier_1_doc_kinds": ["patent_pdf", "drug_monograph"],
+    "questions": [
+      {
+        "scope": "CHEMISTRY",
+        "question": "What synthesis routes or manufacturing processes are described in patents or monographs?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["patent_pdf", "drug_monograph"],
+        "focus_terms": ["synthesis", "manufacturing process", "reaction step", "starting material", "intermediate", "yield", "route"]
+      }
+    ]
+  },
+
+  "manufacturers": {
+    "section_id": "manufacturers",
+    "title": "Manufacturing & GMP",
+    "authority_scope": "MANUFACTURING",
+    "tier_1_doc_kinds": ["manufacturers", "epar"],
+    "questions": [
+      {
+        "scope": "MANUFACTURING",
+        "question": "Who are the MAH and approved manufacturing sites? Include site name, country, and GMP scope.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["manufacturers", "epar", "smpc"],
+        "focus_terms": ["manufacturing site", "manufacturer", "MAH", "GMP", "FEI", "site", "country", "WHO PQ"]
+      }
+    ]
+  }
+}

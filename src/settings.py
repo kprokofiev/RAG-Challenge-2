@@ -34,9 +34,17 @@ class WorkerSettings(BaseSettings):
     # Job processing settings
     max_job_attempts: int = Field(3, env="MAX_JOB_ATTEMPTS")
     job_timeout_seconds: int = Field(3600, env="JOB_TIMEOUT_SECONDS")  # 1 hour default
+    # Heavy doc-kinds (patent/epar/smpc/ru_instruction) get a separate, longer timeout.
+    # Set JOB_TIMEOUT_SECONDS_HEAVY=900 in rag-worker-index to allow 15 min for large scans.
+    job_timeout_seconds_heavy: int = Field(3600, env="JOB_TIMEOUT_SECONDS_HEAVY")
     worker_mode: str = Field("all", env="WORKER_MODE")  # all|doc_parse_index|report_generate|case_view_generate
     worker_concurrency: int = Field(1, env="WORKER_CONCURRENCY")
     worker_poll_timeout: int = Field(2, env="WORKER_POLL_TIMEOUT")
+
+    # Watchdog settings for stale-job reclaim (#1)
+    queue_visibility_timeout_s: int = Field(600, env="DDKIT_QUEUE_VISIBILITY_TIMEOUT_S")
+    watchdog_interval_s: int = Field(60, env="DDKIT_WATCHDOG_INTERVAL_S")
+    watchdog_max_reclaims: int = Field(3, env="DDKIT_WATCHDOG_MAX_RECLAIMS")
 
     # Embeddings settings
     embeddings_model: str = Field("text-embedding-3-large", env="EMBEDDINGS_MODEL")
@@ -52,11 +60,49 @@ class WorkerSettings(BaseSettings):
 
     # Docling tuning
     docling_do_ocr: bool = Field(False, env="DOCLING_DO_OCR")
-    docling_do_tables: bool = Field(False, env="DOCLING_DO_TABLES")
+    docling_do_tables: bool = Field(True, env="DOCLING_DO_TABLES")
     docling_do_pictures: bool = Field(True, env="DOCLING_DO_PICTURES")
+
+    # Sprint-2: OCR language list (comma-separated, e.g. "en,ru")
+    docling_ocr_lang: str = Field("en,ru", env="DOCLING_OCR_LANG")
+
+    # Sprint-2: doc_kinds that ALWAYS get Docling+OCR regardless of text-layer detection
+    # (comma-separated, e.g. "ru_instruction,grls_card,smpc,patent_pdf")
+    docling_ocr_doc_kinds: str = Field(
+        "ru_instruction,grls_card,smpc,patent_pdf",
+        env="DOCLING_OCR_DOC_KINDS",
+    )
+
+    # Sprint-2: doc_kinds that ALWAYS get Docling table extraction
+    # (comma-separated)
+    docling_tables_doc_kinds: str = Field(
+        "ctgov_results,ru_instruction,grls_card,smpc,epar,patent,patent_pdf,publication,pmc",
+        env="DOCLING_TABLES_DOC_KINDS",
+    )
+
+    # Sprint-2: minimum "suspicious garbage" threshold — ratio of replacement chars + non-printables
+    parse_quality_garbage_threshold: float = Field(0.15, env="PARSE_QUALITY_GARBAGE_THRESHOLD")
+
+    # Sprint-2: minimum text chars total for a parsed doc to be considered non-empty
+    parse_quality_min_chars: int = Field(100, env="PARSE_QUALITY_MIN_CHARS")
 
     # PDF validation
     min_pdf_bytes: int = Field(5000, env="MIN_PDF_BYTES")
+
+    # Sprint-3: LLM model configuration
+    # Reranker model (used in LLMReranker). Default: gpt-4o-mini-2024-07-18
+    ddkit_rerank_model: str = Field("gpt-4o-mini-2024-07-18", env="DDKIT_RERANK_MODEL")
+    # Answering model (used in APIProcessor.send_message). Default: gpt-4o-2024-08-06
+    ddkit_answer_model: Optional[str] = Field(None, env="DDKIT_ANSWER_MODEL")
+
+    # Sprint-3: sections_plan version injected into report JSON for traceability
+    ddkit_sections_plan_version: str = Field("unknown", env="DDKIT_SECTIONS_PLAN_VERSION")
+
+    # Sprint-3: evidence K parameters (per-section adaptive defaults can be overridden globally)
+    ddkit_dense_k: int = Field(50, env="DDKIT_DENSE_K")
+    ddkit_sparse_k: int = Field(50, env="DDKIT_SPARSE_K")
+    ddkit_rerank_sample_k: int = Field(80, env="DDKIT_RERANK_SAMPLE_K")
+    ddkit_final_candidates_k: int = Field(40, env="DDKIT_FINAL_CANDIDATES_K")
 
     @validator('storage_endpoint_url', pre=True)
     def resolve_storage_endpoint(cls, v):

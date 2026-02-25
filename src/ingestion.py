@@ -142,6 +142,8 @@ class VectorDBIngestor:
         return [embedding.embedding for embedding in response.data]
 
     def _embed_batch_with_retry(self, batch: List[str], model: str) -> List[List[float]]:
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
         start = time.perf_counter()
         for attempt in range(1, settings.embeddings_retry_max + 1):
             try:
@@ -152,19 +154,35 @@ class VectorDBIngestor:
                     self._batch_attempts.append(attempt)
                 return [embedding.embedding for embedding in response.data]
             except Exception as e:
+                delay = settings.embeddings_backoff_seconds * attempt
                 if attempt >= settings.embeddings_retry_max:
                     elapsed = time.perf_counter() - start
                     with self._metrics_lock:
                         self._batch_timings.append(elapsed)
                         self._batch_attempts.append(attempt)
+                    _log.error(
+                        "embedding_failed_terminal attempt=%d/%d last_error=%s",
+                        attempt, settings.embeddings_retry_max, e,
+                    )
                     raise
-                time.sleep(settings.embeddings_backoff_seconds * attempt)
+                next_retry_at = int(time.time()) + delay
+                _log.warning(
+                    "embedding_retry attempt=%d/%d delay=%ds next_retry_at=%d last_error=%s",
+                    attempt, settings.embeddings_retry_max, delay, next_retry_at, e,
+                )
+                time.sleep(delay)
 
     def _create_vector_db(self, embeddings: List[float]):
         embeddings_array = np.array(embeddings, dtype=np.float32)
+        # L2-normalize so that IndexFlatIP computes true cosine similarity.
+        # Without normalization, inner-product scores are magnitude-dependent and
+        # do not rank by angular similarity — a silent correctness bug (#6).
+        norms = np.linalg.norm(embeddings_array, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)  # avoid div-by-zero for zero vectors
+        embeddings_array = embeddings_array / norms
         dimension = len(embeddings[0])
         start = time.perf_counter()
-        index = faiss.IndexFlatIP(dimension)  # Cosine distance
+        index = faiss.IndexFlatIP(dimension)  # IndexFlatIP + L2-normalized = cosine similarity
         index.add(embeddings_array)
         build_ms = (time.perf_counter() - start) * 1000
         return index, build_ms
@@ -219,4 +237,70 @@ class VectorDBIngestor:
         metrics["faiss_write_ms"] = write_ms
         metrics["doc_name"] = report_path.name
         self.last_report_metrics = [metrics]
+        return metrics
+
+    @staticmethod
+    def build_case_index(vector_dir: Path) -> dict:
+        """
+        Merge all per-document FAISS indices in *vector_dir* into a single
+        case-level index stored as ``case_index.faiss`` in the same directory (#7).
+
+        The merged index enables fast, single-pass retrieval across the entire
+        case corpus instead of per-document scans.  All individual indices must
+        have the same dimension (they always do because the embedding model is
+        fixed).
+
+        Returns a metrics dict with keys:
+            doc_count         – number of doc-level indices merged
+            total_vectors     – total number of vectors in the merged index
+            dimension         – embedding dimension
+            build_ms          – time to merge (ms)
+            write_ms          – time to write to disk (ms)
+            output_path       – absolute path to the written file (str)
+        """
+        metrics: dict = {
+            "doc_count": 0,
+            "total_vectors": 0,
+            "dimension": 0,
+            "build_ms": 0.0,
+            "write_ms": 0.0,
+            "output_path": "",
+        }
+        faiss_files = [f for f in vector_dir.glob("*.faiss") if f.name != "case_index.faiss"]
+        if not faiss_files:
+            return metrics
+
+        build_start = time.perf_counter()
+        merged_index = None
+        for faiss_file in faiss_files:
+            try:
+                idx = faiss.read_index(str(faiss_file))
+            except Exception:
+                continue  # skip corrupt / incompatible shards
+            if merged_index is None:
+                dim = idx.d
+                merged_index = faiss.IndexFlatIP(dim)
+                metrics["dimension"] = dim
+            if idx.d != merged_index.d:
+                continue  # skip shards with mismatched dimension
+            # Extract all vectors and add to merged index
+            n = idx.ntotal
+            if n == 0:
+                continue
+            vecs = np.zeros((n, idx.d), dtype=np.float32)
+            idx.reconstruct_n(0, n, vecs)
+            merged_index.add(vecs)
+            metrics["doc_count"] += 1
+            metrics["total_vectors"] += n
+
+        metrics["build_ms"] = (time.perf_counter() - build_start) * 1000
+
+        if merged_index is None or merged_index.ntotal == 0:
+            return metrics
+
+        output_path = vector_dir / "case_index.faiss"
+        write_start = time.perf_counter()
+        faiss.write_index(merged_index, str(output_path))
+        metrics["write_ms"] = (time.perf_counter() - write_start) * 1000
+        metrics["output_path"] = str(output_path)
         return metrics

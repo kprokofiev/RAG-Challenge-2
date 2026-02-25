@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional, Tuple
 import requests
 from urllib.parse import quote
 from PyPDF2 import PdfReader
+import redis as redis_lib
 
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
@@ -22,6 +23,99 @@ from src.text_splitter import TextSplitter
 from src.ingestion import VectorDBIngestor
 
 logger = logging.getLogger(__name__)
+
+# ── Report-readiness barrier constants ──────────────────────────────────────
+# TTL for all run-flag Redis keys (48 h); they auto-expire.
+_RUN_FLAG_TTL_S = 48 * 3600
+# Maximum time the report worker will wait for corpus readiness before
+# generating a partial report.
+_PREFLIGHT_MAX_WAIT_S = int(os.getenv("DDKIT_REPORT_PREFLIGHT_MAX_WAIT_S", "1800"))  # 30 min
+# Backoff schedule for requeue (seconds).
+_PREFLIGHT_BACKOFF = [30, 60, 120, 180, 300]
+
+
+def _classify_error(error_msg: Optional[str]) -> Optional[str]:
+    """Normalise well-known transient error strings into searchable categories.
+
+    This makes DLQ entries and log queries consistent:
+      embedding_failed   — OpenAI embedding API error after all per-batch retries
+      html_stub          — PDF source returned HTML instead of binary PDF
+    Other strings are returned as-is.
+    """
+    if not error_msg:
+        return error_msg
+    lower = error_msg.lower()
+    embedding_signals = ("embeddings.create", "openai", "embedding_failed", "ratelimiterror",
+                         "apierror", "apiconnectionerror", "timeout" , "embedding")
+    if any(sig in lower for sig in embedding_signals):
+        return f"embedding_failed: {error_msg}"
+    return error_msg
+
+
+def _redis_client() -> Optional[redis_lib.Redis]:
+    """Return a Redis client using the same URL as the queue handler, or None."""
+    url = settings.redis_url
+    if not url:
+        return None
+    try:
+        client = redis_lib.from_url(url, socket_connect_timeout=3)
+        client.ping()
+        return client
+    except Exception as exc:
+        logger.warning("Redis unavailable for run-flags: %s", exc)
+        return None
+
+
+def _run_flag_key(tenant_id: str, case_id: str, flag: str, run_id: Optional[str] = None) -> str:
+    """Build the Redis key for a pipeline barrier flag.
+
+    When run_id is provided the key is run-scoped (#12):
+        ddkit:run:{tenant}:{case}:{run_id}:{flag}
+    Otherwise the legacy key is used (backward-compatible for flags set without run_id):
+        ddkit:run:{tenant}:{case}:{flag}
+    """
+    if run_id:
+        return f"ddkit:run:{tenant_id}:{case_id}:{run_id}:{flag}"
+    return f"ddkit:run:{tenant_id}:{case_id}:{flag}"
+
+
+def set_run_flag(tenant_id: str, case_id: str, flag: str, run_id: Optional[str] = None) -> None:
+    """Atomically set a pipeline-barrier flag in Redis.
+
+    run_id isolates flags per pipeline run so re-runs of the same case don't
+    inherit stale flags from a previous run (#12).
+    """
+    rdb = _redis_client()
+    if rdb is None:
+        return
+    key = _run_flag_key(tenant_id, case_id, flag, run_id)
+    try:
+        rdb.set(key, str(int(time.time())), ex=_RUN_FLAG_TTL_S)
+        logger.info("run_flag_set tenant=%s case=%s run=%s flag=%s", tenant_id, case_id, run_id, flag)
+    except Exception as exc:
+        logger.warning("Failed to set run flag %s: %s", key, exc)
+
+
+def get_run_flag(tenant_id: str, case_id: str, flag: str, run_id: Optional[str] = None) -> bool:
+    """Return True if the pipeline-barrier flag is set.
+
+    Checks run-scoped key first (when run_id provided), then falls back to
+    legacy key to preserve backward compatibility with flags set by older code.
+    """
+    rdb = _redis_client()
+    if rdb is None:
+        return True  # fail-open: no Redis → don't block
+    try:
+        if run_id:
+            run_key = _run_flag_key(tenant_id, case_id, flag, run_id)
+            if rdb.exists(run_key):
+                return True
+        # Fallback: legacy key (no run_id) — covers flags set by Go code
+        # without run_id or by older worker versions.
+        legacy_key = _run_flag_key(tenant_id, case_id, flag)
+        return bool(rdb.exists(legacy_key))
+    except Exception:
+        return True  # fail-open
 
 
 def _ms_since(start: float) -> float:
@@ -78,27 +172,193 @@ class DocParseIndexProcessor:
         self.storage_client = StorageClient()
         self.ddkit_db = DDKitDB()
 
+    def _set_index_done_if_ready(self, tenant_id: str, case_id: str, run_id: Optional[str] = None) -> None:
+        """
+        After each terminal doc_parse_index outcome (success OR failure), check whether
+        the entire corpus for this case is "settled" (no docs stuck in non-terminal states).
+        If so, set the ddkit:run:{tenant}:{case}:{run_id}:index_done Redis flag (#12).
+
+        Terminal statuses (corpus settled):
+          - indexed  : successfully parsed + embedded + uploaded
+          - parsed   : upload done but callback to api-gateway pending (transient; treated as terminal here)
+          - failed   : processing failed; counted as missing in completeness
+          - skipped  : explicitly skipped (e.g. duplicate, unsupported type)
+          - unsupported : doc kind not supported by parser
+
+        We also require at least one indexed or parsed document so the flag is
+        not set on a completely empty or all-failed corpus.
+        """
+        if not self.ddkit_db.is_configured():
+            return
+        try:
+            docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
+            if not docs:
+                return
+            # Terminal states: corpus is settled when no doc is still in-flight (#2).
+            # Must include all blocked/error statuses so paywalled docs don't block the pipeline.
+            terminal = {"indexed", "failed", "parsed", "skipped", "unsupported",
+                        "blocked_paywall", "captcha", "forbidden_403", "rate_limited_429",
+                        "requires_login", "robots_denied", "timeout",
+                        "parsed_empty",  # Sprint-2: docs that parsed but produced no text
+                        }
+            in_progress = [d for d in docs if str(d.get("status", "")).lower() not in terminal]
+            indexed_or_parsed = [
+                d for d in docs
+                if str(d.get("status", "")).lower() in {"indexed", "parsed"}
+            ]
+            failed = [d for d in docs if str(d.get("status", "")).lower() in {
+                "failed", "skipped", "unsupported", "parsed_empty",
+            }]
+            if in_progress:
+                # Check whether the parse queue is drained — if so, any remaining
+                # 'rendered' (or other pre-queue) docs are effectively stuck and
+                # should not block index_done indefinitely.
+                rendered_only = all(
+                    str(d.get("status", "")).lower() in {"rendered", "created"} for d in in_progress
+                )
+                if rendered_only:
+                    rdb = _redis_client()
+                    queue_len = 0
+                    fetch_queue_len = 0
+                    if rdb is not None:
+                        try:
+                            queue_len = rdb.llen("ddkit:doc_parse_index")
+                            fetch_queue_len = rdb.llen("ddkit:doc_fetch_render")
+                        except Exception:
+                            pass
+                    # Only treat as terminal if BOTH queues are drained.
+                    # If doc_fetch_render still has items, docs are en-route to rendered state.
+                    if queue_len == 0 and fetch_queue_len == 0:
+                        logger.warning(
+                            "index_done_check: %d docs stuck in pre-queue state but both queues empty — "
+                            "treating as terminal to unblock corpus case=%s statuses=%s",
+                            len(in_progress), case_id,
+                            {str(d.get("status", "")).lower() for d in in_progress},
+                        )
+                        # Fall through to set index_done below
+                    else:
+                        logger.info(
+                            "index_done_check: %d docs still in progress case=%s parse_queue=%d fetch_queue=%d",
+                            len(in_progress), case_id, queue_len, fetch_queue_len,
+                        )
+                        return
+                else:
+                    statuses_blocking = {}
+                    for d in in_progress:
+                        s = str(d.get("status", "unknown")).lower()
+                        statuses_blocking[s] = statuses_blocking.get(s, 0) + 1
+                    logger.info(
+                        "index_done_check: %d docs still in progress case=%s blocking_statuses=%s",
+                        len(in_progress), case_id, statuses_blocking,
+                    )
+                    return
+            if not indexed_or_parsed:
+                logger.info(
+                    "index_done_check: 0 indexed/parsed docs (all failed?) case=%s failed=%d — not setting flag",
+                    case_id, len(failed),
+                )
+                return
+            set_run_flag(tenant_id, case_id, "index_done", run_id)
+            logger.info(
+                "index_done: corpus settled case=%s run=%s indexed_or_parsed=%d failed=%d total=%d",
+                case_id, run_id, len(indexed_or_parsed), len(failed), len(docs),
+            )
+            # Trigger async case-level index build (#7). Run in a background thread
+            # so we don't block the current job callback path.
+            import threading
+            def _build_case_index_bg():
+                try:
+                    from src.ingestion import VectorDBIngestor
+                    from src.storage_client import StorageClient as _SC
+                    sc = _SC()
+                    # Download all vector shards for this case to a temp dir
+                    import tempfile
+                    with tempfile.TemporaryDirectory() as _tmp:
+                        _tmp_path = Path(_tmp)
+                        prefix = f"tenants/{tenant_id}/cases/{case_id}/documents/"
+                        keys = sc.list_objects(prefix)
+                        downloaded = 0
+                        for key in (keys or []):
+                            if "/vectors/" in key and key.endswith(".faiss"):
+                                local = _tmp_path / Path(key).name
+                                if sc.download_to_path(key, local):
+                                    downloaded += 1
+                        if downloaded == 0:
+                            return
+                        m = VectorDBIngestor.build_case_index(_tmp_path)
+                        if m.get("output_path"):
+                            case_idx_key = f"tenants/{tenant_id}/cases/{case_id}/vectors/case_index.faiss"
+                            sc.upload_file(case_idx_key, Path(m["output_path"]))
+                            logger.info(
+                                "case_index_built case=%s vectors=%d docs=%d build_ms=%.1f",
+                                case_id, m.get("total_vectors", 0), m.get("doc_count", 0), m.get("build_ms", 0),
+                            )
+                except Exception as _exc:
+                    logger.warning("case_index_build_failed case=%s: %s", case_id, _exc)
+            threading.Thread(target=_build_case_index_bg, daemon=True).start()
+        except Exception as exc:
+            logger.warning("_set_index_done_if_ready failed (non-fatal): %s", exc)
+
     def _detect_text_layer(self, pdf_path: Path, max_pages: int = 3, min_chars: int = 200) -> Dict[str, Any]:
-        """Detect whether PDF has a usable text layer."""
+        """Detect whether PDF has a usable text layer.
+
+        Sprint-2 improvements:
+        - Sample pages more representatively (first, middle, last up to max_pages)
+        - Track Cyrillic character ratio to detect RU-language scans with partial text layer
+        - Detect likely tabular/column layout via whitespace ratio
+        """
         result = {
             "has_text_layer": False,
             "pages_total": 0,
             "pages_checked": 0,
-            "text_chars": 0
+            "text_chars": 0,
+            "cyrillic_ratio": 0.0,
+            "whitespace_ratio": 0.0,
         }
         try:
             reader = PdfReader(str(pdf_path))
             pages_total = len(reader.pages)
-            pages_checked = min(max_pages, pages_total)
+            if pages_total == 0:
+                return result
+
+            # Sample: first page, last page, and middle pages up to max_pages
+            indices = set()
+            indices.add(0)
+            if pages_total > 1:
+                indices.add(pages_total - 1)
+            if pages_total > 2:
+                indices.add(pages_total // 2)
+            # Fill remaining slots from beginning
+            for i in range(pages_total):
+                if len(indices) >= max_pages:
+                    break
+                indices.add(i)
+            sample_indices = sorted(indices)[:max_pages]
+
             text_chars = 0
-            for idx in range(pages_checked):
+            cyrillic_chars = 0
+            whitespace_chars = 0
+            total_extracted = 0
+            for idx in sample_indices:
                 page_text = reader.pages[idx].extract_text() or ""
-                text_chars += len(page_text.strip())
+                stripped = page_text.strip()
+                text_chars += len(stripped)
+                total_extracted += len(page_text)
+                for ch in page_text:
+                    if '\u0400' <= ch <= '\u04FF':
+                        cyrillic_chars += 1
+                    if ch in ' \t':
+                        whitespace_chars += 1
+
+            cyrillic_ratio = cyrillic_chars / total_extracted if total_extracted > 0 else 0.0
+            whitespace_ratio = whitespace_chars / total_extracted if total_extracted > 0 else 0.0
             result.update({
                 "has_text_layer": text_chars >= min_chars,
                 "pages_total": pages_total,
-                "pages_checked": pages_checked,
-                "text_chars": text_chars
+                "pages_checked": len(sample_indices),
+                "text_chars": text_chars,
+                "cyrillic_ratio": round(cyrillic_ratio, 3),
+                "whitespace_ratio": round(whitespace_ratio, 3),
             })
         except Exception:
             return result
@@ -123,14 +383,23 @@ class DocParseIndexProcessor:
         source_url = job_data.get("source_url", "")
         s3_parsed_json_key = job_data.get("s3_parsed_json_key")
         s3_pdf_key = job_data["s3_rendered_pdf_key"]
+        # Correlation fields for distributed tracing (#13)
+        trace_id = job_data.get("trace_id")
+        run_id = job_data.get("run_id")
+        attempt = job_data.get("attempt", 0)
 
-        logger.info(f"Processing doc_parse_index job: tenant={tenant_id}, case={case_id}, doc={doc_id}")
+        logger.info(
+            "doc_parse_index_start tenant=%s case=%s doc=%s job=%s trace=%s run=%s attempt=%s",
+            tenant_id, case_id, doc_id, job_id, trace_id, run_id, attempt,
+        )
         metrics: Dict[str, Any] = {
             "job_type": "doc_parse_index",
             "job_id": job_id,
             "tenant_id": tenant_id,
             "case_id": case_id,
             "doc_id": doc_id,
+            "trace_id": trace_id,
+            "run_id": run_id,
             "doc_kind": doc_kind,
             "source_url": source_url,
             "stages": {}
@@ -176,14 +445,59 @@ class DocParseIndexProcessor:
                     "pages": text_layer.get("pages_total"),
                     "text_layer_chars": text_layer.get("text_chars"),
                     "text_layer_pages_checked": text_layer.get("pages_checked"),
+                    "cyrillic_ratio": text_layer.get("cyrillic_ratio"),
+                    "whitespace_ratio": text_layer.get("whitespace_ratio"),
                 })
-                parser_mode = "fast_text" if text_layer.get("has_text_layer") else "docling"
-                docling_do_ocr = not text_layer.get("has_text_layer")
-                docling_do_tables = bool(settings.docling_do_tables) if parser_mode == "docling" else False
+
+                # Sprint-2: doc_kind-aware parser selection.
+                # Some doc_kinds always need Docling+OCR (scanned RU instructions, patents)
+                # regardless of whether PyPDF2 finds a text layer.
+                _ocr_doc_kinds = {
+                    k.strip().lower()
+                    for k in settings.docling_ocr_doc_kinds.split(",")
+                    if k.strip()
+                }
+                _tables_doc_kinds = {
+                    k.strip().lower()
+                    for k in settings.docling_tables_doc_kinds.split(",")
+                    if k.strip()
+                }
+                _dk = (doc_kind or "").lower()
+
+                force_docling_ocr = _dk in _ocr_doc_kinds
+                force_tables = _dk in _tables_doc_kinds
+
+                if force_docling_ocr and not text_layer.get("has_text_layer"):
+                    # Scan doc: Docling + OCR
+                    parser_mode = "docling"
+                    docling_do_ocr = True
+                elif force_docling_ocr and text_layer.get("has_text_layer"):
+                    # OCR-mandatory kind but has text — still use Docling for layout/tables
+                    parser_mode = "docling"
+                    docling_do_ocr = False  # text layer present; skip OCR for speed
+                elif not text_layer.get("has_text_layer"):
+                    # Generic scan: Docling + OCR
+                    parser_mode = "docling"
+                    docling_do_ocr = True
+                else:
+                    # Has text layer, not a forced-OCR kind: fast path
+                    parser_mode = "fast_text"
+                    docling_do_ocr = False
+
+                # Tables: always Docling path + tables for table-required doc_kinds
+                if force_tables and parser_mode == "fast_text":
+                    # Upgrade to Docling (no OCR needed if text layer exists)
+                    parser_mode = "docling"
+                    docling_do_ocr = False
+
+                docling_do_tables = force_tables or (bool(settings.docling_do_tables) and parser_mode == "docling")
+
                 metrics["parser_path"] = parser_mode
                 metrics["parser_used"] = parser_mode
                 metrics["docling_do_ocr"] = docling_do_ocr
                 metrics["docling_do_tables"] = docling_do_tables
+                metrics["force_docling_ocr"] = force_docling_ocr
+                metrics["force_tables"] = force_tables
 
                 # Process single PDF through the pipeline with timeout isolation
                 success, parsed_key, error_message, stage_metrics = self._process_single_document_with_timeout(
@@ -232,6 +546,26 @@ class DocParseIndexProcessor:
                         metrics["upload_bytes_total"] = upload_metrics.get("upload_bytes_total")
 
                 if success:
+                    # Sprint-2: compute quality metrics from parsed result
+                    quality = self._compute_parse_quality(metrics)
+                    metrics["parse_quality"] = quality
+
+                    if quality.get("is_empty"):
+                        # Document parsed but produced no usable text — treat as parsed_empty
+                        logger.warning(
+                            "doc_parse_index_empty doc=%s reason=%s chars=%d",
+                            doc_id, quality.get("empty_reason"), quality.get("text_chars_total", 0),
+                        )
+                        if job_id and self.ddkit_db.is_configured():
+                            self.ddkit_db.mark_job_failed(job_id, "parsed_empty:" + (quality.get("empty_reason") or ""))
+                        job_data["status"] = "parsed_empty"
+                        job_data["error_message"] = "parsed_empty:" + (quality.get("empty_reason") or "")
+                        metrics["error"] = job_data["error_message"]
+                        job_data["metrics"] = metrics
+                        logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
+                        self._set_index_done_if_ready(tenant_id, case_id, run_id)
+                        return False
+
                     if job_id and self.ddkit_db.is_configured():
                         self.ddkit_db.mark_job_succeeded(job_id)
                     if parsed_key:
@@ -239,9 +573,23 @@ class DocParseIndexProcessor:
                     job_data["status"] = "succeeded"
                     job_data["metrics"] = metrics
                     logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
-                    logger.info(f"Successfully processed document {doc_id}")
+                    logger.info(
+                        "doc_parse_index_ok doc=%s parser=%s ocr=%s tables=%s "
+                        "chars=%d pages=%d tables_count=%d garbage_ratio=%.3f",
+                        doc_id, parser_mode, docling_do_ocr, docling_do_tables,
+                        quality.get("text_chars_total", 0),
+                        quality.get("pages_total", 0),
+                        quality.get("tables_count", 0),
+                        quality.get("garbage_ratio", 0.0),
+                    )
+                    # After each terminal outcome (success or failure), check if the full corpus
+                    # is settled and set index_done if so. This ensures the flag is set even
+                    # when some docs fail — partial corpus → partial report is still valid.
+                    self._set_index_done_if_ready(tenant_id, case_id, run_id)
                     return True
                 else:
+                    # Normalise well-known transient error classes so DLQ/logs are searchable.
+                    error_message = _classify_error(error_message)
                     if job_id and self.ddkit_db.is_configured():
                         self.ddkit_db.mark_job_failed(job_id, error_message or "processing_failed")
                     job_data["status"] = "failed"
@@ -250,7 +598,9 @@ class DocParseIndexProcessor:
                     metrics["error"] = error_message or "processing_failed"
                     job_data["metrics"] = metrics
                     logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
-                    logger.error(f"Failed to process document {doc_id}")
+                    logger.error("doc_parse_index_failed doc=%s error=%s", doc_id, error_message)
+                    # Check if corpus is settled despite this doc failing.
+                    self._set_index_done_if_ready(tenant_id, case_id, run_id)
                     return False
 
         except Exception as e:
@@ -428,8 +778,21 @@ class DocParseIndexProcessor:
         docling_do_ocr: Optional[bool] = None,
         docling_do_tables: Optional[bool] = None
     ) -> Tuple[bool, Optional[str], Optional[str], Optional[Dict[str, Any]]]:
-        """Run the pipeline in a subprocess and enforce a timeout."""
-        timeout_seconds = max(1, settings.job_timeout_seconds)
+        """Run the pipeline in a subprocess and enforce a timeout.
+
+        Doc-kind aware timeout: heavy Docling+OCR kinds (patent, epar, smpc, ru_instruction)
+        get a longer budget because they routinely produce 20-60 page scans that take 5-15 min
+        through Docling.  All other kinds fall back to the global JOB_TIMEOUT_SECONDS setting.
+        """
+        _HEAVY_KINDS = {
+            "patent", "patent_pdf", "epar", "smpc",
+            "ru_instruction", "grls_card",
+        }
+        _dk_lower = (doc_kind or "").lower()
+        if _dk_lower in _HEAVY_KINDS:
+            timeout_seconds = max(1, settings.job_timeout_seconds_heavy)
+        else:
+            timeout_seconds = max(1, settings.job_timeout_seconds)
         result_queue: Queue = Queue()
         payload = {
             "temp_path": str(temp_path),
@@ -467,6 +830,68 @@ class DocParseIndexProcessor:
         metrics = result.get("metrics") or {"stages": {}}
         metrics["stages"]["subprocess_ms"] = _ms_since(proc_start)
         return False, None, result.get("error", "processing_failed"), metrics
+
+    def _compute_parse_quality(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Sprint-2: compute sanity metrics from job metrics after successful parsing.
+
+        Returns a dict with:
+          text_chars_total      — total extracted characters (chunks × avg tokens * ~4)
+          pages_total           — page count from PDF detection
+          pages_with_text_ratio — fraction of pages that contributed text
+          tables_count          — number of tables extracted (if available)
+          ocr_used              — whether OCR was enabled for this doc
+          garbage_ratio         — fraction of suspicious chars (replacement char / non-printable)
+          is_empty              — True if doc effectively produced no usable text
+          empty_reason          — explanation if is_empty
+        """
+        quality: Dict[str, Any] = {
+            "text_chars_total": 0,
+            "pages_total": metrics.get("pages") or 0,
+            "pages_with_text_ratio": 0.0,
+            "tables_count": 0,
+            "ocr_used": bool(metrics.get("docling_do_ocr")),
+            "garbage_ratio": 0.0,
+            "is_empty": False,
+            "empty_reason": None,
+        }
+
+        # Estimate total chars from chunk metrics (chunks_count × avg_tokens × ~4 chars/token)
+        chunks_count = metrics.get("chunks_count") or 0
+        avg_tokens = metrics.get("avg_tokens_per_chunk") or 0
+        if chunks_count and avg_tokens:
+            quality["text_chars_total"] = int(chunks_count * avg_tokens * 4)
+        elif metrics.get("text_layer_chars"):
+            quality["text_chars_total"] = metrics["text_layer_chars"]
+
+        # tables_count from Docling stage if present in stage_metrics
+        embed_m = metrics.get("embeddings") if isinstance(metrics.get("embeddings"), dict) else {}
+        quality["tables_count"] = embed_m.get("tables_count", 0)
+
+        # pages_with_text_ratio (approximation: if we got chunks, assume all sampled pages had text)
+        pages_total = quality["pages_total"] or 1
+        if quality["text_chars_total"] > 0:
+            quality["pages_with_text_ratio"] = min(1.0, chunks_count / max(pages_total, 1))
+
+        # Garbage ratio: from text_layer detection if available
+        # (exact ratio requires reading parsed JSON — use heuristic from cyrillic/whitespace metrics)
+        # If docling/ocr produced very low char count vs page count → suspicious
+        chars_per_page = quality["text_chars_total"] / max(pages_total, 1)
+        if chars_per_page < 50 and quality["text_chars_total"] < settings.parse_quality_min_chars:
+            quality["garbage_ratio"] = 1.0
+        else:
+            quality["garbage_ratio"] = 0.0
+
+        # is_empty check
+        if quality["text_chars_total"] < settings.parse_quality_min_chars:
+            quality["is_empty"] = True
+            quality["empty_reason"] = (
+                f"text_chars_total={quality['text_chars_total']} < threshold={settings.parse_quality_min_chars}"
+            )
+        elif chunks_count == 0:
+            quality["is_empty"] = True
+            quality["empty_reason"] = "chunks_count=0"
+
+        return quality
 
     def _validate_pdf_file(self, pdf_path: Path) -> Optional[str]:
         if not pdf_path.exists():
@@ -588,6 +1013,124 @@ class ReportGenerateProcessor:
         self.storage_client = StorageClient()
         self.ddkit_db = DDKitDB()
 
+    # ── Preflight readiness gate ─────────────────────────────────────────────
+
+    def _corpus_ready(self, tenant_id: str, case_id: str, run_id: Optional[str] = None) -> Tuple[bool, str]:
+        """
+        Check whether the document corpus for this case is ready for report generation.
+
+        Returns (is_ready, reason_if_not_ready).
+
+        Rules (all must pass):
+        1. attach_deep_done flag is set   — Wave-2 research sources were attached.
+           (Skipped if research_run_started flag is NOT set — fast-path cases that
+           never trigger research:run don't need to wait for Wave-2.)
+        2. index_done flag is set          — all docs settled in terminal states.
+        3. At least 1 indexed document.
+
+        run_id is used to scope Redis flag checks to this specific run (#12).
+        Falls back to legacy (unscoped) key for backward compatibility.
+        If Redis is unavailable we fail-open (return True) so the system degrades
+        gracefully rather than blocking forever.
+        """
+        # Only wait for attach_deep_done if research:run was actually started.
+        research_started = get_run_flag(tenant_id, case_id, "research_run_started", run_id)
+        if research_started:
+            deep_done = get_run_flag(tenant_id, case_id, "attach_deep_done", run_id)
+            if not deep_done:
+                return False, "attach_deep_not_done"
+
+        index_done = get_run_flag(tenant_id, case_id, "index_done", run_id)
+        if not index_done:
+            # Fallback: query DB directly — Redis flag might have been missed.
+            if self.ddkit_db.is_configured():
+                try:
+                    docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
+                    # All states that count as "terminal" for corpus-ready check (#2).
+                    # Includes blocked/paywall statuses so they don't hold up the pipeline forever.
+                    terminal = {"indexed", "failed", "parsed", "skipped", "unsupported",
+                                "blocked_paywall", "captcha", "forbidden_403", "rate_limited_429",
+                                "requires_login", "robots_denied", "timeout",
+                                "parsed_empty",  # Sprint-2
+                                }
+                    in_progress = [d for d in docs if str(d.get("status", "")).lower() not in terminal]
+                    indexed = [d for d in docs if str(d.get("status", "")).lower() == "indexed"]
+                    if in_progress:
+                        return False, f"docs_still_indexing:{len(in_progress)}"
+                    if not indexed:
+                        return False, "no_indexed_docs"
+                    # DB says ready → set the flag retroactively
+                    set_run_flag(tenant_id, case_id, "index_done", run_id)
+                except Exception as exc:
+                    logger.warning("DB readiness fallback check failed: %s", exc)
+                    return True, ""  # fail-open
+            else:
+                return True, ""  # no DB → fail-open
+
+        return True, ""
+
+    def preflight_case_ready(
+        self,
+        job_data: Dict[str, Any],
+        attempt: int,
+    ) -> Tuple[bool, bool]:
+        """
+        Run the pre-flight readiness check and decide whether to proceed or requeue.
+
+        Returns (proceed, requeued):
+          - proceed=True  → start report generation now
+          - proceed=False, requeued=True  → job re-enqueued with backoff; caller should return True
+          - proceed=False, requeued=False → max wait exceeded; generate partial report
+        """
+        tenant_id = job_data["tenant_id"]
+        case_id = job_data["case_id"]
+        run_id = job_data.get("run_id")
+        enqueued_at = job_data.get("enqueued_at", time.time())
+        elapsed = time.time() - float(enqueued_at)
+
+        ready, reason = self._corpus_ready(tenant_id, case_id, run_id)
+        if ready:
+            logger.info(
+                "preflight_pass tenant=%s case=%s elapsed=%.1fs",
+                tenant_id, case_id, elapsed,
+            )
+            return True, False
+
+        if elapsed >= _PREFLIGHT_MAX_WAIT_S:
+            logger.warning(
+                "preflight_timeout tenant=%s case=%s elapsed=%.1fs reason=%s — generating partial report",
+                tenant_id, case_id, elapsed, reason,
+            )
+            job_data["is_partial"] = True
+            job_data["partial_reasons"] = [f"timeout_preflight:{reason}"]
+            return True, False  # proceed with partial
+
+        # Requeue with backoff
+        backoff_idx = min(attempt, len(_PREFLIGHT_BACKOFF) - 1)
+        delay = _PREFLIGHT_BACKOFF[backoff_idx]
+        job_data["attempt"] = attempt + 1
+        if "enqueued_at" not in job_data:
+            job_data["enqueued_at"] = time.time()
+        logger.info(
+            "preflight_requeue tenant=%s case=%s attempt=%d delay=%ds elapsed=%.1fs reason=%s",
+            tenant_id, case_id, attempt, delay, elapsed, reason,
+        )
+        rdb = _redis_client()
+        if rdb is not None:
+            try:
+                time.sleep(delay)
+                queue = settings.queue_report_generate
+                rdb.lpush(queue, json.dumps(job_data))
+            except Exception as exc:
+                logger.error("Failed to requeue report_generate job: %s", exc)
+                # Fall through → generate partial rather than lose the job
+                job_data["is_partial"] = True
+                job_data["partial_reasons"] = [f"requeue_failed:{exc}"]
+                return True, False
+        return False, True
+
+    # ── Main process_job ─────────────────────────────────────────────────────
+
     def process_job(self, job_data: Dict[str, Any]) -> bool:
         """
         Process a report_generate job.
@@ -603,10 +1146,29 @@ class ReportGenerateProcessor:
         sections_plan_key = job_data["sections_plan_key"]
         report_id = job_data.get("report_id") or f"report_{case_id}"
         job_id = job_data.get("job_id")
+        attempt = int(job_data.get("attempt", 0))
+        # Correlation fields for distributed tracing (#13)
+        trace_id = job_data.get("trace_id")
+        run_id = job_data.get("run_id")
 
-        logger.info(f"Processing report_generate job: tenant={tenant_id}, case={case_id}")
+        logger.info(
+            "report_generate_start tenant=%s case=%s report=%s attempt=%d trace=%s run=%s",
+            tenant_id, case_id, report_id, attempt, trace_id, run_id,
+        )
 
         try:
+            # ── Preflight readiness gate ──────────────────────────────────────
+            # Ensure Wave-2 sources are attached and all docs are indexed before
+            # downloading artifacts. If not ready, requeue with backoff.
+            # On timeout (>_PREFLIGHT_MAX_WAIT_S) fall through and generate a
+            # partial report.
+            # skip_preflight=True is set by report:regenerate endpoint (corpus settled).
+            if not job_data.get("is_partial") and not job_data.get("skip_preflight"):
+                proceed, requeued = self.preflight_case_ready(job_data, attempt)
+                if requeued:
+                    return False  # job re-enqueued with backoff; suppress success callback
+                # proceed=True here (either ready or partial fallback)
+
             if job_id and self.ddkit_db.is_configured():
                 self.ddkit_db.mark_job_running(job_id)
             # Create temporary directory for processing
@@ -640,17 +1202,37 @@ class ReportGenerateProcessor:
 
                 # Generate DD report with timeout
                 output_path = temp_path / "dd_report.json"
+                # Resolve INN so DDReportGenerator can anchor retrieval to the drug.
+                # Priority: job_data["inn"] (set by api-gateway) → case_views DB lookup.
+                case_inn: Optional[str] = job_data.get("inn") or None
+                if case_inn:
+                    case_inn = str(case_inn).strip() or None
+                if not case_inn and self.ddkit_db.is_configured():
+                    try:
+                        case_inn = self.ddkit_db.get_case_inn(tenant_id, case_id)
+                    except Exception as _inn_err:
+                        logger.warning("Could not retrieve INN for case %s: %s", case_id, _inn_err)
+                logger.info("Report generator INN for case %s: %s", case_id, case_inn or "(unknown)")
                 generator = DDReportGenerator(
                     documents_dir=documents_dir,
                     vector_db_dir=vector_dir,
                     tenant_id=tenant_id,
-                    case_id=case_id
+                    case_id=case_id,
+                    ddkit_db=self.ddkit_db,
+                    inn=case_inn,
                 )
                 start_ts = time.time()
                 deadline = time.time() + settings.job_timeout_seconds
                 logger.info("Report generation timeout set to %ds", settings.job_timeout_seconds)
+                is_partial = bool(job_data.get("is_partial", False))
+                partial_reasons = list(job_data.get("partial_reasons") or [])
                 try:
-                    report_payload = generator.generate_report(sections_plan, deadline=deadline)
+                    report_payload = generator.generate_report(
+                        sections_plan,
+                        deadline=deadline,
+                        is_partial=is_partial,
+                        partial_reasons=partial_reasons,
+                    )
                 except TimeoutError as err:
                     logger.error(f"Report generation timed out: {err}")
                     if self.ddkit_db.is_configured():
@@ -687,7 +1269,26 @@ class ReportGenerateProcessor:
 
                 job_data["artifacts"] = {"s3_report_json_key": s3_key}
                 job_data["status"] = "succeeded"
-                logger.info(f"Successfully generated and uploaded report for case {case_id}")
+                completeness = report_payload.get("completeness", {})
+                included_total = completeness.get("included", {}).get("total", "?")
+                expected_total = completeness.get("expected", {}).get("total", "?")
+                missing_total = completeness.get("missing", {}).get("total", "?")
+                is_partial = completeness.get("is_partial", False)
+                ratio = completeness.get("ratio", "?")
+                partial_reasons = completeness.get("partial_reasons") or []
+                logger.info(
+                    "report_generate_done tenant=%s case=%s report=%s "
+                    "is_partial=%s included=%s expected=%s missing=%s",
+                    tenant_id, case_id, report_id,
+                    is_partial, included_total, expected_total, missing_total,
+                )
+                # One-line machine-readable summary for quick debugging (P1.2)
+                logger.info(
+                    "full_run_summary case=%s expected=%s included=%s missing=%s ratio=%s "
+                    "is_partial=%s partial_reasons=%s",
+                    case_id, expected_total, included_total, missing_total, ratio,
+                    is_partial, partial_reasons,
+                )
                 return True
 
         except Exception as e:
