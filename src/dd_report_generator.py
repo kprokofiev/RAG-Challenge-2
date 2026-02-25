@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 
@@ -13,19 +14,125 @@ from src.validation_gates import ValidationGates
 
 
 class DDReportGenerator:
-    def __init__(self, documents_dir: Path, vector_db_dir: Path,
-                 tenant_id: Optional[str] = None, case_id: Optional[str] = None):
+    def __init__(
+        self,
+        documents_dir: Path,
+        vector_db_dir: Path,
+        tenant_id: Optional[str] = None,
+        case_id: Optional[str] = None,
+        ddkit_db: Optional[Any] = None,
+        inn: Optional[str] = None,
+    ):
         self.documents_dir = documents_dir
         self.vector_db_dir = vector_db_dir
         self.tenant_id = tenant_id
         self.case_id = case_id
+        self.ddkit_db = ddkit_db
+        # Normalize INN: lowercase for matching, keep original for display/query augment
+        self.inn: Optional[str] = inn.strip() if inn and inn.strip() else None
+        self.inn_lower: Optional[str] = self.inn.lower() if self.inn else None
         self.retriever = HybridRetriever(vector_db_dir, documents_dir)
         self.api = APIProcessor(provider=os.getenv("DDKIT_LLM_PROVIDER", "openai"))
         self.answering_model = os.getenv("DDKIT_ANSWER_MODEL", None)
         self.evidence_builder = EvidenceCandidatesBuilder()
         self.validator = ValidationGates()
+        # Top-K evidence candidates per question (#9). Configurable via env; default 25.
+        # Larger K reduces false-unknowns by making 11-25th ranked chunks available to LLM.
+        try:
+            self._top_k = max(1, int(os.getenv("DDKIT_EVIDENCE_TOP_K", "25")))
+        except (ValueError, TypeError):
+            self._top_k = 25
 
-    def generate_report(self, sections_plan: Dict[str, Any], deadline: Optional[float] = None) -> Dict[str, Any]:
+    # ── Completeness tracking ────────────────────────────────────────────────
+
+    def _build_completeness(
+        self,
+        included_docs: List[Dict[str, Any]],
+        is_partial: bool,
+        partial_reasons: List[str],
+    ) -> Dict[str, Any]:
+        """
+        Build the `completeness` block that is added to every DD report.
+
+        expected = all indexed docs in the DB for this case (if DB configured).
+        included = docs that the generator actually downloaded and used.
+        missing  = expected(indexed) minus included.
+        """
+        # ---- included counts (from downloaded chunk files) ------------------
+        included_by_kind: Dict[str, int] = defaultdict(int)
+        for d in included_docs:
+            k = d.get("kind") or "unknown"
+            included_by_kind[k] += 1
+        included_total = len(included_docs)
+
+        # ---- expected counts (from DB) --------------------------------------
+        expected_by_kind: Dict[str, int] = {}
+        expected_total = 0
+        missing_by_kind: Dict[str, int] = {}
+        missing_total = 0
+
+        if self.ddkit_db is not None and getattr(self.ddkit_db, "is_configured", lambda: False)():
+            try:
+                db_docs = self.ddkit_db.list_case_documents(
+                    tenant_id=self.tenant_id or "",
+                    case_id=self.case_id or "",
+                )
+                for d in db_docs:
+                    if str(d.get("status", "")).lower() == "indexed":
+                        k = d.get("doc_kind") or "unknown"
+                        expected_by_kind[k] = expected_by_kind.get(k, 0) + 1
+                        expected_total += 1
+
+                included_kind_set: Dict[str, int] = dict(included_by_kind)
+                for k, exp_n in expected_by_kind.items():
+                    inc_n = included_kind_set.get(k, 0)
+                    diff = exp_n - inc_n
+                    if diff > 0:
+                        missing_by_kind[k] = diff
+                        missing_total += diff
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "completeness DB query failed (non-fatal): %s", exc
+                )
+
+        raw_ratio = (included_total / expected_total) if expected_total > 0 else 1.0
+        # Cap ratio at 1.0 — over-inclusion (duplicates/extra docs) must not inflate the metric (#11).
+        completeness_ratio = min(raw_ratio, 1.0)
+        over_included = max(0, included_total - expected_total) if expected_total > 0 else 0
+        logging.getLogger(__name__).info(
+            "completeness: included=%d expected=%d missing=%d ratio=%.2f over_included=%d is_partial=%s",
+            included_total, expected_total, missing_total, completeness_ratio, over_included, is_partial,
+        )
+
+        return {
+            "is_partial": is_partial,
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "expected": {
+                "total": expected_total,
+                "by_kind": expected_by_kind,
+            },
+            "included": {
+                "total": included_total,
+                "by_kind": dict(included_by_kind),
+            },
+            "missing": {
+                "total": missing_total,
+                "by_kind": missing_by_kind,
+            },
+            "completeness_ratio": round(completeness_ratio, 4),
+            "over_included": over_included,
+            "reasons": partial_reasons,
+        }
+
+    # ── Main report generation ───────────────────────────────────────────────
+
+    def generate_report(
+        self,
+        sections_plan: Dict[str, Any],
+        deadline: Optional[float] = None,
+        is_partial: bool = False,
+        partial_reasons: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         logger = logging.getLogger(__name__)
         start_ts = time.time()
         documents = self._load_documents_meta()
@@ -78,14 +185,21 @@ class DDReportGenerator:
                 query_text = q_text
                 if focus_terms:
                     query_text = f"{q_text} {' '.join(focus_terms)}"
+                # Always augment query with INN so vector search is drug-anchored,
+                # even for sections whose focus_terms are schema field names.
+                if self.inn and self.inn_lower not in query_text.lower():
+                    query_text = f"{query_text} {self.inn}"
                 logger.info(
-                    "Question: %s | doc_kind=%s | focus_terms=%s",
+                    "Question: %s | doc_kind=%s | focus_terms=%s | inn=%s",
                     q_text[:160],
                     doc_kind,
-                    ",".join(focus_terms) if focus_terms else "-"
+                    ",".join(focus_terms) if focus_terms else "-",
+                    self.inn or "-",
                 )
                 t0 = time.time()
-                retrieve_limit = 30 if focus_terms else 10
+                # Retrieve more candidates when focus_terms are present (broader recall needed).
+                # Use at least self._top_k (default 25, env DDKIT_EVIDENCE_TOP_K) (#9).
+                retrieve_limit = max(self._top_k, 30) if focus_terms else self._top_k
                 retrieved = self.retriever.retrieve_by_case(
                     query=query_text,
                     top_n=retrieve_limit,
@@ -93,16 +207,55 @@ class DDReportGenerator:
                     case_id=self.case_id,
                     doc_kind=doc_kind
                 )
-                if focus_terms:
+                if focus_terms and not self._is_schema_field_terms(focus_terms):
                     before_count = len(retrieved)
                     retrieved = [item for item in retrieved if self._candidate_matches_terms(item, focus_terms)]
-                    retrieved = retrieved[:10]
+                    retrieved = retrieved[:self._top_k]
                     logger.info(
                         "Filtered retrieved passages by focus_terms (%s): %d -> %d",
                         ",".join(focus_terms),
                         before_count,
                         len(retrieved)
                     )
+                elif focus_terms and self._is_schema_field_terms(focus_terms):
+                    logger.info(
+                        "focus_terms (%s) detected as schema field names — skipping candidate filter, "
+                        "keeping top-%d from retrieval",
+                        ",".join(focus_terms),
+                        self._top_k,
+                    )
+                    retrieved = retrieved[:self._top_k]
+                else:
+                    retrieved = retrieved[:self._top_k]
+                # INN-based relevance scoring: boost passages that mention INN/synonyms,
+                # but never hard-exclude — regulatory doc_kind items always pass (#8).
+                # This prevents false-unknowns when a publication uses a brand name or salt form.
+                if self.inn_lower and retrieved:
+                    # Regulatory doc kinds that should always be kept regardless of INN mention.
+                    _regulatory_kinds = {"label", "smpc", "pil", "epar", "grls", "grls_card",
+                                         "ru_instruction", "us_fda", "assessment_report"}
+                    inn_terms = self._build_inn_terms(focus_terms)
+                    inn_matched = []
+                    inn_unmatched = []
+                    for item in retrieved:
+                        dk = str(item.get("doc_kind") or item.get("kind") or "").lower()
+                        haystack = (item.get("text", "") + " " + item.get("doc_title", "")).lower()
+                        if dk in _regulatory_kinds or any(t in haystack for t in inn_terms):
+                            inn_matched.append(item)
+                        else:
+                            inn_unmatched.append(item)
+                    if inn_matched:
+                        logger.info(
+                            "INN filter (%s): %d matched, %d unmatched (unmatched demoted, not removed)",
+                            self.inn, len(inn_matched), len(inn_unmatched),
+                        )
+                        # Prefer matched but append unmatched at the end so LLM still has them
+                        retrieved = inn_matched + inn_unmatched
+                    else:
+                        logger.info(
+                            "INN filter (%s): no passages matched — keeping all %d (soft fallback)",
+                            self.inn, len(retrieved),
+                        )
                 self._check_deadline(deadline, f"after_retrieval:{section_id}")
                 logger.info(
                     "Retrieved %d passages for question '%s' in %.2fs",
@@ -183,13 +336,19 @@ class DDReportGenerator:
             logger.info("Section '%s' completed in %.2fs", section_id, time.time() - section_start)
 
         logger.info("DD report generation finished in %.2fs", time.time() - start_ts)
+        completeness = self._build_completeness(
+            included_docs=documents,
+            is_partial=bool(is_partial),
+            partial_reasons=list(partial_reasons or []),
+        )
         return {
             "report_id": f"dd_report_{self.case_id}_{int(time.time())}",
             "case_id": self.case_id,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "sections": sections_output,
             "evidence_index": list(evidence_index_map.values()),
-            "documents": documents
+            "documents": documents,
+            "completeness": completeness,
         }
 
     def _load_documents_meta(self) -> List[Dict[str, Any]]:
@@ -255,6 +414,22 @@ class DDReportGenerator:
         return terms
 
     @staticmethod
+    def _is_schema_field_terms(terms: List[str]) -> bool:
+        """Return True if terms look like router-map extraction_targets (snake_case field names).
+
+        Extraction targets like 'one_sentence_moa', 'trial_name', 'primary_endpoint_result'
+        are data-schema field names, not pharmacological search terms.  They must not be used
+        for candidate filtering because they never appear literally in document text and would
+        eliminate all retrieved passages.
+
+        Heuristic: if the majority of terms contain underscores and no spaces, treat as schema fields.
+        """
+        if not terms:
+            return False
+        schema_like = sum(1 for t in terms if "_" in t and " " not in t)
+        return schema_like >= max(1, len(terms) // 2)
+
+    @staticmethod
     def _candidate_matches_terms(item: Dict[str, Any], terms: List[str]) -> bool:
         if not terms:
             return True
@@ -263,6 +438,30 @@ class DDReportGenerator:
             item.get("doc_title", "")
         ]).lower()
         return any(term in haystack for term in terms)
+
+    def _build_inn_terms(self, focus_terms: List[str]) -> List[str]:
+        """
+        Build a list of lowercase terms to use for INN-matching in the soft filter (#8).
+
+        Includes:
+        - INN itself
+        - Any non-schema focus_terms (brand names, salt forms, abbreviations passed by caller)
+        - Common salt/ester suffixes derived from INN (e.g. "metformin" -> "metformin hydrochloride")
+        """
+        terms: List[str] = []
+        if self.inn_lower:
+            terms.append(self.inn_lower)
+            # Add common salt/ester variants
+            for suffix in (" hydrochloride", " hcl", " sodium", " potassium",
+                           " acetate", " succinate", " mesylate", " tartrate",
+                           " phosphate", " sulfate", " maleate", " fumarate"):
+                terms.append(self.inn_lower + suffix)
+        # Add non-schema focus terms as synonyms (brand names, codes, etc.)
+        if focus_terms and not self._is_schema_field_terms(focus_terms):
+            for t in focus_terms:
+                if t and t not in terms:
+                    terms.append(t.lower())
+        return terms
 
     @staticmethod
     def _collect_evidence_ids(answer: Dict[str, Any]) -> set[str]:

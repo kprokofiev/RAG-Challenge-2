@@ -22,9 +22,8 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies (use cached wheels between builds)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --retries 5 --timeout 300 -r requirements.txt
+# Install Python dependencies
+RUN pip install --retries 5 --timeout 300 --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ ./src/

@@ -211,8 +211,12 @@ class VectorRetriever:
         )
         embedding = embedding.data[0].embedding
         embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+        # L2-normalize query vector to match normalized index vectors (#6).
+        norm = np.linalg.norm(embedding_array)
+        if norm > 0:
+            embedding_array = embedding_array / norm
         distances, indices = vector_db.search(x=embedding_array, k=actual_top_n)
-    
+
         retrieval_results = []
         seen_pages = set()
         
@@ -257,6 +261,10 @@ class VectorRetriever:
         )
         embedding = embedding.data[0].embedding
         embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+        # L2-normalize query vector to match normalized index vectors (#6).
+        norm = np.linalg.norm(embedding_array)
+        if norm > 0:
+            embedding_array = embedding_array / norm
 
         candidates: List[Dict] = []
         for report in self.all_dbs:
