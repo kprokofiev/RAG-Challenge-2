@@ -89,6 +89,21 @@ class WorkerSettings(BaseSettings):
     # PDF validation
     min_pdf_bytes: int = Field(5000, env="MIN_PDF_BYTES")
 
+    # Sprint-3: LLM model configuration
+    # Reranker model (used in LLMReranker). Default: gpt-4o-mini-2024-07-18
+    ddkit_rerank_model: str = Field("gpt-4o-mini-2024-07-18", env="DDKIT_RERANK_MODEL")
+    # Answering model (used in APIProcessor.send_message). Default: gpt-4o-2024-08-06
+    ddkit_answer_model: Optional[str] = Field(None, env="DDKIT_ANSWER_MODEL")
+
+    # Sprint-3: sections_plan version injected into report JSON for traceability
+    ddkit_sections_plan_version: str = Field("unknown", env="DDKIT_SECTIONS_PLAN_VERSION")
+
+    # Sprint-3: evidence K parameters (per-section adaptive defaults can be overridden globally)
+    ddkit_dense_k: int = Field(50, env="DDKIT_DENSE_K")
+    ddkit_sparse_k: int = Field(50, env="DDKIT_SPARSE_K")
+    ddkit_rerank_sample_k: int = Field(80, env="DDKIT_RERANK_SAMPLE_K")
+    ddkit_final_candidates_k: int = Field(40, env="DDKIT_FINAL_CANDIDATES_K")
+
     @validator('storage_endpoint_url', pre=True)
     def resolve_storage_endpoint(cls, v):
         if v:
