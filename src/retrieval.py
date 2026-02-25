@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Tuple, Dict, Optional, Union
+from typing import Any, List, Tuple, Dict, Optional, Union
 from rank_bm25 import BM25Okapi
 import pickle
 from pathlib import Path
@@ -12,6 +12,11 @@ import numpy as np
 from src.reranking import LLMReranker
 
 _log = logging.getLogger(__name__)
+
+# ── BM25 in-process cache (P1): avoids rebuilding index on every question ──────────
+# Key: (case_id, tenant_id, doc_kind_key) → (corpus_chunks_list, BM25Okapi_instance)
+# Invalidated when the number of chunks changes (new documents indexed mid-run is rare).
+_BM25_CACHE: Dict[tuple, Any] = {}
 
 
 # ── Authority tiers: maps section scope → (tier-1 doc_kinds, tier-2 doc_kinds) ──────
@@ -168,48 +173,61 @@ class BM25Retriever:
         the tenant/case/doc_kind filters.  Returns scored dicts compatible with
         VectorRetriever.retrieve_by_case() output so results can be merged and reranked.
         """
-        all_chunks: List[Dict] = []
+        # ── P1 cache key: (case_id, tenant_id, normalised doc_kind string) ──────────────
+        _dk_key = ",".join(sorted(doc_kind)) if isinstance(doc_kind, list) else (doc_kind or "")
+        _cache_key = (case_id or "", tenant_id or "", _dk_key)
+        _cached = _BM25_CACHE.get(_cache_key)
 
-        for doc_path in self.documents_dir.glob("*.json"):
-            try:
-                with open(doc_path, "r", encoding="utf-8") as f:
-                    doc = json.load(f)
-            except Exception as exc:
-                _log.debug("BM25: skip %s — %s", doc_path.name, exc)
-                continue
+        if _cached is not None:
+            all_chunks, bm25_index = _cached
+            _log.debug("BM25 cache hit: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
+        else:
+            all_chunks = []
 
-            metainfo = doc.get("metainfo", {})
-            if tenant_id and metainfo.get("tenant_id") != tenant_id:
-                continue
-            if case_id and metainfo.get("case_id") != case_id:
-                continue
-            if doc_kind:
-                if not VectorRetriever._doc_kind_matches(metainfo.get("doc_kind", ""), doc_kind):
+            for doc_path in self.documents_dir.glob("*.json"):
+                try:
+                    with open(doc_path, "r", encoding="utf-8") as f:
+                        doc = json.load(f)
+                except Exception as exc:
+                    _log.debug("BM25: skip %s — %s", doc_path.name, exc)
                     continue
 
-            doc_id = metainfo.get("doc_id", doc_path.stem)
-            doc_title = metainfo.get("title") or metainfo.get("company_name") or doc_id
+                metainfo = doc.get("metainfo", {})
+                if tenant_id and metainfo.get("tenant_id") != tenant_id:
+                    continue
+                if case_id and metainfo.get("case_id") != case_id:
+                    continue
+                if doc_kind:
+                    if not VectorRetriever._doc_kind_matches(metainfo.get("doc_kind", ""), doc_kind):
+                        continue
 
-            for chunk in doc.get("content", {}).get("chunks", []):
-                all_chunks.append({
-                    "_text": chunk.get("text", ""),
-                    "_chunk": chunk,
-                    "_doc_id": doc_id,
-                    "_doc_title": doc_title,
-                    "_metainfo": metainfo,
-                })
+                doc_id = metainfo.get("doc_id", doc_path.stem)
+                doc_title = metainfo.get("title") or metainfo.get("company_name") or doc_id
 
-        if not all_chunks:
-            _log.debug("BM25 retrieve_by_case: no chunks found (case=%s, doc_kind=%s)", case_id, doc_kind)
-            return []
+                for chunk in doc.get("content", {}).get("chunks", []):
+                    all_chunks.append({
+                        "_text": chunk.get("text", ""),
+                        "_chunk": chunk,
+                        "_doc_id": doc_id,
+                        "_doc_title": doc_title,
+                        "_metainfo": metainfo,
+                    })
 
-        # Tokenise and build BM25 index on the fly
-        tokenized_corpus = [c["_text"].lower().split() for c in all_chunks]
-        try:
-            bm25_index = BM25Okapi(tokenized_corpus)
-        except Exception as exc:
-            _log.warning("BM25 index build failed: %s", exc)
-            return []
+            if not all_chunks:
+                _log.debug("BM25 retrieve_by_case: no chunks found (case=%s, doc_kind=%s)", case_id, doc_kind)
+                return []
+
+            # Tokenise and build BM25 index on the fly
+            tokenized_corpus = [c["_text"].lower().split() for c in all_chunks]
+            try:
+                bm25_index = BM25Okapi(tokenized_corpus)
+            except Exception as exc:
+                _log.warning("BM25 index build failed: %s", exc)
+                return []
+
+            # Store in process-level cache
+            _BM25_CACHE[_cache_key] = (all_chunks, bm25_index)
+            _log.debug("BM25 cache stored: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
 
         tokenized_query = query.lower().split()
         scores = bm25_index.get_scores(tokenized_query)

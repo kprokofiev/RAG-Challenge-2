@@ -254,6 +254,8 @@ class ValidationGates:
 
         valid_ev_ids = {c.evidence_id for c in evidence_candidates}
         candidate_snippets: Dict[str, str] = {c.evidence_id: c.snippet for c in evidence_candidates}
+        # P1: doc_id lookup — remap only within same source document to prevent cross-doc misattribution
+        candidate_doc_ids: Dict[str, str] = {c.evidence_id: c.doc_id for c in evidence_candidates}
         candidate_ids = list(valid_ev_ids)
 
         if not evidence_candidates:
@@ -280,12 +282,16 @@ class ValidationGates:
                     fixed.append(eid)
                     continue
                 any_bad = True
-                # Strategy A: fuzzy snippet match
-                best_match = self._fuzzy_match_candidate(eid, candidate_ids, candidate_snippets)
+                # Strategy A: fuzzy match restricted to same doc_id (P1 guard)
+                best_match, match_score = self._fuzzy_match_candidate(
+                    eid, candidate_ids, candidate_snippets, candidate_doc_ids=candidate_doc_ids
+                )
                 if best_match:
+                    matched_doc = candidate_doc_ids.get(best_match, "?")
                     logger.info(
-                        "_attempt_fix StrategyA: orphaned '%s' remapped → '%s'",
-                        eid, best_match,
+                        "_attempt_fix StrategyA: orphaned '%s' remapped to '%s' "
+                        "(score=%.3f doc_id=%s reason=%s)",
+                        eid, best_match, match_score, matched_doc, REASON_REMAPPED,
                     )
                     fixed.append(best_match)
                     nonlocal remapped_count
@@ -383,34 +389,57 @@ class ValidationGates:
         candidate_ids: List[str],
         candidate_snippets: Dict[str, str],
         min_ratio: float = 0.55,
-    ) -> Optional[str]:
+        candidate_doc_ids: Optional[Dict[str, str]] = None,
+    ) -> tuple:
         """
         Strategy A: try to find the closest valid candidate for an orphaned evidence_id.
+
+        Returns (best_match_id_or_None, match_score).
 
         Two heuristics (best wins):
         1. ID similarity — the orphaned id might differ by a suffix/hash.
         2. Snippet similarity — compare last known snippet chars embedded in the bad id
            against candidate snippets using SequenceMatcher.
+
+        P1 guard: if candidate_doc_ids is provided, restrict matches to candidates from the
+        same doc_id as the orphaned reference (inferred from the ev_id prefix).  This prevents
+        cross-document misattribution (e.g. remapping a patent ev_id to an EPAR candidate).
         """
-        # Heuristic 1: id string similarity
-        id_matches = difflib.get_close_matches(bad_ev_id, candidate_ids, n=1, cutoff=min_ratio)
+        # Infer expected doc_id from the bad ev_id (format: ev_{doc_id}_{page}_{hash} or ev_{chunk_id})
+        allowed_ids = candidate_ids
+        if candidate_doc_ids:
+            # Try to extract doc_id prefix: strip leading "ev_", take everything before last 2 "_" parts
+            parts = bad_ev_id.lstrip("ev_").rsplit("_", 2)
+            expected_doc_id = parts[0] if len(parts) >= 2 else None
+            if expected_doc_id and len(expected_doc_id) >= 3:
+                same_doc_ids = [cid for cid in candidate_ids
+                                if candidate_doc_ids.get(cid, "") == expected_doc_id]
+                if same_doc_ids:
+                    allowed_ids = same_doc_ids
+                # If no same-doc candidates, fall back to all candidates (don't lose the remap entirely)
+
+        # Heuristic 1: id string similarity (restricted to allowed_ids)
+        id_matches = difflib.get_close_matches(bad_ev_id, allowed_ids, n=1, cutoff=min_ratio)
         if id_matches:
-            return id_matches[0]
+            # Compute the actual ratio for logging
+            ratio = difflib.SequenceMatcher(None, bad_ev_id, id_matches[0]).ratio()
+            return id_matches[0], round(ratio, 3)
 
         # Heuristic 2: if bad_ev_id embeds a fragment, try snippet match
         # (e.g. ev_abc123 where abc123 might appear in a snippet)
         fragment = bad_ev_id.replace("ev_", "").replace("_", " ").strip()
         if len(fragment) < 4:
-            return None
+            return None, 0.0
         best_id, best_ratio = None, 0.0
-        for cid, snippet in candidate_snippets.items():
+        for cid in allowed_ids:
+            snippet = candidate_snippets.get(cid, "")
             ratio = difflib.SequenceMatcher(None, fragment.lower(), snippet[:200].lower()).ratio()
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_id = cid
         if best_ratio >= min_ratio:
-            return best_id
-        return None
+            return best_id, round(best_ratio, 3)
+        return None, 0.0
 
     @staticmethod
     def _move_all_to_unknowns(output: Dict[str, Any], reason: str) -> Dict[str, Any]:
