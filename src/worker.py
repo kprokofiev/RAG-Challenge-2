@@ -250,9 +250,10 @@ class DDKitWorker:
             # Exponential backoff delay before re-queueing (#3)
             backoff_idx = min(attempt - 1, len(self._RETRY_BACKOFF) - 1)
             delay_s = self._RETRY_BACKOFF[backoff_idx]
+            next_retry_at = int(time.time()) + delay_s
             logger.warning(
-                "job_retrying job=%s attempt=%d/%d delay=%ds error=%s",
-                job_id, attempt, settings.max_job_attempts, delay_s, error_msg,
+                "job_retrying job=%s attempt=%d/%d delay=%ds next_retry_at=%d last_error=%s",
+                job_id, attempt, settings.max_job_attempts, delay_s, next_retry_at, error_msg,
             )
             time.sleep(delay_s)
             # Update attempt count in job payload so workers can propagate it.

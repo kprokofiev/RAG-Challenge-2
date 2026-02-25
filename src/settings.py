@@ -34,6 +34,9 @@ class WorkerSettings(BaseSettings):
     # Job processing settings
     max_job_attempts: int = Field(3, env="MAX_JOB_ATTEMPTS")
     job_timeout_seconds: int = Field(3600, env="JOB_TIMEOUT_SECONDS")  # 1 hour default
+    # Heavy doc-kinds (patent/epar/smpc/ru_instruction) get a separate, longer timeout.
+    # Set JOB_TIMEOUT_SECONDS_HEAVY=900 in rag-worker-index to allow 15 min for large scans.
+    job_timeout_seconds_heavy: int = Field(3600, env="JOB_TIMEOUT_SECONDS_HEAVY")
     worker_mode: str = Field("all", env="WORKER_MODE")  # all|doc_parse_index|report_generate|case_view_generate
     worker_concurrency: int = Field(1, env="WORKER_CONCURRENCY")
     worker_poll_timeout: int = Field(2, env="WORKER_POLL_TIMEOUT")

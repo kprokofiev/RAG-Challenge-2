@@ -34,6 +34,24 @@ _PREFLIGHT_MAX_WAIT_S = int(os.getenv("DDKIT_REPORT_PREFLIGHT_MAX_WAIT_S", "1800
 _PREFLIGHT_BACKOFF = [30, 60, 120, 180, 300]
 
 
+def _classify_error(error_msg: Optional[str]) -> Optional[str]:
+    """Normalise well-known transient error strings into searchable categories.
+
+    This makes DLQ entries and log queries consistent:
+      embedding_failed   — OpenAI embedding API error after all per-batch retries
+      html_stub          — PDF source returned HTML instead of binary PDF
+    Other strings are returned as-is.
+    """
+    if not error_msg:
+        return error_msg
+    lower = error_msg.lower()
+    embedding_signals = ("embeddings.create", "openai", "embedding_failed", "ratelimiterror",
+                         "apierror", "apiconnectionerror", "timeout" , "embedding")
+    if any(sig in lower for sig in embedding_signals):
+        return f"embedding_failed: {error_msg}"
+    return error_msg
+
+
 def _redis_client() -> Optional[redis_lib.Redis]:
     """Return a Redis client using the same URL as the queue handler, or None."""
     url = settings.redis_url
@@ -570,6 +588,8 @@ class DocParseIndexProcessor:
                     self._set_index_done_if_ready(tenant_id, case_id, run_id)
                     return True
                 else:
+                    # Normalise well-known transient error classes so DLQ/logs are searchable.
+                    error_message = _classify_error(error_message)
                     if job_id and self.ddkit_db.is_configured():
                         self.ddkit_db.mark_job_failed(job_id, error_message or "processing_failed")
                     job_data["status"] = "failed"
@@ -578,7 +598,7 @@ class DocParseIndexProcessor:
                     metrics["error"] = error_message or "processing_failed"
                     job_data["metrics"] = metrics
                     logger.info("doc_parse_index_metrics=%s", json.dumps(metrics, ensure_ascii=False))
-                    logger.error(f"Failed to process document {doc_id}")
+                    logger.error("doc_parse_index_failed doc=%s error=%s", doc_id, error_message)
                     # Check if corpus is settled despite this doc failing.
                     self._set_index_done_if_ready(tenant_id, case_id, run_id)
                     return False
@@ -758,8 +778,21 @@ class DocParseIndexProcessor:
         docling_do_ocr: Optional[bool] = None,
         docling_do_tables: Optional[bool] = None
     ) -> Tuple[bool, Optional[str], Optional[str], Optional[Dict[str, Any]]]:
-        """Run the pipeline in a subprocess and enforce a timeout."""
-        timeout_seconds = max(1, settings.job_timeout_seconds)
+        """Run the pipeline in a subprocess and enforce a timeout.
+
+        Doc-kind aware timeout: heavy Docling+OCR kinds (patent, epar, smpc, ru_instruction)
+        get a longer budget because they routinely produce 20-60 page scans that take 5-15 min
+        through Docling.  All other kinds fall back to the global JOB_TIMEOUT_SECONDS setting.
+        """
+        _HEAVY_KINDS = {
+            "patent", "patent_pdf", "epar", "smpc",
+            "ru_instruction", "grls_card",
+        }
+        _dk_lower = (doc_kind or "").lower()
+        if _dk_lower in _HEAVY_KINDS:
+            timeout_seconds = max(1, settings.job_timeout_seconds_heavy)
+        else:
+            timeout_seconds = max(1, settings.job_timeout_seconds)
         result_queue: Queue = Queue()
         payload = {
             "temp_path": str(temp_path),

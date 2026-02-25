@@ -142,6 +142,8 @@ class VectorDBIngestor:
         return [embedding.embedding for embedding in response.data]
 
     def _embed_batch_with_retry(self, batch: List[str], model: str) -> List[List[float]]:
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
         start = time.perf_counter()
         for attempt in range(1, settings.embeddings_retry_max + 1):
             try:
@@ -152,13 +154,23 @@ class VectorDBIngestor:
                     self._batch_attempts.append(attempt)
                 return [embedding.embedding for embedding in response.data]
             except Exception as e:
+                delay = settings.embeddings_backoff_seconds * attempt
                 if attempt >= settings.embeddings_retry_max:
                     elapsed = time.perf_counter() - start
                     with self._metrics_lock:
                         self._batch_timings.append(elapsed)
                         self._batch_attempts.append(attempt)
+                    _log.error(
+                        "embedding_failed_terminal attempt=%d/%d last_error=%s",
+                        attempt, settings.embeddings_retry_max, e,
+                    )
                     raise
-                time.sleep(settings.embeddings_backoff_seconds * attempt)
+                next_retry_at = int(time.time()) + delay
+                _log.warning(
+                    "embedding_retry attempt=%d/%d delay=%ds next_retry_at=%d last_error=%s",
+                    attempt, settings.embeddings_retry_max, delay, next_retry_at, e,
+                )
+                time.sleep(delay)
 
     def _create_vector_db(self, embeddings: List[float]):
         embeddings_array = np.array(embeddings, dtype=np.float32)

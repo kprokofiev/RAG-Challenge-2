@@ -108,6 +108,8 @@ services:
       - WORKER_CONCURRENCY=4
       - DDKIT_LLM_TIMEOUT_SECONDS=120
       - JOB_TIMEOUT_SECONDS=300
+      # Heavy kinds (patent/epar/smpc/ru_instruction) get 15 min; light kinds keep 5 min.
+      - JOB_TIMEOUT_SECONDS_HEAVY=900
       - EMBEDDINGS_BATCH_SIZE=128
       - EMBEDDINGS_MAX_CONCURRENCY=4
       - CHUNK_SIZE_TOKENS=800
