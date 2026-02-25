@@ -12,6 +12,48 @@ from src.prompts import DDSectionAnswerPrompt, DDSectionAnswerSchema, build_syst
 from src.retrieval import HybridRetriever
 from src.validation_gates import ValidationGates
 
+# ── Adaptive top-K table (Sprint 3, §3.1) ────────────────────────────────────────
+# Maps section_id prefix (or exact id) → evidence candidate K to use.
+# Regulatory/instruction: 20-30 (dense, structured docs).
+# Clinical results: 40-60 (numbers scattered across tables).
+# Patents: 40-80 (long text + many relevant sections).
+# Publications/RWE: 40-50 (varying depth).
+_ADAPTIVE_K_TABLE: Dict[str, int] = {
+    # Regulatory
+    "regulatory_status_eu": 25,
+    "regulatory_status_us": 25,
+    "regulatory_status_ru": 20,
+    "safety_profile": 30,
+    # Clinical
+    "clinical_trials_overview": 40,
+    "clinical_results": 55,
+    "clinical_protocols": 40,
+    "clinical_efficacy_publications": 45,
+    "clinical_congress_abstracts": 35,
+    "clinical_preprints": 30,
+    # RWE / trial registry
+    "rwe_evidence": 50,
+    "trial_registry": 40,
+    # Patents
+    "patents": 60,
+    "synthesis": 50,
+    # Manufacturers / other
+    "manufacturers": 25,
+    "manufacturing_quality": 25,
+}
+
+# Prefixes for pattern matching (section_id.startswith(prefix))
+_ADAPTIVE_K_PREFIXES: List[tuple] = [
+    ("regulatory_", 25),
+    ("clinical_result", 55),
+    ("clinical_trial", 40),
+    ("clinical_", 40),
+    ("rwe_", 50),
+    ("patent", 60),
+    ("safety", 30),
+    ("manufactur", 25),
+]
+
 
 class DDReportGenerator:
     def __init__(
@@ -42,6 +84,39 @@ class DDReportGenerator:
             self._top_k = max(1, int(os.getenv("DDKIT_EVIDENCE_TOP_K", "25")))
         except (ValueError, TypeError):
             self._top_k = 25
+        # sections_plan version — injected into report JSON for traceability
+        self._sections_plan_version: Optional[str] = None
+
+    # ── Adaptive K (Sprint 3, §3.1) ──────────────────────────────────────────────
+
+    def _adaptive_top_k(self, section_id: str, doc_kind: Any = None) -> int:
+        """
+        Return evidence candidate K appropriate for this section type.
+
+        Priority:
+        1. Env override DDKIT_EVIDENCE_TOP_K (global cap, if set explicitly).
+        2. doc_kind-based heuristic (patents are deep → high K).
+        3. Exact section_id table lookup.
+        4. Prefix match.
+        5. Global default self._top_k.
+        """
+        # doc_kind heuristic overrides table when the caller asks for a very specific type
+        if doc_kind:
+            dk_str = str(doc_kind) if isinstance(doc_kind, str) else ",".join(str(d) for d in (doc_kind or []))
+            if any(p in dk_str for p in ("patent", "ops", "patent_family")):
+                k = 60
+                return max(k, self._top_k)
+            if any(p in dk_str for p in ("ctgov_results", "rwe_study", "rwe_safety", "scientific")):
+                k = 50
+                return max(k, self._top_k)
+        # Exact match
+        if section_id in _ADAPTIVE_K_TABLE:
+            return max(_ADAPTIVE_K_TABLE[section_id], self._top_k)
+        # Prefix match
+        for prefix, k in _ADAPTIVE_K_PREFIXES:
+            if section_id.startswith(prefix):
+                return max(k, self._top_k)
+        return self._top_k
 
     # ── Completeness tracking ────────────────────────────────────────────────
 
@@ -135,6 +210,15 @@ class DDReportGenerator:
     ) -> Dict[str, Any]:
         logger = logging.getLogger(__name__)
         start_ts = time.time()
+
+        # Extract plan metadata (version etc.) from _meta key if present
+        plan_meta = sections_plan.get("_meta", {}) if isinstance(sections_plan, dict) else {}
+        sections_plan_version = (
+            plan_meta.get("sections_plan_version")
+            or self._sections_plan_version
+            or os.getenv("DDKIT_SECTIONS_PLAN_VERSION", "unknown")
+        )
+
         documents = self._load_documents_meta()
         doc_titles = {d["doc_id"]: d.get("title") for d in documents if d.get("doc_id")}
 
@@ -142,24 +226,30 @@ class DDReportGenerator:
         sections_output: List[Dict[str, Any]] = []
 
         logger.info(
-            "DD report generation started (sections=%d, documents=%d)",
+            "DD report generation started (sections=%d, documents=%d, plan_version=%s)",
             len(sections_plan),
-            len(documents)
+            len(documents),
+            sections_plan_version,
         )
         if deadline is not None:
             logger.info("Report generation timeout in %.2fs", max(0.0, deadline - start_ts))
 
-        for _, section_cfg in sections_plan.items():
+        # Skip the _meta pseudo-section key
+        for sec_key, section_cfg in sections_plan.items():
+            if sec_key == "_meta" or not isinstance(section_cfg, dict):
+                continue
             self._check_deadline(deadline, "before_section")
-            section_id = section_cfg.get("section_id") or section_cfg.get("id")
+            section_id = section_cfg.get("section_id") or section_cfg.get("id") or sec_key
             title = section_cfg.get("title", section_id)
             questions = section_cfg.get("questions", [])
+            authority_scope = section_cfg.get("authority_scope")
             section_start = time.time()
             logger.info(
-                "Generating section '%s' (%s), questions=%d",
+                "Generating section '%s' (%s), questions=%d, authority_scope=%s",
                 title,
                 section_id,
-                len(questions)
+                len(questions),
+                authority_scope or "-",
             )
 
             section_output = {
@@ -197,36 +287,42 @@ class DDReportGenerator:
                     self.inn or "-",
                 )
                 t0 = time.time()
+                # Adaptive top-K (#9, Sprint 3 §3.1): section type determines evidence depth.
+                adaptive_k = self._adaptive_top_k(section_id, doc_kind)
                 # Retrieve more candidates when focus_terms are present (broader recall needed).
-                # Use at least self._top_k (default 25, env DDKIT_EVIDENCE_TOP_K) (#9).
-                retrieve_limit = max(self._top_k, 30) if focus_terms else self._top_k
+                retrieve_limit = max(adaptive_k, 30) if focus_terms else adaptive_k
                 retrieved = self.retriever.retrieve_by_case(
                     query=query_text,
-                    top_n=retrieve_limit,
+                    final_candidates_k=retrieve_limit,
+                    dense_k=min(retrieve_limit * 2, 100),
+                    sparse_k=min(retrieve_limit * 2, 100),
+                    rerank_sample_k=min(retrieve_limit * 3, 150),
                     tenant_id=self.tenant_id,
                     case_id=self.case_id,
-                    doc_kind=doc_kind
+                    doc_kind=doc_kind,
+                    authority_scope=authority_scope,
                 )
                 if focus_terms and not self._is_schema_field_terms(focus_terms):
                     before_count = len(retrieved)
                     retrieved = [item for item in retrieved if self._candidate_matches_terms(item, focus_terms)]
-                    retrieved = retrieved[:self._top_k]
+                    retrieved = retrieved[:adaptive_k]
                     logger.info(
-                        "Filtered retrieved passages by focus_terms (%s): %d -> %d",
+                        "Filtered retrieved passages by focus_terms (%s): %d -> %d (adaptive_k=%d)",
                         ",".join(focus_terms),
                         before_count,
-                        len(retrieved)
+                        len(retrieved),
+                        adaptive_k,
                     )
                 elif focus_terms and self._is_schema_field_terms(focus_terms):
                     logger.info(
                         "focus_terms (%s) detected as schema field names — skipping candidate filter, "
                         "keeping top-%d from retrieval",
                         ",".join(focus_terms),
-                        self._top_k,
+                        adaptive_k,
                     )
-                    retrieved = retrieved[:self._top_k]
+                    retrieved = retrieved[:adaptive_k]
                 else:
-                    retrieved = retrieved[:self._top_k]
+                    retrieved = retrieved[:adaptive_k]
                 # INN-based relevance scoring: boost passages that mention INN/synonyms,
                 # but never hard-exclude — regulatory doc_kind items always pass (#8).
                 # This prevents false-unknowns when a publication uses a brand name or salt form.
@@ -312,7 +408,20 @@ class DDReportGenerator:
                 validation = self.validator.validate_section_output(answer, candidates)
                 if validation.fixed_output:
                     answer = validation.fixed_output
-                answer = self.validator.move_orphaned_to_unknowns(answer)
+                    logger.info(
+                        "repair loop fixed section %s (remapped+moved to unknowns)",
+                        section_id,
+                    )
+                # Pass candidates so move_orphaned_to_unknowns validates ID existence, not just presence
+                answer = self.validator.move_orphaned_to_unknowns(answer, evidence_candidates=candidates)
+                logger.info(
+                    "Validation result for %s: valid=%s errors=%d unknowns_now=%d needs_expand_k=%s",
+                    section_id,
+                    validation.is_valid,
+                    len(validation.errors),
+                    len(answer.get("unknowns", [])),
+                    getattr(validation, "_needs_expand_k", False),
+                )
 
                 section_output["claims"].extend(answer.get("claims", []))
                 section_output["numbers"].extend(answer.get("numbers", []))
@@ -345,6 +454,7 @@ class DDReportGenerator:
             "report_id": f"dd_report_{self.case_id}_{int(time.time())}",
             "case_id": self.case_id,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "sections_plan_version": sections_plan_version,
             "sections": sections_output,
             "evidence_index": list(evidence_index_map.values()),
             "documents": documents,
