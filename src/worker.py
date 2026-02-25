@@ -255,8 +255,10 @@ class DDKitWorker:
                 job_id, attempt, settings.max_job_attempts, delay_s, error_msg,
             )
             time.sleep(delay_s)
-            # Update attempt count in job payload so workers can propagate it
+            # Update attempt count in job payload so workers can propagate it.
+            # Strip runtime-only keys (metrics may contain bytes from docling) before requeue.
             job_data["attempt"] = attempt + 1
+            job_data.pop("metrics", None)
             self._requeue_job(job_data)
 
     def _requeue_job(self, job_data: Dict[str, Any]) -> None:

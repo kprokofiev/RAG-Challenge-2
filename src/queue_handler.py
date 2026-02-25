@@ -42,7 +42,7 @@ class JobQueueHandler:
         """
         try:
             queue_name = self._get_queue_name(job_data["job_type"])
-            job_json = json.dumps(job_data)
+            job_json = json.dumps(job_data, default=str)
 
             self.redis_client.lpush(queue_name, job_json)
             logger.info(f"Enqueued job {job_data.get('job_type')} to queue {queue_name}")
