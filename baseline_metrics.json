@@ -1,0 +1,256 @@
+{
+  "_meta": {
+    "generated": "2026-02-25",
+    "sprint": 3,
+    "description": "Sprint 3 golden case baseline metrics \u2014 3 E2E runs, all GATE PASS",
+    "note": "F2 WARN on all 3 runs is expected: adaptive_k=55 not triggered (no clinical_results patent docs in these corpora)"
+  },
+  "golden_cases": {
+    "trimebutine": {
+      "case_id": "9d757f44-9564-4154-98de-fc555acc838f",
+      "report_id": "3feba951-3ce8-490a-9998-28a3a841f29a",
+      "sections_plan_version": "2.1",
+      "sections_count": 14,
+      "docs": {
+        "total": 63,
+        "indexed": 51,
+        "failed": 12
+      },
+      "report": {
+        "total_claims": 4,
+        "total_unknowns": 24,
+        "completeness_ratio": 1.0,
+        "is_partial": false
+      },
+      "gate": {
+        "result": "PASS",
+        "pass": 13,
+        "warn": 1,
+        "fail": 0,
+        "total": 14
+      },
+      "sections": {
+        "clinical_congress_abstracts": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "clinical_efficacy_publications": {
+          "claims": 3,
+          "unknowns": 0
+        },
+        "clinical_preprints": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "clinical_results": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "clinical_trials_overview": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "manufacturers": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "patents": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_eu": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_ru": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_us": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "rwe_evidence": {
+          "claims": 1,
+          "unknowns": 1
+        },
+        "safety_profile": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "synthesis": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "trial_registry": {
+          "claims": 0,
+          "unknowns": 1
+        }
+      }
+    },
+    "rivaroxaban": {
+      "case_id": "d5eda949-a2fd-4bd2-9909-1c49da1a3a22",
+      "report_id": "5c6f5f98-92a4-4281-b0a0-ebda70a14ea1",
+      "sections_plan_version": "2.1",
+      "sections_count": 14,
+      "docs": {
+        "total": 81,
+        "indexed": 67,
+        "failed": 14
+      },
+      "report": {
+        "total_claims": 18,
+        "total_unknowns": 21,
+        "completeness_ratio": 1.0,
+        "is_partial": false
+      },
+      "gate": {
+        "result": "PASS",
+        "pass": 14,
+        "warn": 1,
+        "fail": 0,
+        "total": 15
+      },
+      "sections": {
+        "clinical_congress_abstracts": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "clinical_efficacy_publications": {
+          "claims": 6,
+          "unknowns": 0
+        },
+        "clinical_preprints": {
+          "claims": 3,
+          "unknowns": 0
+        },
+        "clinical_results": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "clinical_trials_overview": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "manufacturers": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "patents": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_eu": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_ru": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_us": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "rwe_evidence": {
+          "claims": 6,
+          "unknowns": 0
+        },
+        "safety_profile": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "synthesis": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "trial_registry": {
+          "claims": 3,
+          "unknowns": 0
+        }
+      }
+    },
+    "semaglutide": {
+      "case_id": "c55904fc-620f-48dc-bc78-7b6c8d463204",
+      "report_id": "8429ffca-f5ac-4e11-bf88-dfdebae207e3",
+      "sections_plan_version": "2.1",
+      "sections_count": 14,
+      "docs": {
+        "total": 100,
+        "indexed": 83,
+        "failed": 17
+      },
+      "report": {
+        "total_claims": 20,
+        "total_unknowns": 20,
+        "completeness_ratio": 1.0,
+        "is_partial": true
+      },
+      "gate": {
+        "result": "PASS",
+        "pass": 14,
+        "warn": 1,
+        "fail": 0,
+        "total": 15
+      },
+      "sections": {
+        "clinical_congress_abstracts": {
+          "claims": 2,
+          "unknowns": 0
+        },
+        "clinical_efficacy_publications": {
+          "claims": 7,
+          "unknowns": 0
+        },
+        "clinical_preprints": {
+          "claims": 3,
+          "unknowns": 0
+        },
+        "clinical_results": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "clinical_trials_overview": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "manufacturers": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "patents": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_eu": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_ru": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "regulatory_status_us": {
+          "claims": 0,
+          "unknowns": 3
+        },
+        "rwe_evidence": {
+          "claims": 6,
+          "unknowns": 0
+        },
+        "safety_profile": {
+          "claims": 0,
+          "unknowns": 2
+        },
+        "synthesis": {
+          "claims": 0,
+          "unknowns": 1
+        },
+        "trial_registry": {
+          "claims": 2,
+          "unknowns": 0
+        }
+      }
+    }
+  }
+}
