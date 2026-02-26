@@ -160,15 +160,20 @@ class DDKitWorker:
             return self.queue_handler.dequeue_job("report_generate", timeout=timeout)
         if self.mode == "case_view_generate":
             return self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
+        if self.mode == "dossier_generate":
+            return self.queue_handler.dequeue_job("dossier_generate", timeout=timeout)
 
-        # default: try doc_parse_index first, then report_generate, then case_view_generate
+        # default (all): poll queues in priority order
         job_data = self.queue_handler.dequeue_job("doc_parse_index", timeout=timeout)
         if job_data:
             return job_data
         job_data = self.queue_handler.dequeue_job("report_generate", timeout=timeout)
         if job_data:
             return job_data
-        return self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
+        job_data = self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
+        if job_data:
+            return job_data
+        return self.queue_handler.dequeue_job("dossier_generate", timeout=timeout)
 
     def _process_job(self, job_data: Dict[str, Any]):
         """Process a single job with retry logic."""

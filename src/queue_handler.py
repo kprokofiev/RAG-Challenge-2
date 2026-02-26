@@ -18,6 +18,7 @@ class JobQueueHandler:
         self.doc_parse_index_queue = settings.queue_doc_parse_index
         self.report_generate_queue = settings.queue_report_generate
         self.case_view_generate_queue = settings.queue_case_view_generate
+        self.dossier_generate_queue = settings.queue_dossier_generate
 
     def _get_queue_name(self, job_type: str) -> str:
         """Get the appropriate queue name for job type."""
@@ -27,6 +28,8 @@ class JobQueueHandler:
             return self.report_generate_queue
         elif job_type == "case_view_generate":
             return self.case_view_generate_queue
+        elif job_type == "dossier_generate":
+            return self.dossier_generate_queue
         else:
             raise ValueError(f"Unknown job type: {job_type}")
 

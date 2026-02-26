@@ -2009,7 +2009,7 @@ class DossierGenerateProcessor:
                     tf.write(dossier_json)
                     tf_path = tf.name
                 try:
-                    upload_ok = self.storage_client.upload_from_path(tf_path, dossier_key)
+                    upload_ok = self.storage_client.upload_file(dossier_key, tf_path)
                     if not upload_ok:
                         raise RuntimeError(f"S3 upload failed for {dossier_key}")
                     logger.info("dossier_uploaded key=%s", dossier_key)

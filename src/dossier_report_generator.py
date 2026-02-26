@@ -289,13 +289,17 @@ class DossierReportGenerator:
                 f"Available Evidence Candidates:\n{candidates_str}\n\n"
                 "Generate structured JSON answer."
             )
-            response = self.api.send_message(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                response_format=schema_class,
+            result_dict = self.api.send_message(
                 model=self.answering_model,
+                system_content=system_prompt,
+                human_content=user_prompt,
+                is_structured=True,
+                response_format=schema_class,
             )
-            return response
+            # send_message returns .dict() — re-parse into Pydantic object
+            if isinstance(result_dict, dict):
+                return schema_class.model_validate(result_dict)
+            return result_dict
         except Exception as exc:
             logger.warning("LLM call failed for question=%r: %s", question[:60], exc)
             return None
