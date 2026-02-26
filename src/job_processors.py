@@ -2029,7 +2029,7 @@ class DossierGenerateProcessor:
                 }
 
             if job_id and self.ddkit_db.is_configured():
-                self.ddkit_db.mark_job_done(job_id, report_id)
+                self.ddkit_db.mark_job_succeeded(job_id)
 
             return True
 
