@@ -83,6 +83,8 @@ class DossierPassport(BaseModel):
     Core drug identity & regulatory snapshot.
     All fields are EvidencedValue — none are free-text without citation.
     Missing data → DossierUnknown list at report level, NOT null here.
+
+    S6 additions: smiles, inchi_key, molecular_weight (PubChem chemistry block).
     """
     inn: str = Field(description="International Nonproprietary Name (query key)")
     trade_names: List[EvidencedValue] = Field(
@@ -99,7 +101,19 @@ class DossierPassport(BaseModel):
         default_factory=list,
         description="Jurisdictions with valid marketing authorization (chips)"
     )
-    chemical_formula: Optional[EvidencedValue] = Field(None, description="Molecular formula")
+    chemical_formula: Optional[EvidencedValue] = Field(None, description="Molecular formula (e.g. C10H14N2)")
+    smiles: Optional[EvidencedValue] = Field(
+        None,
+        description="Canonical SMILES string (PubChem source). S6: PubChem chemistry block."
+    )
+    inchi_key: Optional[EvidencedValue] = Field(
+        None,
+        description="InChIKey identifier (PubChem source). S6: PubChem chemistry block."
+    )
+    molecular_weight: Optional[EvidencedValue] = Field(
+        None,
+        description="Molecular weight in g/mol (PubChem source). S6: PubChem chemistry block."
+    )
     drug_class: Optional[EvidencedValue] = Field(None, description="Pharmacological class / ATC")
     mechanism_of_action: Optional[EvidencedValue] = Field(None, description="MoA summary")
     mah_holders: List[EvidencedValue] = Field(
@@ -316,32 +330,56 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     """
     Compute per-block coverage and overall evidence completeness.
 
+    S6 additions:
+      - registrations_coverage: number of regions with non-empty registration (no pct, raw count)
+      - evidence_coverage_pct: fraction of filled fields that have ≥1 evidence_ref
+      - chemistry_filled: bool — at least one of smiles/inchi_key/chemical_formula filled
+      - Passport now includes smiles, inchi_key, molecular_weight in coverage count (S6 fields)
+
     Returns dict ready to assign to report.dossier_quality.
     """
     def _ev_filled(ev: Optional[EvidencedValue]) -> bool:
         return ev is not None and ev.value is not None and bool(ev.evidence_refs)
 
+    def _ev_has_value(ev: Optional[EvidencedValue]) -> bool:
+        """Filled even without evidence refs — used for partial-credit counting."""
+        return ev is not None and ev.value is not None
+
     def _list_filled(lst: list) -> int:
         return sum(1 for x in lst if (_ev_filled(x) if isinstance(x, EvidencedValue) else bool(x)))
 
-    # Passport coverage
+    # ── Passport coverage (S6: 7 mandatory fields per TZ §1) ─────────────────
     pp = report.passport
-    passport_fields = [
+    # Mandatory scalar fields (TZ §1 obligatory minimum):
+    # inn, fda_approval_date, fda_indication, drug_class/MoA, chemical_formula, route
+    passport_scalar_fields = [
         pp.fda_approval_date, pp.fda_indication, pp.chemical_formula,
         pp.drug_class, pp.mechanism_of_action, pp.route_of_administration,
+        # S6 PubChem chemistry block
+        pp.smiles, pp.inchi_key, pp.molecular_weight,
     ]
-    passport_list_fields = [pp.trade_names, pp.registered_where, pp.mah_holders,
-                            pp.dosage_forms, pp.key_dosages]
-    pp_filled = sum(1 for f in passport_fields if _ev_filled(f))
+    passport_list_fields = [
+        pp.trade_names, pp.registered_where, pp.mah_holders,
+        pp.dosage_forms, pp.key_dosages,
+    ]
+    pp_filled = sum(1 for f in passport_scalar_fields if _ev_filled(f))
     pp_filled += sum(1 for lst in passport_list_fields if len(lst) > 0)
-    pp_total = len(passport_fields) + len(passport_list_fields)
+    pp_total = len(passport_scalar_fields) + len(passport_list_fields)
     passport_pct = round(pp_filled / pp_total * 100, 1) if pp_total else 0.0
 
-    # Registrations coverage
+    # ── Registrations coverage (S6-T5) ───────────────────────────────────────
+    # registrations_coverage = number of regions with non-empty registration records
+    # reg_pct = fraction of registrations that have evidence_refs
     reg_pct = round(
         sum(1 for r in report.registrations if r.evidence_refs) / max(len(report.registrations), 1) * 100,
         1
     ) if report.registrations else 0.0
+    registrations_coverage = len(report.registrations)  # raw count of non-empty regions
+    regions_with_data = list({r.region for r in report.registrations})
+    has_empty_registrations = any(
+        not r.evidence_refs and not r.identifiers
+        for r in report.registrations
+    )
 
     # Clinical coverage
     clinical_pct = round(
@@ -361,35 +399,72 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         1
     ) if report.synthesis_steps else 0.0
 
-    # Unknown reason distribution
+    # ── Chemistry block (S6-T4) ───────────────────────────────────────────────
+    chemistry_filled = any([
+        _ev_filled(pp.chemical_formula),
+        _ev_filled(pp.smiles),
+        _ev_filled(pp.inchi_key),
+    ])
+
+    # ── Unknown reason distribution ───────────────────────────────────────────
     reason_dist: Dict[str, int] = {}
     for u in report.unknowns:
         reason_dist[u.reason_code] = reason_dist.get(u.reason_code, 0) + 1
 
-    # Overall evidence completeness: fraction of evidence-locked values that have ≥1 ref
+    # ── Overall evidence completeness (S6-T5) ─────────────────────────────────
+    # evidence_coverage_pct = filled fields WITH evidence_refs / all filled fields
+    # (measures: "of what we extracted, how much is properly sourced?")
+    filled_with_evidence = 0
+    filled_total = 0
+    all_scalar_fields = passport_scalar_fields + [
+        pp.fda_indication,  # also count fda_indication separately
+    ]
+    for field in passport_scalar_fields:
+        if _ev_has_value(field):
+            filled_total += 1
+            if _ev_filled(field):
+                filled_with_evidence += 1
+    for lst in passport_list_fields:
+        for ev in lst:
+            if _ev_has_value(ev):
+                filled_total += 1
+                if _ev_filled(ev):
+                    filled_with_evidence += 1
+
+    evidence_coverage_pct = round(
+        filled_with_evidence / max(filled_total, 1) * 100, 1
+    )
+
+    # Legacy metric: evidence_completeness_pct (all EvidencedValue slots vs. filled)
     total_ev_values = 0
-    filled_ev_values = 0
+    filled_ev_values_legacy = 0
     for field in [pp.fda_approval_date, pp.fda_indication, pp.chemical_formula,
-                  pp.drug_class, pp.mechanism_of_action, pp.route_of_administration]:
+                  pp.drug_class, pp.mechanism_of_action, pp.route_of_administration,
+                  pp.smiles, pp.inchi_key, pp.molecular_weight]:
         total_ev_values += 1
         if _ev_filled(field):
-            filled_ev_values += 1
+            filled_ev_values_legacy += 1
     for lst in [pp.trade_names, pp.registered_where, pp.mah_holders, pp.dosage_forms, pp.key_dosages]:
         for ev in lst:
             total_ev_values += 1
             if _ev_filled(ev):
-                filled_ev_values += 1
+                filled_ev_values_legacy += 1
 
     evidence_completeness_pct = round(
-        filled_ev_values / max(total_ev_values, 1) * 100, 1
+        filled_ev_values_legacy / max(total_ev_values, 1) * 100, 1
     )
 
     return {
         "passport_pct": passport_pct,
         "registrations_pct": reg_pct,
+        "registrations_coverage": registrations_coverage,
+        "regions_with_data": regions_with_data,
+        "has_empty_registrations": has_empty_registrations,
         "clinical_pct": clinical_pct,
         "patents_pct": patent_pct,
         "synthesis_pct": synth_pct,
+        "chemistry_filled": chemistry_filled,
+        "evidence_coverage_pct": evidence_coverage_pct,
         "evidence_completeness_pct": evidence_completeness_pct,
         "unknowns_count": len(report.unknowns),
         "unknown_reason_distribution": reason_dist,

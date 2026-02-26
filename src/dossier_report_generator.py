@@ -42,11 +42,58 @@ from src.retrieval import HybridRetriever
 
 logger = logging.getLogger(__name__)
 
+# ── Authority-tiering policy (S6-T2) ─────────────────────────────────────────
+# Maps passport/registration field → allowed Tier-1 doc_kinds.
+# Fields marked Tier-2 are populated only from listed doc_kinds with confidence=medium.
+# Registration status/numbers are FORBIDDEN from Tier-2 sources.
+#
+# Tier-1: authoritative regulatory filings (label, EPAR, SmPC, GRLS, DailyMed, Drugs@FDA)
+# Tier-2: secondary (moa_overview, drug_monograph, press_release — only for MoA/class)
+
+FIELD_ALLOWED_SOURCES: Dict[str, List[str]] = {
+    # Registration facts — strict Tier-1 only
+    "registered_where":        ["epar", "smpc", "label", "us_fda", "grls_card", "grls", "eaeu_document"],
+    "fda_approval_date":       ["label", "us_fda", "approval_letter"],
+    "mah_holders":             ["smpc", "epar", "grls_card", "grls", "ru_instruction", "label"],
+    # Identity / forms — Tier-1 preferred, Tier-2 fallback for moa/class
+    "trade_names":             ["label", "smpc", "grls_card", "grls", "ru_instruction", "epar"],
+    "dosage_forms":            ["label", "smpc", "grls_card", "ru_instruction"],
+    "key_dosages":             ["label", "smpc", "ru_instruction"],
+    # MoA / class — Tier-2 allowed with medium confidence
+    "drug_class":              ["label", "smpc", "drug_monograph", "moa_overview"],
+    "mechanism_of_action":     ["label", "smpc", "drug_monograph", "moa_overview"],
+    # Chemistry — PubChem only
+    "chemical_formula":        ["pubchem", "drug_monograph"],
+    "smiles":                  ["pubchem"],
+    "inchi_key":               ["pubchem"],
+}
+
+# Tier-2 doc_kinds: populates with confidence=medium, forbidden for regulatory identifiers
+_TIER2_DOC_KINDS = {"drug_monograph", "moa_overview", "review_article"}
+
+# Fields where Tier-2 is FORBIDDEN (reg statuses, reg numbers, approval dates)
+_TIER1_ONLY_FIELDS = {"registered_where", "fda_approval_date", "mah_holders"}
+
+
 # ── LLM schemas for structured extraction ────────────────────────────────────
 
 class _EvidencedValueLLM(BaseModel):
     value: Optional[str] = Field(None, description="Extracted value as string")
-    evidence_id: Optional[str] = Field(None, description="evidence_id from candidates list")
+    evidence_id: Optional[str] = Field(
+        None,
+        description=(
+            "EXACTLY ONE evidence_id from the Available Evidence Candidates list above. "
+            "Copy the full ID verbatim, e.g. 'ev_a1b2c3d4_7_e5f6a7b8'. "
+            "Set to null ONLY if no candidate contains information about this field."
+        )
+    )
+    evidence_ids: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional: list of evidence_ids when multiple candidates support this value. "
+            "Each ID must appear verbatim in the Available Evidence Candidates list."
+        )
+    )
 
 
 class _PassportExtractLLM(BaseModel):
@@ -56,6 +103,10 @@ class _PassportExtractLLM(BaseModel):
     fda_indication: Optional[_EvidencedValueLLM] = None
     registered_where: List[_EvidencedValueLLM] = Field(default_factory=list)
     chemical_formula: Optional[_EvidencedValueLLM] = None
+    # S6-T4: PubChem chemistry block
+    smiles: Optional[_EvidencedValueLLM] = Field(None, description="Canonical SMILES from PubChem")
+    inchi_key: Optional[_EvidencedValueLLM] = Field(None, description="InChIKey from PubChem")
+    molecular_weight: Optional[_EvidencedValueLLM] = Field(None, description="Molecular weight g/mol from PubChem")
     drug_class: Optional[_EvidencedValueLLM] = None
     mechanism_of_action: Optional[_EvidencedValueLLM] = None
     mah_holders: List[_EvidencedValueLLM] = Field(default_factory=list)
@@ -125,16 +176,35 @@ class _SynthesisExtractLLM(BaseModel):
 _PASSPORT_INSTRUCTION = """
 You are a pharmaceutical dossier extraction system.
 Extract drug passport fields from the provided context.
-For each field, provide the value AND the evidence_id from the candidates list.
-CRITICAL: Only use evidence_ids that appear in the candidates list.
-If a field cannot be found in the provided context, set it to null — do NOT guess or hallucinate.
+
+INSTRUCTIONS:
+1. For EACH field, provide the extracted value AND the evidence_id copied VERBATIM from the
+   "Available Evidence Candidates" list (format: ev_XXXXXXXX_N_YYYYYYYY).
+2. You MAY supply multiple evidence_ids in the "evidence_ids" list field when several candidates
+   support the same value.
+3. If a field is present in the context, you MUST fill both "value" and at least one of
+   "evidence_id" / "evidence_ids". Do NOT leave evidence_id null if you filled value.
+4. If a field cannot be found in the context → set value to null (do NOT guess or hallucinate).
+5. Tier-1 sources take priority: FDA label (doc_kind=label/us_fda) > EMA EPAR/SmPC > GRLS > other.
+
+EXAMPLE of correct output for one field:
+  "fda_approval_date": {"value": "2021-06-04", "evidence_id": "ev_3fa2b1c8_12_d4e5f6a7"}
+  "trade_names": [{"value": "Ozempic", "evidence_id": "ev_3fa2b1c8_1_a1b2c3d4"}]
+
+CRITICAL: Copy evidence_ids EXACTLY as shown in the candidates list — do NOT invent new IDs.
 """.strip()
 
 _REGISTRATIONS_INSTRUCTION = """
 You are a pharmaceutical dossier extraction system.
 Extract marketing authorization records from the provided context.
-For each registration (one per country/region), list: region (RU/EU/US/EAEU), status, MAH, identifiers (reg numbers), forms/strengths.
-CRITICAL: Only use evidence_ids from the candidates list. If no registration data found, return empty list.
+
+INSTRUCTIONS:
+1. For each registration (one per country/region), provide: region (RU/EU/US/EAEU), status, MAH, identifiers (reg numbers), forms/strengths.
+2. Each value field MUST include an evidence_id copied verbatim from the Available Evidence Candidates list.
+3. Only populate regions for which real registration data exists in context.
+4. Do NOT create empty rows — if region data is absent, omit that registration entirely.
+5. If no registration data found for any region, return empty list.
+CRITICAL: Only use evidence_ids from the candidates list. Never invent registration numbers.
 """.strip()
 
 _CLINICAL_INSTRUCTION = """
@@ -181,14 +251,57 @@ def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
     )
 
 
+def _resolve_evidence_refs(
+    raw_ids: List[str],
+    candidates_map: Dict[str, DossierEvidence],
+) -> List[str]:
+    """
+    Resolve a list of LLM-supplied evidence_id strings to valid keys in candidates_map.
+
+    Strategy (S6-T1 — evidence-first fix):
+      1. Exact match — use as-is.
+      2. Prefix match — LLM sometimes truncates the hash suffix; match on the doc_id prefix portion
+         (e.g. "ev_a1b2c3d4" matches "ev_a1b2c3d4_7_e5f6a7b8").
+    Returns deduplicated list of valid evidence_ids.
+    """
+    resolved: List[str] = []
+    seen: set = set()
+    for raw_id in raw_ids:
+        if not raw_id:
+            continue
+        if raw_id in candidates_map:
+            # Exact match
+            if raw_id not in seen:
+                resolved.append(raw_id)
+                seen.add(raw_id)
+        else:
+            # Prefix / substring match — scan all known IDs
+            for known_id in candidates_map:
+                if known_id.startswith(raw_id) or raw_id.startswith(known_id[:20]):
+                    if known_id not in seen:
+                        resolved.append(known_id)
+                        seen.add(known_id)
+                    break
+    return resolved
+
+
 def _ev_to_evidenced_value(llm_val: Optional[_EvidencedValueLLM],
                             candidates_map: Dict[str, DossierEvidence]) -> Optional[EvidencedValue]:
-    """Convert LLM-extracted value + evidence_id → EvidencedValue, validating evidence_id exists."""
+    """
+    Convert LLM-extracted value + evidence_id(s) → EvidencedValue, validating refs exist.
+
+    S6-T1: supports both legacy evidence_id (single) and new evidence_ids (list).
+    Falls back to prefix matching so partial ev_ids still resolve.
+    A value with no linked evidence is retained with empty refs — the caller's validation
+    layer decides whether to emit a DossierUnknown for mandatory fields.
+    """
     if llm_val is None or llm_val.value is None:
         return None
-    refs = []
-    if llm_val.evidence_id and llm_val.evidence_id in candidates_map:
-        refs = [llm_val.evidence_id]
+    # Collect raw IDs from both fields
+    raw_ids: List[str] = list(llm_val.evidence_ids or [])
+    if llm_val.evidence_id:
+        raw_ids.insert(0, llm_val.evidence_id)
+    refs = _resolve_evidence_refs(raw_ids, candidates_map)
     return EvidencedValue(value=llm_val.value, evidence_refs=refs)
 
 
@@ -266,10 +379,18 @@ class DossierReportGenerator:
         return candidates
 
     def _format_candidates(self, candidates_map: Dict[str, DossierEvidence]) -> str:
+        """
+        Format candidates for LLM prompt.  S6-T1: show ev_id prominently so LLM
+        can copy it verbatim into evidence_id field.
+        """
         lines = []
-        for ev_id, ev in candidates_map.items():
-            pg = f"Page {ev.page}" if ev.page else "p.?"
-            lines.append(f"- {ev_id}: {ev.title or ev.doc_id} ({pg}): {ev.snippet[:200]}")
+        for i, (ev_id, ev) in enumerate(candidates_map.items(), 1):
+            pg = f"p.{ev.page}" if ev.page else "p.?"
+            src = ev.title or ev.source_url or ev.doc_id or "?"
+            # Format: [N] ev_id | Source (p.N) | snippet
+            lines.append(
+                f"[{i}] ID={ev_id} | {src[:60]} ({pg}) | {ev.snippet[:200]}"
+            )
         return "\n".join(lines)
 
     def _call_llm(self, instruction: str, context: str, question: str,
@@ -338,12 +459,19 @@ class DossierReportGenerator:
     # ── Block generators ─────────────────────────────────────────────────────
 
     def _generate_passport(self, unknowns: List[DossierUnknown]) -> DossierPassport:
-        """Stage A+B+C+D for passport block."""
-        passport_doc_kinds = ["label", "us_fda", "epar", "smpc", "grls_card", "grls", "drug_monograph"]
+        """Stage A+B+C+D for passport block. S6: includes PubChem chemistry fields."""
+        # S6-T2: Authority-tiering — Tier-1 sources first, pubchem for chemistry
+        passport_doc_kinds = [
+            "label", "us_fda", "epar", "smpc", "grls_card", "grls",
+            "ru_instruction", "pubchem", "drug_monograph",
+        ]
         question = (
-            f"Extract drug passport fields for {self.inn}: INN, trade names, FDA approval date, "
-            "FDA indication, registered jurisdictions, chemical formula, drug class, mechanism of action, "
-            "MAH holders, route of administration, dosage forms, key dosing regimens."
+            f"Extract drug passport fields for {self.inn}: "
+            "INN, trade names (brand names), FDA approval date, FDA indication, "
+            "registered jurisdictions (where is it approved: US/EU/RU/EAEU/UK), "
+            "chemical formula, canonical SMILES string, InChIKey, molecular weight in g/mol, "
+            "drug class (ATC/pharmacological class), mechanism of action, "
+            "MAH/marketing authorization holders, route of administration, dosage forms, key dosing regimens."
         )
         retrieved = self._retrieve(question, passport_doc_kinds, top_k=40)
         if not retrieved:
@@ -377,6 +505,10 @@ class DossierReportGenerator:
             fda_indication=_ev_to_evidenced_value(result.fda_indication, cm),
             registered_where=_ev_list(result.registered_where, cm),
             chemical_formula=_ev_to_evidenced_value(result.chemical_formula, cm),
+            # S6-T4: PubChem chemistry block
+            smiles=_ev_to_evidenced_value(result.smiles, cm),
+            inchi_key=_ev_to_evidenced_value(result.inchi_key, cm),
+            molecular_weight=_ev_to_evidenced_value(result.molecular_weight, cm),
             drug_class=_ev_to_evidenced_value(result.drug_class, cm),
             mechanism_of_action=_ev_to_evidenced_value(result.mechanism_of_action, cm),
             mah_holders=_ev_list(result.mah_holders, cm),
@@ -385,38 +517,56 @@ class DossierReportGenerator:
             key_dosages=_ev_list(result.key_dosages, cm),
         )
 
-        # Validate: fields without evidence → unknowns
+        # S6-T2: Validate — mandatory fields without evidence → unknowns
+        # Tier-1-only fields: registered_where is handled via registration block
         mandatory_fields = [
-            ("passport.fda_approval_date", passport.fda_approval_date),
-            ("passport.fda_indication", passport.fda_indication),
-            ("passport.drug_class", passport.drug_class),
-            ("passport.mechanism_of_action", passport.mechanism_of_action),
+            ("passport.fda_approval_date", passport.fda_approval_date,
+             "Ensure FDA label or Drugs@FDA is indexed in corpus."),
+            ("passport.fda_indication", passport.fda_indication,
+             "Ensure FDA label is indexed in corpus."),
+            ("passport.drug_class", passport.drug_class,
+             "Ensure FDA label or EMA EPAR/SmPC is indexed."),
+            ("passport.mechanism_of_action", passport.mechanism_of_action,
+             "Ensure FDA label, EMA SmPC, or drug_monograph is indexed."),
         ]
-        for field_path, ev_val in mandatory_fields:
+        for field_path, ev_val, next_action in mandatory_fields:
             if ev_val is None or not ev_val.evidence_refs:
                 self._add_unknown(
                     unknowns, field_path, "NO_EVIDENCE_IN_CORPUS",
                     f"Field {field_path} could not be extracted with evidence from available documents.",
-                    "Ensure FDA label or EPAR is in the corpus and properly indexed."
+                    next_action,
                 )
 
         if not passport.trade_names:
             self._add_unknown(
                 unknowns, "passport.trade_names", "NO_EVIDENCE_IN_CORPUS",
                 f"No trade names found in corpus for {self.inn}.",
+                "Ensure FDA label or EMA SmPC is indexed (trade_names = brand names).",
+            )
+
+        # S6-T4: PubChem chemistry block — if no pubchem doc indexed, add typed unknown
+        if not any([passport.smiles, passport.inchi_key, passport.chemical_formula]):
+            self._add_unknown(
+                unknowns, "passport.chemistry", "NO_DOCUMENT_IN_CORPUS",
+                f"No chemistry data (SMILES/InChIKey/formula) for {self.inn}. "
+                "PubChem document not in corpus.",
+                "Ensure PubChem compound data (doc_kind=pubchem) is attached to corpus."
             )
 
         return passport
 
     def _generate_registrations(self, unknowns: List[DossierUnknown]) -> List[DossierRegistration]:
         """Generate registration records for RU, EU, US."""
+        # S6-T6: EAEU is NOT in the live search list because the EAEU portal client
+        # is a URL-builder stub only (pharm_search/packages/clients/ru/eaeu/eaeu.go).
+        # It gets a forced typed-unknown below instead of being searched.
         regions = [
-            ("RU", ["grls_card", "grls", "ru_instruction", "eaeu_document"],
-             "What are the GRLS registration numbers, trade names, MAH, drug forms, and status?"),
-            ("EU", ["epar", "smpc", "assessment_report"],
-             "What are the EMA marketing authorization numbers, MAH, authorized forms, and status?"),
+            ("RU", ["grls_card", "grls", "ru_instruction"],
+             "What are the GRLS registration numbers, trade names, MAH, drug forms, and status for this drug in Russia?"),
+            ("EU", ["epar", "smpc", "assessment_report", "pil"],
+             "What are the EMA marketing authorization numbers, MAH, authorized forms, and status for this drug in the EU?"),
             ("US", ["label", "us_fda", "approval_letter", "anda_package"],
-             "What are the FDA NDA/BLA numbers, applicant names, drug forms, and approval dates?"),
+             "What are the FDA NDA/BLA numbers, applicant names, drug forms, and approval dates for this drug in the US?"),
         ]
 
         registrations: List[DossierRegistration] = []
@@ -485,7 +635,19 @@ class DossierReportGenerator:
                 )
                 registrations.append(registration)
 
-        # S5-P0-D: Dedup by region — keep only the richest entry per region.
+        # S6-T6: EAEU typed-unknown — always add because client is a stub.
+        # TZ §5.2: if EAEU not implemented → write typed unknown, do NOT create empty row.
+        self._add_unknown(
+            unknowns, "registrations[EAEU].*", "EAEU_NOT_IMPLEMENTED",
+            f"EAEU drug registry data unavailable for {self.inn}. "
+            "The EAEU portal client (pharm_search/packages/clients/ru/eaeu/eaeu.go) "
+            "is a URL-builder stub that does not query portal.eaeunion.org.",
+            "Implement HTTP client for portal.eaeunion.org public REST API "
+            "(endpoint: /sites/portal/ru-ru/Pages/registry/register-of-drugs.aspx). "
+            "Replace BuildEAEULink stub with real drug registry search.",
+        )
+
+        # S5-P0-D + S6: Dedup by region — keep only the richest entry per region.
         # LLM may produce duplicate rows for the same region (e.g. 2 × "RU").
         # Sort descending by (identifiers count, evidence count) so the most
         # evidence-rich record wins; ties broken by original order.
