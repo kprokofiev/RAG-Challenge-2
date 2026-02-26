@@ -14,6 +14,7 @@ import redis as redis_lib
 
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
+from src.dossier_report_generator import DossierReportGenerator
 from src.case_view_v2_generator import CaseViewV2Generator
 from src.pubmed_pipeline import PubMedIngestor
 from src.storage_client import StorageClient
@@ -1895,6 +1896,199 @@ class CaseViewGenerateProcessor:
                     return False
                 vector_count += 1
         logger.info("Downloaded artifacts: chunks=%d vectors=%d", chunk_count, vector_count)
+        return True
+
+
+class DossierGenerateProcessor:
+    """
+    Processor for ddkit:dossier_generate queue — Sprint 4.
+
+    Generates a DossierReport v3.0 (passport + registrations + clinical_studies +
+    patent_families + synthesis_steps + unknowns + evidence_registry) from the
+    indexed corpus for a case.  The output JSON is uploaded to S3 at:
+      tenants/{tenant}/cases/{case}/reports/{report_id}/dossier_v3.json
+
+    Also mirrors the dossier into the legacy report slot so the pharm_search
+    API /report/{report_id} endpoint can serve it immediately.
+    """
+
+    def __init__(self):
+        self.storage_client = StorageClient()
+        self.ddkit_db = DDKitDB()
+
+    def process_job(self, job_data: Dict[str, Any]) -> bool:
+        """
+        Process a dossier_generate job.
+
+        Expected job_data keys:
+            tenant_id, case_id, report_id (optional), run_id (optional),
+            sections_plan_key (dossier sections plan S3 key), job_id (optional),
+            trace_id (optional), deadline_s (optional, unix timestamp)
+        """
+        tenant_id = job_data["tenant_id"]
+        case_id = job_data["case_id"]
+        report_id = job_data.get("report_id") or f"dossier_{case_id}"
+        run_id = job_data.get("run_id")
+        job_id = job_data.get("job_id")
+        trace_id = job_data.get("trace_id")
+        deadline_s = job_data.get("deadline_s")
+
+        logger.info(
+            "dossier_generate_start tenant=%s case=%s report=%s run=%s trace=%s",
+            tenant_id, case_id, report_id, run_id, trace_id,
+        )
+
+        try:
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_running(job_id)
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+
+                # ── Download corpus artifacts (same as ReportGenerateProcessor) ────
+                ok = self._download_case_artifacts(temp_path, tenant_id, case_id)
+                if not ok:
+                    raise RuntimeError("Failed to download case artifacts from S3")
+
+                # ── Optionally download legacy sections plan (for MoA cross-check) ─
+                sections_plan_key = job_data.get("sections_plan_key")
+                sections_plan = None
+                if sections_plan_key:
+                    local_plan = temp_path / "sections_plan.json"
+                    if self.storage_client.download_to_path(sections_plan_key, local_plan):
+                        with open(local_plan, "r", encoding="utf-8") as f:
+                            sections_plan = json.load(f)
+
+                # ── Download legacy report JSON (for backward-compat sections[]) ───
+                legacy_sections = None
+                completeness = None
+                legacy_key = f"tenants/{tenant_id}/cases/{case_id}/reports/{report_id}/report.json"
+                local_legacy = temp_path / "legacy_report.json"
+                if self.storage_client.download_to_path(legacy_key, local_legacy):
+                    try:
+                        with open(local_legacy, "r", encoding="utf-8") as f:
+                            legacy_json = json.load(f)
+                        legacy_sections = legacy_json.get("sections")
+                        completeness = legacy_json.get("completeness")
+                    except Exception as ex:
+                        logger.warning("Could not parse legacy report JSON: %s", ex)
+
+                # ── Run DossierReportGenerator ────────────────────────────────────
+                t0 = time.perf_counter()
+                inn = job_data.get("inn") or job_data.get("drug_name") or case_id
+                generator = DossierReportGenerator(
+                    vector_db_dir=temp_path / "databases" / "vector_dbs",
+                    documents_dir=temp_path / "databases" / "chunked_reports",
+                    inn=inn,
+                    tenant_id=tenant_id,
+                    case_id=case_id,
+                )
+                dossier = generator.generate(
+                    case_id=case_id,
+                    run_id=run_id,
+                    deadline=deadline_s,
+                    legacy_sections=legacy_sections,
+                    completeness=completeness,
+                )
+                elapsed_s = time.perf_counter() - t0
+                logger.info(
+                    "dossier_generated case=%s report=%s elapsed_s=%.1f "
+                    "unknowns=%d evidence_registry=%d passport_pct=%s",
+                    case_id, report_id, elapsed_s,
+                    len(dossier.unknowns),
+                    len(dossier.evidence_registry),
+                    (dossier.dossier_quality or {}).get("passport_pct", "?"),
+                )
+
+                # ── Upload dossier JSON to S3 ─────────────────────────────────────
+                dossier_key = f"tenants/{tenant_id}/cases/{case_id}/reports/{report_id}/dossier_v3.json"
+                dossier_json = dossier.model_dump_json(indent=2)
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False, encoding="utf-8"
+                ) as tf:
+                    tf.write(dossier_json)
+                    tf_path = tf.name
+                try:
+                    upload_ok = self.storage_client.upload_from_path(tf_path, dossier_key)
+                    if not upload_ok:
+                        raise RuntimeError(f"S3 upload failed for {dossier_key}")
+                    logger.info("dossier_uploaded key=%s", dossier_key)
+                finally:
+                    try:
+                        os.unlink(tf_path)
+                    except OSError:
+                        pass
+
+                job_data["artifacts"] = {"dossier_v3": dossier_key}
+                job_data["status"] = "completed"
+                job_data["metrics"] = {
+                    "elapsed_s": round(elapsed_s, 1),
+                    "unknowns_count": len(dossier.unknowns),
+                    "evidence_registry_size": len(dossier.evidence_registry),
+                    "dossier_quality": dossier.dossier_quality or {},
+                }
+
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_done(job_id, report_id)
+
+            return True
+
+        except Exception as exc:
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_failed(job_id, str(exc))
+            job_data["status"] = "failed"
+            logger.error("dossier_generate_failed case=%s: %s", case_id, exc)
+            return False
+
+    def _download_case_artifacts(self, temp_path: Path, tenant_id: str, case_id: str) -> bool:
+        """Download chunks + vectors from S3 (mirrors ReportGenerateProcessor logic)."""
+        import tarfile
+        base_prefix = f"tenants/{tenant_id}/cases/{case_id}/documents/"
+        keys = self.storage_client.list_objects(base_prefix)
+        if not keys:
+            logger.info(
+                "No document artifacts found under %s (empty corpus — proceeding)", base_prefix
+            )
+            (temp_path / "databases" / "chunked_reports").mkdir(parents=True, exist_ok=True)
+            (temp_path / "databases" / "vector_dbs").mkdir(parents=True, exist_ok=True)
+            return True
+
+        chunks_dir = temp_path / "databases" / "chunked_reports"
+        vectors_dir = temp_path / "databases" / "vector_dbs"
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        vectors_dir.mkdir(parents=True, exist_ok=True)
+
+        chunk_count = 0
+        vector_count = 0
+        for key in keys:
+            if "/chunks/" in key and key.endswith("chunks_bundle.tar.gz"):
+                bundle_path = chunks_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, bundle_path):
+                    logger.error("Failed to download chunk bundle %s", key)
+                    return False
+                try:
+                    with tarfile.open(bundle_path, "r:gz") as tar:
+                        members = [m for m in tar.getmembers() if m.name.endswith(".json")]
+                        tar.extractall(path=chunks_dir)
+                    chunk_count += len(members)
+                except Exception as exc:
+                    logger.error("Failed to extract chunk bundle %s: %s", key, exc)
+                    return False
+                continue
+            if "/chunks/" in key and key.endswith(".json") and not key.endswith("manifest.json"):
+                local_path = chunks_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.error("Failed to download chunk %s", key)
+                    return False
+                chunk_count += 1
+            if "/vectors/" in key and key.endswith(".faiss"):
+                local_path = vectors_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.error("Failed to download vector %s", key)
+                    return False
+                vector_count += 1
+
+        logger.info("dossier_artifacts_downloaded chunks=%d vectors=%d", chunk_count, vector_count)
         return True
 
 
