@@ -1,0 +1,208 @@
+{
+  "_meta": {
+    "sections_plan_version": "3.0",
+    "description": "Dossier-oriented sections plan v3.0. Produces DossierReport v3.0 schema: passport + registrations + clinical_studies + patent_families + synthesis_steps + unknowns + evidence_registry. Every field requires evidence or goes to unknowns with typed reason_code.",
+    "changelog": [
+      "3.0 (Sprint 4): Full dossier schema extraction — passport, registrations (RU/EU/US), clinical study cards, patent families (INPADOC+RU), synthesis steps. All questions designed to extract structured EvidencedValue objects."
+    ]
+  },
+
+  "dossier_passport": {
+    "section_id": "dossier_passport",
+    "title": "Drug Passport",
+    "authority_scope": "PASSPORT",
+    "dossier_target": "passport",
+    "tier_1_doc_kinds": ["label", "us_fda", "epar", "smpc", "grls_card", "grls", "drug_monograph"],
+    "questions": [
+      {
+        "scope": "US_REG",
+        "question": "What is the INN, trade names, FDA NDA/BLA number, approval date, indication, and sponsor?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["label", "us_fda", "approval_letter"],
+        "focus_terms": ["INN", "trade name", "brand name", "NDA", "BLA", "approval date", "indication", "sponsor", "applicant"]
+      },
+      {
+        "scope": "EU_REG",
+        "question": "What is the EMA marketing authorization number, MAH, and approved indication per EPAR?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["epar", "smpc", "assessment_report"],
+        "focus_terms": ["marketing authorisation", "MAH", "indication", "approval date", "EU/H/C"]
+      },
+      {
+        "scope": "RU_REG",
+        "question": "What is the GRLS registration number, MAH, approved trade names and registration date?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["grls_card", "grls", "ru_instruction"],
+        "focus_terms": ["регистрационный номер", "МНН", "торговое наименование", "держатель", "дата", "registration number", "trade name", "holder"]
+      },
+      {
+        "scope": "CHEMISTRY",
+        "question": "What is the molecular formula, drug class, ATC code, and mechanism of action?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["drug_monograph", "label", "smpc", "epar"],
+        "focus_terms": ["formula", "molecular weight", "ATC", "drug class", "mechanism of action", "pharmacology", "MoA", "target"]
+      },
+      {
+        "scope": "US_REG",
+        "question": "What routes of administration, dosage forms, and key approved dosing regimens are listed?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["label", "us_fda", "smpc", "ru_instruction"],
+        "focus_terms": ["route of administration", "dosage form", "dose", "regimen", "tablet", "mg", "injection", "oral", "subcutaneous"]
+      }
+    ]
+  },
+
+  "dossier_registrations_ru": {
+    "section_id": "dossier_registrations_ru",
+    "title": "RU/EAEU Registrations",
+    "authority_scope": "RU_REG",
+    "dossier_target": "registrations",
+    "dossier_region": "RU",
+    "tier_1_doc_kinds": ["grls_card", "grls", "ru_instruction", "eaeu_document"],
+    "questions": [
+      {
+        "scope": "RU_REG",
+        "question": "What are all active GRLS registrations: trade names, drug forms, strengths, MAH, reg number, reg date, status?",
+        "answer_type": "table",
+        "doc_kind_preference": ["grls_card", "grls"],
+        "focus_terms": ["регистрационный номер", "дата регистрации", "держатель", "статус", "форма выпуска", "торговое наименование", "действующий", "registration", "status", "MAH", "form", "strength"]
+      },
+      {
+        "scope": "RU_REG",
+        "question": "What EAEU/CIS registrations exist (if documented)?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["eaeu_document", "grls_card"],
+        "focus_terms": ["ЕАЭС", "ЕврАзЭС", "EAEU", "CIS", "евразийский", "регистрация"]
+      }
+    ]
+  },
+
+  "dossier_registrations_eu": {
+    "section_id": "dossier_registrations_eu",
+    "title": "EU Registrations (EMA/MRP/DCP)",
+    "authority_scope": "EU_REG",
+    "dossier_target": "registrations",
+    "dossier_region": "EU",
+    "tier_1_doc_kinds": ["epar", "smpc", "assessment_report", "pil"],
+    "questions": [
+      {
+        "scope": "EU_REG",
+        "question": "What are the EU central procedure number, authorization date, MAH, status, and authorized forms per EPAR?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["epar", "assessment_report"],
+        "focus_terms": ["EU/H/C", "procedure", "authorization", "MAH", "status", "centralized", "form", "strength", "approved indication"]
+      }
+    ]
+  },
+
+  "dossier_registrations_us": {
+    "section_id": "dossier_registrations_us",
+    "title": "US Registrations (FDA)",
+    "authority_scope": "US_REG",
+    "dossier_target": "registrations",
+    "dossier_region": "US",
+    "tier_1_doc_kinds": ["label", "us_fda", "approval_letter", "anda_package"],
+    "questions": [
+      {
+        "scope": "US_REG",
+        "question": "What are the NDA/BLA numbers, approval dates, applicant names, drug forms, and strengths per FDA records?",
+        "answer_type": "table",
+        "doc_kind_preference": ["label", "us_fda", "approval_letter"],
+        "focus_terms": ["NDA", "BLA", "ANDA", "approval", "applicant", "sponsor", "label", "form", "strength", "route"]
+      }
+    ]
+  },
+
+  "dossier_clinical_studies": {
+    "section_id": "dossier_clinical_studies",
+    "title": "Clinical Studies (Structured Cards)",
+    "authority_scope": "CLINICAL",
+    "dossier_target": "clinical_studies",
+    "tier_1_doc_kinds": ["ctgov_protocol", "ctgov_results", "ctgov", "trial_registry", "scientific_pmc", "scientific_pdf", "publication"],
+    "questions": [
+      {
+        "scope": "CLINICAL_US",
+        "question": "For each pivotal phase 3 trial: extract NCT ID, trial name, phase, study type (RCT/non-RCT/obs), enrollment N, countries, comparator arm, dosing regimen, primary endpoint result (value + p-value + CI), and conclusion.",
+        "answer_type": "table",
+        "doc_kind_preference": ["ctgov_protocol", "ctgov_results", "ctgov"],
+        "focus_terms": ["NCT", "phase 3", "randomized", "enrollment", "comparator", "primary endpoint", "p-value", "hazard ratio", "odds ratio", "countries", "conclusion"]
+      },
+      {
+        "scope": "CLINICAL_US",
+        "question": "For each phase 2 trial: extract NCT ID, trial name, phase, N, comparator, dosing, key efficacy finding.",
+        "answer_type": "table",
+        "doc_kind_preference": ["ctgov_protocol", "ctgov_results", "ctgov"],
+        "focus_terms": ["NCT", "phase 2", "dose-finding", "enrollment", "comparator", "efficacy", "dose", "safety"]
+      },
+      {
+        "scope": "PUBLICATIONS",
+        "question": "What clinical studies are reported in peer-reviewed publications? Extract study design, N, comparator, primary endpoint result, and conclusion for each publication.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["scientific_pmc", "scientific_pdf", "publication"],
+        "focus_terms": ["randomized controlled trial", "clinical trial", "enrollment", "primary endpoint", "efficacy", "comparator", "N=", "treatment effect", "HR", "OR", "RR"]
+      }
+    ]
+  },
+
+  "dossier_patent_families": {
+    "section_id": "dossier_patent_families",
+    "title": "Patent Families (INPADOC + RU)",
+    "authority_scope": "PATENTS",
+    "dossier_target": "patent_families",
+    "tier_1_doc_kinds": ["patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent"],
+    "questions": [
+      {
+        "scope": "PATENTS",
+        "question": "What compound/composition patent families cover the active ingredient? For each family: representative pub number, priority date, assignee, expiry estimate, country coverage, what it protects.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["patent_family", "ops", "patent_pdf"],
+        "focus_terms": ["compound patent", "composition", "active ingredient", "priority date", "expiry", "assignee", "EP", "WO", "US patent", "jurisdiction", "country", "family"]
+      },
+      {
+        "scope": "PATENTS",
+        "question": "What formulation, method-of-use, or process patents exist? For each: representative number, priority date, what it blocks (formulation / method of treatment / synthesis process), country coverage.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["patent_family", "ops", "patent_pdf"],
+        "focus_terms": ["formulation patent", "use patent", "method of treatment", "process patent", "polymorph", "crystalline", "delivery", "dosage form", "ANDA barrier"]
+      },
+      {
+        "scope": "PATENTS",
+        "question": "What Russian/EAPO patents exist (from Rospatent/FIPS data)? For each: registration number, priority date, assignee, title summary.",
+        "answer_type": "facts",
+        "doc_kind_preference": ["ru_patent_fips", "patent_pdf", "patent"],
+        "focus_terms": ["патент", "Роспатент", "приоритет", "заявитель", "assignee", "EAPO", "EA patent", "RU patent", "priority"]
+      },
+      {
+        "scope": "PATENTS",
+        "question": "What are the SPC (supplementary protection certificate) grants or lapses, and patent cliff estimates?",
+        "answer_type": "numbers",
+        "doc_kind_preference": ["patent_family", "ops"],
+        "focus_terms": ["SPC", "supplementary protection certificate", "patent cliff", "expiry date", "term extension", "lapse", "grant"]
+      }
+    ]
+  },
+
+  "dossier_synthesis": {
+    "section_id": "dossier_synthesis",
+    "title": "Synthesis & Chemistry (from Patents)",
+    "authority_scope": "CHEMISTRY",
+    "dossier_target": "synthesis_steps",
+    "tier_1_doc_kinds": ["patent_pdf", "drug_monograph", "patent"],
+    "questions": [
+      {
+        "scope": "CHEMISTRY",
+        "question": "What synthesis routes are described in patent documents? Extract each step with: step number, description, starting materials/reagents, intermediates, yield (if stated).",
+        "answer_type": "facts",
+        "doc_kind_preference": ["patent_pdf", "patent"],
+        "focus_terms": ["synthesis", "route", "step", "starting material", "reagent", "intermediate", "reaction", "yield", "Example 1", "preparation", "method"]
+      },
+      {
+        "scope": "CHEMISTRY",
+        "question": "What manufacturing processes or API synthesis methods are described in drug monographs or patents?",
+        "answer_type": "facts",
+        "doc_kind_preference": ["drug_monograph", "patent_pdf"],
+        "focus_terms": ["manufacturing", "API synthesis", "process", "batch", "active pharmaceutical ingredient", "production", "GMP"]
+      }
+    ]
+  }
+}
