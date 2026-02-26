@@ -460,6 +460,21 @@ class DossierReportGenerator:
                 for ev in identifiers:
                     ev_refs.extend(ev.evidence_refs)
 
+                # S5-P0-D: Drop empty rows — a registration with no status,
+                # no MAH, and no identifiers contains nothing useful and would
+                # appear as an empty row in the dossier table.
+                has_content = (
+                    (status and status.value not in (None, "", []))
+                    or (mah and mah.value not in (None, "", []))
+                    or len(identifiers) > 0
+                )
+                if not has_content:
+                    logger.debug(
+                        "s5_reg_drop_empty region=%s inn=%s",
+                        reg_llm.region or region, self.inn,
+                    )
+                    continue
+
                 registration = DossierRegistration(
                     region=reg_llm.region or region,
                     status=status,
@@ -470,7 +485,28 @@ class DossierReportGenerator:
                 )
                 registrations.append(registration)
 
-        return registrations
+        # S5-P0-D: Dedup by region — keep only the richest entry per region.
+        # LLM may produce duplicate rows for the same region (e.g. 2 × "RU").
+        # Sort descending by (identifiers count, evidence count) so the most
+        # evidence-rich record wins; ties broken by original order.
+        seen_regions: dict = {}
+        deduped: List[DossierRegistration] = []
+        for reg in sorted(
+            registrations,
+            key=lambda r: (len(r.identifiers), len(r.evidence_refs)),
+            reverse=True,
+        ):
+            r_key = reg.region.upper().strip()
+            if r_key not in seen_regions:
+                seen_regions[r_key] = True
+                deduped.append(reg)
+            else:
+                logger.debug(
+                    "s5_reg_dedup_drop region=%s inn=%s (kept higher-evidence entry)",
+                    r_key, self.inn,
+                )
+
+        return deduped
 
     def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
         """Generate structured clinical study cards."""
