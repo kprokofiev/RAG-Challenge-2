@@ -322,7 +322,7 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         return ev is not None and ev.value is not None and bool(ev.evidence_refs)
 
     def _list_filled(lst: list) -> int:
-        return sum(1 for x in lst if _ev_filled(x) if isinstance(x, EvidencedValue) else bool(x))
+        return sum(1 for x in lst if (_ev_filled(x) if isinstance(x, EvidencedValue) else bool(x)))
 
     # Passport coverage
     pp = report.passport
