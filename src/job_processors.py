@@ -221,17 +221,23 @@ class DocParseIndexProcessor:
                     rdb = _redis_client()
                     queue_len = 0
                     fetch_queue_len = 0
+                    processing_len = 0
                     if rdb is not None:
                         try:
                             queue_len = rdb.llen("ddkit:doc_parse_index")
                             fetch_queue_len = rdb.llen("ddkit:doc_fetch_render")
+                            # Also check the BRPOPLPUSH processing list — items dequeued
+                            # but not yet ACK'd are actively being parsed and must NOT be
+                            # treated as terminal (this is the main source of the race condition
+                            # where a heavy PDF is dequeued, queue_len becomes 0, but the
+                            # doc is still being processed in another worker thread).
+                            processing_len = rdb.llen("ddkit:doc_parse_index:processing")
                         except Exception:
                             pass
-                    # Only treat as terminal if BOTH queues are drained.
-                    # If doc_fetch_render still has items, docs are en-route to rendered state.
-                    if queue_len == 0 and fetch_queue_len == 0:
+                    # Only treat as terminal if ALL queues AND the processing list are drained.
+                    if queue_len == 0 and fetch_queue_len == 0 and processing_len == 0:
                         logger.warning(
-                            "index_done_check: %d docs stuck in pre-queue state but both queues empty — "
+                            "index_done_check: %d docs stuck in pre-queue state but all queues empty — "
                             "treating as terminal to unblock corpus case=%s statuses=%s",
                             len(in_progress), case_id,
                             {str(d.get("status", "")).lower() for d in in_progress},
@@ -239,8 +245,9 @@ class DocParseIndexProcessor:
                         # Fall through to set index_done below
                     else:
                         logger.info(
-                            "index_done_check: %d docs still in progress case=%s parse_queue=%d fetch_queue=%d",
-                            len(in_progress), case_id, queue_len, fetch_queue_len,
+                            "index_done_check: %d docs still in progress case=%s "
+                            "parse_queue=%d fetch_queue=%d processing=%d",
+                            len(in_progress), case_id, queue_len, fetch_queue_len, processing_len,
                         )
                         return
                 else:
@@ -1916,6 +1923,33 @@ class DossierGenerateProcessor:
         self.storage_client = StorageClient()
         self.ddkit_db = DDKitDB()
 
+    def _corpus_ready_for_dossier(self, tenant_id: str, case_id: str, run_id: Optional[str]) -> Tuple[bool, str]:
+        """Check whether the corpus is ready for dossier generation.
+
+        Reuses the same index_done / DB-fallback logic as ReportGenerateProcessor.
+        """
+        index_done = get_run_flag(tenant_id, case_id, "index_done", run_id)
+        if not index_done:
+            if self.ddkit_db.is_configured():
+                try:
+                    docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
+                    terminal = {"indexed", "failed", "parsed", "skipped", "unsupported",
+                                "blocked_paywall", "captcha", "forbidden_403", "rate_limited_429",
+                                "requires_login", "robots_denied", "timeout", "parsed_empty"}
+                    in_progress = [d for d in docs if str(d.get("status", "")).lower() not in terminal]
+                    indexed = [d for d in docs if str(d.get("status", "")).lower() == "indexed"]
+                    if in_progress:
+                        return False, f"docs_still_indexing:{len(in_progress)}"
+                    if not indexed:
+                        return False, "no_indexed_docs"
+                    set_run_flag(tenant_id, case_id, "index_done", run_id)
+                except Exception as exc:
+                    logger.warning("Dossier corpus fallback check failed: %s", exc)
+                    return True, ""  # fail-open
+            else:
+                return True, ""  # no DB → fail-open
+        return True, ""
+
     def process_job(self, job_data: Dict[str, Any]) -> bool:
         """
         Process a dossier_generate job.
@@ -1932,11 +1966,45 @@ class DossierGenerateProcessor:
         job_id = job_data.get("job_id")
         trace_id = job_data.get("trace_id")
         deadline_s = job_data.get("deadline_s")
+        attempt = int(job_data.get("attempt", 0))
+        enqueued_at = float(job_data.get("enqueued_at", time.time()))
 
         logger.info(
-            "dossier_generate_start tenant=%s case=%s report=%s run=%s trace=%s",
-            tenant_id, case_id, report_id, run_id, trace_id,
+            "dossier_generate_start tenant=%s case=%s report=%s run=%s trace=%s attempt=%d",
+            tenant_id, case_id, report_id, run_id, trace_id, attempt,
         )
+
+        # ── Preflight: wait for corpus to be indexed ──────────────────────────
+        ready, reason = self._corpus_ready_for_dossier(tenant_id, case_id, run_id)
+        if not ready:
+            elapsed = time.time() - enqueued_at
+            if elapsed >= _PREFLIGHT_MAX_WAIT_S:
+                logger.warning(
+                    "dossier_preflight_timeout tenant=%s case=%s elapsed=%.1fs reason=%s — generating partial",
+                    tenant_id, case_id, elapsed, reason,
+                )
+                job_data["is_partial"] = True
+            else:
+                backoff_idx = min(attempt, len(_PREFLIGHT_BACKOFF) - 1)
+                delay = _PREFLIGHT_BACKOFF[backoff_idx]
+                job_data["attempt"] = attempt + 1
+                logger.info(
+                    "dossier_preflight_requeue tenant=%s case=%s attempt=%d delay=%ds elapsed=%.1fs reason=%s",
+                    tenant_id, case_id, attempt, delay, elapsed, reason,
+                )
+                rdb = _redis_client()
+                if rdb is not None:
+                    try:
+                        time.sleep(delay)
+                        # Strip private queue-handler keys (bytes / internal) before re-serialising
+                        serialisable = {k: v for k, v in job_data.items() if not k.startswith("_")}
+                        rdb.lpush(settings.queue_dossier_generate, json.dumps(serialisable))
+                        return True
+                    except Exception as exc:
+                        logger.error("Failed to requeue dossier_generate: %s", exc)
+                        job_data["is_partial"] = True
+                else:
+                    job_data["is_partial"] = True
 
         try:
             if job_id and self.ddkit_db.is_configured():

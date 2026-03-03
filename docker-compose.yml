@@ -92,7 +92,7 @@ services:
   rag-worker-index:
     build: .
     deploy:
-      replicas: 4
+      replicas: 1
     env_file:
       - ../../pharm_search/.env
     environment:
