@@ -179,6 +179,9 @@ class DocParseIndexProcessor:
         the entire corpus for this case is "settled" (no docs stuck in non-terminal states).
         If so, set the ddkit:run:{tenant}:{case}:{run_id}:index_done Redis flag (#12).
 
+        NOTE: run_id should always be provided to avoid stale-flag issues across runs.
+        When run_id is None, a warning is emitted and the legacy (unscoped) key is used.
+
         Terminal statuses (corpus settled):
           - indexed  : successfully parsed + embedded + uploaded
           - parsed   : upload done but callback to api-gateway pending (transient; treated as terminal here)
@@ -191,6 +194,12 @@ class DocParseIndexProcessor:
         """
         if not self.ddkit_db.is_configured():
             return
+        if not run_id:
+            logger.warning(
+                "index_done_check: run_id is None for case=%s — using legacy unscoped key. "
+                "This can cause stale-flag issues across consecutive runs.",
+                case_id,
+            )
         try:
             docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
             if not docs:
@@ -232,8 +241,11 @@ class DocParseIndexProcessor:
                             # where a heavy PDF is dequeued, queue_len becomes 0, but the
                             # doc is still being processed in another worker thread).
                             processing_len = rdb.llen("ddkit:doc_parse_index:processing")
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning(
+                                "index_done_check: Redis queue length query failed case=%s: %s",
+                                case_id, exc,
+                            )
                     # Only treat as terminal if ALL queues AND the processing list are drained.
                     if queue_len == 0 and fetch_queue_len == 0 and processing_len == 0:
                         logger.warning(

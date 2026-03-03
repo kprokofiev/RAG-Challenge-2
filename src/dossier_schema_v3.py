@@ -348,16 +348,39 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     def _list_filled(lst: list) -> int:
         return sum(1 for x in lst if (_ev_filled(x) if isinstance(x, EvidencedValue) else bool(x)))
 
-    # ── Passport coverage (S6: 7 mandatory fields per TZ §1) ─────────────────
+    # ── Passport coverage (S7: region-aware denominator) ─────────────────────
     pp = report.passport
-    # Mandatory scalar fields (TZ §1 obligatory minimum):
-    # inn, fda_approval_date, fda_indication, drug_class/MoA, chemical_formula, route
-    passport_scalar_fields = [
-        pp.fda_approval_date, pp.fda_indication, pp.chemical_formula,
-        pp.drug_class, pp.mechanism_of_action, pp.route_of_administration,
-        # S6 PubChem chemistry block
-        pp.smiles, pp.inchi_key, pp.molecular_weight,
+
+    # Determine registered regions from the registrations block
+    registered_regions: set = set()
+    for reg in report.registrations:
+        if reg.status and reg.status.value:
+            registered_regions.add((reg.region or "").upper().strip())
+    has_us = bool(registered_regions & {"US", "USA", "UNITED STATES"})
+
+    # US-specific fields: excluded from denominator when drug has no US registration
+    _US_SPECIFIC_FIELDS = {"fda_approval_date", "fda_indication"}
+
+    all_scalar_entries = [
+        ("fda_approval_date", pp.fda_approval_date),
+        ("fda_indication", pp.fda_indication),
+        ("chemical_formula", pp.chemical_formula),
+        ("drug_class", pp.drug_class),
+        ("mechanism_of_action", pp.mechanism_of_action),
+        ("route_of_administration", pp.route_of_administration),
+        ("smiles", pp.smiles),
+        ("inchi_key", pp.inchi_key),
+        ("molecular_weight", pp.molecular_weight),
     ]
+
+    not_applicable_fields: list = []
+    passport_scalar_fields = []
+    for field_name, field_obj in all_scalar_entries:
+        if field_name in _US_SPECIFIC_FIELDS and not has_us:
+            not_applicable_fields.append(f"passport.{field_name}")
+            continue
+        passport_scalar_fields.append(field_obj)
+
     passport_list_fields = [
         pp.trade_names, pp.registered_where, pp.mah_holders,
         pp.dosage_forms, pp.key_dosages,
@@ -456,6 +479,8 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
 
     return {
         "passport_pct": passport_pct,
+        "passport_total_fields": pp_total,
+        "passport_not_applicable": not_applicable_fields,
         "registrations_pct": reg_pct,
         "registrations_coverage": registrations_coverage,
         "regions_with_data": regions_with_data,

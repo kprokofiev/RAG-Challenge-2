@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import os
 import numpy as np
 from src.reranking import LLMReranker
+from src.tokenizer import tokenize as _pharma_tokenize
 
 _log = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class BM25Retriever:
         pages = document["content"]["pages"]
         
         # Get BM25 scores for the query
-        tokenized_query = query.split()
+        tokenized_query = _pharma_tokenize(query)
         scores = bm25_index.get_scores(tokenized_query)
         
         actual_top_n = min(top_n, len(scores))
@@ -220,8 +221,8 @@ class BM25Retriever:
                 _log.info("BM25 retrieve_by_case: no chunks found (case=%s, doc_kind=%s)", case_id, doc_kind)
                 return []
 
-            # Tokenise and build BM25 index on the fly
-            tokenized_corpus = [c["_text"].lower().split() for c in all_chunks]
+            # Tokenise and build BM25 index on the fly (pharma-aware tokenizer)
+            tokenized_corpus = [_pharma_tokenize(c["_text"]) for c in all_chunks]
             try:
                 bm25_index = BM25Okapi(tokenized_corpus)
             except Exception as exc:
@@ -232,7 +233,7 @@ class BM25Retriever:
             _BM25_CACHE[_cache_key] = (all_chunks, bm25_index)
             _log.info("BM25 cache stored: case=%s doc_kind=%s (%d chunks)", case_id, _dk_key, len(all_chunks))
 
-        tokenized_query = query.lower().split()
+        tokenized_query = _pharma_tokenize(query)
         scores = bm25_index.get_scores(tokenized_query)
 
         actual_top_n = min(top_n, len(all_chunks))

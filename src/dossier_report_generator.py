@@ -82,16 +82,16 @@ class _EvidencedValueLLM(BaseModel):
     evidence_id: Optional[str] = Field(
         None,
         description=(
-            "EXACTLY ONE evidence_id from the Available Evidence Candidates list above. "
-            "Copy the full ID verbatim, e.g. 'ev_a1b2c3d4_7_e5f6a7b8'. "
+            "EXACTLY ONE evidence alias from the Available Evidence Candidates list "
+            "(format: E1, E2, ..., E25). "
             "Set to null ONLY if no candidate contains information about this field."
         )
     )
     evidence_ids: List[str] = Field(
         default_factory=list,
         description=(
-            "Optional: list of evidence_ids when multiple candidates support this value. "
-            "Each ID must appear verbatim in the Available Evidence Candidates list."
+            "Optional: list of evidence aliases when multiple candidates support this value. "
+            "Each alias must appear in the Available Evidence Candidates list (e.g. [\"E1\", \"E4\"])."
         )
     )
 
@@ -178,20 +178,20 @@ You are a pharmaceutical dossier extraction system.
 Extract drug passport fields from the provided context.
 
 INSTRUCTIONS:
-1. For EACH field, provide the extracted value AND the evidence_id copied VERBATIM from the
-   "Available Evidence Candidates" list (format: ev_XXXXXXXX_N_YYYYYYYY).
-2. You MAY supply multiple evidence_ids in the "evidence_ids" list field when several candidates
-   support the same value.
+1. For EACH field, provide the extracted value AND the evidence alias from the
+   "Available Evidence Candidates" list (format: E1, E2, ..., E25).
+2. You MAY supply multiple aliases in the "evidence_ids" list field when several candidates
+   support the same value (e.g. ["E1", "E4"]).
 3. If a field is present in the context, you MUST fill both "value" and at least one of
    "evidence_id" / "evidence_ids". Do NOT leave evidence_id null if you filled value.
 4. If a field cannot be found in the context → set value to null (do NOT guess or hallucinate).
 5. Tier-1 sources take priority: FDA label (doc_kind=label/us_fda) > EMA EPAR/SmPC > GRLS > other.
 
 EXAMPLE of correct output for one field:
-  "fda_approval_date": {"value": "2021-06-04", "evidence_id": "ev_3fa2b1c8_12_d4e5f6a7"}
-  "trade_names": [{"value": "Ozempic", "evidence_id": "ev_3fa2b1c8_1_a1b2c3d4"}]
+  "fda_approval_date": {"value": "2021-06-04", "evidence_id": "E3"}
+  "trade_names": [{"value": "Ozempic", "evidence_id": "E1"}]
 
-CRITICAL: Copy evidence_ids EXACTLY as shown in the candidates list — do NOT invent new IDs.
+CRITICAL: Use ONLY the aliases shown in brackets (E1, E2, ...). Do NOT invent aliases.
 """.strip()
 
 _REGISTRATIONS_INSTRUCTION = """
@@ -200,18 +200,18 @@ Extract marketing authorization records from the provided context.
 
 INSTRUCTIONS:
 1. For each registration (one per country/region), provide: region (RU/EU/US/EAEU), status, MAH, identifiers (reg numbers), forms/strengths.
-2. Each value field MUST include an evidence_id copied verbatim from the Available Evidence Candidates list.
+2. Each value field MUST include an evidence alias (E1, E2, ...) from the Available Evidence Candidates list.
 3. Only populate regions for which real registration data exists in context.
 4. Do NOT create empty rows — if region data is absent, omit that registration entirely.
 5. If no registration data found for any region, return empty list.
-CRITICAL: Only use evidence_ids from the candidates list. Never invent registration numbers.
+CRITICAL: Use ONLY the aliases shown in brackets (E1, E2, ...). Never invent registration numbers.
 """.strip()
 
 _CLINICAL_INSTRUCTION = """
 You are a pharmaceutical dossier extraction system.
 Extract structured clinical study cards from the provided context.
 For each study: title, registry ID (NCT#), phase, study type, enrollment N, countries, comparator, dosing regimen, key efficacy findings (primary endpoint result, p-value, CI), conclusion, status.
-CRITICAL: Each value must reference an evidence_id from the candidates list.
+CRITICAL: Each value must reference an evidence alias (E1, E2, ...) from the candidates list.
 If a field is not stated in context, set it to null. Do NOT hallucinate N, p-values, or conclusions.
 """.strip()
 
@@ -219,22 +219,29 @@ _PATENTS_INSTRUCTION = """
 You are a pharmaceutical patent dossier extraction system.
 Extract patent family records from the provided context.
 For each family: family_id (use patent number if INPADOC unknown), representative publication number, priority date, assignees, what_blocks (compound/formulation/method_of_use/synthesis/other), one-sentence summary, country coverage, expiry dates per country (ONLY if explicitly stated in context).
-CRITICAL: Only use evidence_ids from candidates list. Never hallucinate expiry dates. If expiry not stated, leave expiry_by_country empty.
+CRITICAL: Use ONLY evidence aliases (E1, E2, ...) from candidates list. Never hallucinate expiry dates. If expiry not stated, leave expiry_by_country empty.
 """.strip()
 
 _SYNTHESIS_INSTRUCTION = """
 You are a pharmaceutical chemistry extraction system.
 Extract synthesis/manufacturing steps from the provided patent or monograph context.
 For each step: step number, description, reagents/starting materials, intermediates produced.
-CRITICAL: Each description must reference an evidence_id from candidates. Do NOT invent synthesis steps not in context.
+CRITICAL: Each description must reference an evidence alias (E1, E2, ...) from candidates. Do NOT invent synthesis steps not in context.
 """.strip()
 
 
 # ── Evidence registry helper ──────────────────────────────────────────────────
 
 def _ev_id(doc_id: str, page: Optional[int], text: str) -> str:
-    """Generate a deterministic evidence_id."""
-    h = hashlib.sha256(f"{doc_id}:{page}:{text[:100]}".encode()).hexdigest()[:8]
+    """Generate a deterministic evidence_id.
+
+    Uses full normalized text for hash (not text[:100]) to avoid collisions
+    on chunks sharing identical preambles (disclaimers, table headers).
+    12-char hex digest = 48-bit address space — collision-safe for large corpora.
+    """
+    import re as _re
+    normalized = _re.sub(r"\s+", " ", text).strip()
+    h = hashlib.sha256(f"{doc_id}:{page}:{normalized}".encode()).hexdigest()[:12]
     return f"ev_{doc_id[:8]}_{page or 0}_{h}"
 
 
@@ -251,65 +258,60 @@ def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
     )
 
 
-def _resolve_evidence_refs(
-    raw_ids: List[str],
-    candidates_map: Dict[str, DossierEvidence],
+def _resolve_evidence_refs_via_alias(
+    raw_aliases: List[str],
+    alias_map: Dict[str, str],
 ) -> List[str]:
     """
-    Resolve a list of LLM-supplied evidence_id strings to valid keys in candidates_map.
+    Resolve LLM-returned aliases (E1, E7, ...) → real evidence_ids.
 
-    Strategy (S6-T1 — evidence-first fix):
-      1. Exact match — use as-is.
-      2. Prefix match — LLM sometimes truncates the hash suffix; match on the doc_id prefix portion
-         (e.g. "ev_a1b2c3d4" matches "ev_a1b2c3d4_7_e5f6a7b8").
-    Returns deduplicated list of valid evidence_ids.
+    Strict: unknown aliases are logged and dropped — NO prefix/fuzzy matching.
+    This replaces the old prefix-match strategy that could silently bind the
+    wrong evidence chunk when multiple candidates shared a doc_id prefix.
     """
     resolved: List[str] = []
     seen: set = set()
-    for raw_id in raw_ids:
-        if not raw_id:
+    for alias in raw_aliases:
+        if not alias:
             continue
-        if raw_id in candidates_map:
-            # Exact match
-            if raw_id not in seen:
-                resolved.append(raw_id)
-                seen.add(raw_id)
+        alias_upper = alias.strip().upper()
+        if alias_upper in alias_map:
+            ev_id = alias_map[alias_upper]
+            if ev_id not in seen:
+                resolved.append(ev_id)
+                seen.add(ev_id)
         else:
-            # Prefix / substring match — scan all known IDs
-            for known_id in candidates_map:
-                if known_id.startswith(raw_id) or raw_id.startswith(known_id[:20]):
-                    if known_id not in seen:
-                        resolved.append(known_id)
-                        seen.add(known_id)
-                    break
+            logger.warning(
+                "unknown_evidence_alias alias=%s known_range=E1..E%d",
+                alias, len(alias_map),
+            )
     return resolved
 
 
 def _ev_to_evidenced_value(llm_val: Optional[_EvidencedValueLLM],
-                            candidates_map: Dict[str, DossierEvidence]) -> Optional[EvidencedValue]:
+                            alias_map: Dict[str, str]) -> Optional[EvidencedValue]:
     """
-    Convert LLM-extracted value + evidence_id(s) → EvidencedValue, validating refs exist.
+    Convert LLM-extracted value + evidence alias(es) → EvidencedValue.
 
-    S6-T1: supports both legacy evidence_id (single) and new evidence_ids (list).
-    Falls back to prefix matching so partial ev_ids still resolve.
-    A value with no linked evidence is retained with empty refs — the caller's validation
-    layer decides whether to emit a DossierUnknown for mandatory fields.
+    Uses alias_map (E1→real_ev_id) instead of candidates_map prefix matching.
+    A value with no linked evidence is retained with empty refs — the caller's
+    sanitizer decides whether to strip it and emit a DossierUnknown.
     """
     if llm_val is None or llm_val.value is None:
         return None
-    # Collect raw IDs from both fields
-    raw_ids: List[str] = list(llm_val.evidence_ids or [])
+    # Collect raw aliases from both fields
+    raw_aliases: List[str] = list(llm_val.evidence_ids or [])
     if llm_val.evidence_id:
-        raw_ids.insert(0, llm_val.evidence_id)
-    refs = _resolve_evidence_refs(raw_ids, candidates_map)
+        raw_aliases.insert(0, llm_val.evidence_id)
+    refs = _resolve_evidence_refs_via_alias(raw_aliases, alias_map)
     return EvidencedValue(value=llm_val.value, evidence_refs=refs)
 
 
 def _ev_list(llm_list: List[_EvidencedValueLLM],
-             candidates_map: Dict[str, DossierEvidence]) -> List[EvidencedValue]:
+             alias_map: Dict[str, str]) -> List[EvidencedValue]:
     result = []
     for item in llm_list:
-        ev = _ev_to_evidenced_value(item, candidates_map)
+        ev = _ev_to_evidenced_value(item, alias_map)
         if ev is not None:
             result.append(ev)
     return result
@@ -378,20 +380,25 @@ class DossierReportGenerator:
             self._evidence_registry[ev.evidence_id] = ev
         return candidates
 
-    def _format_candidates(self, candidates_map: Dict[str, DossierEvidence]) -> str:
+    def _build_alias_map(self, candidates_map: Dict[str, DossierEvidence]) -> Tuple[Dict[str, str], str]:
         """
-        Format candidates for LLM prompt.  S6-T1: show ev_id prominently so LLM
-        can copy it verbatim into evidence_id field.
+        Build alias mapping E1..EN → real evidence_id and formatted prompt text.
+
+        Returns (alias_map, formatted_candidates_str).
+        Using short aliases instead of raw ev_ids prevents LLM from truncating
+        or mutating long IDs (the old prefix-match risk).
         """
-        lines = []
+        alias_map: Dict[str, str] = {}
+        lines: List[str] = []
         for i, (ev_id, ev) in enumerate(candidates_map.items(), 1):
+            alias = f"E{i}"
+            alias_map[alias] = ev_id
             pg = f"p.{ev.page}" if ev.page else "p.?"
             src = ev.title or ev.source_url or ev.doc_id or "?"
-            # Format: [N] ev_id | Source (p.N) | snippet
             lines.append(
-                f"[{i}] ID={ev_id} | {src[:60]} ({pg}) | {ev.snippet[:200]}"
+                f"[{alias}] {src[:60]} ({pg}) | {ev.snippet[:200]}"
             )
-        return "\n".join(lines)
+        return alias_map, "\n".join(lines)
 
     def _call_llm(self, instruction: str, context: str, question: str,
                    candidates_str: str, schema_class) -> Optional[Any]:
@@ -402,7 +409,7 @@ class DossierReportGenerator:
             system_prompt = (
                 f"{instruction}\n\n"
                 f"Your answer MUST be valid JSON matching this schema:\n```\n{schema_str}\n```\n\n"
-                "CRITICAL: Only use evidence_ids that appear in the Available Evidence Candidates section below."
+                "CRITICAL: Only use evidence aliases (E1, E2, ...) that appear in the Available Evidence Candidates section below."
             )
             user_prompt = (
                 f"Context:\n{context}\n\n"
@@ -441,6 +448,37 @@ class DossierReportGenerator:
             message=message,
             suggested_next_action=next_action,
         ))
+
+    @staticmethod
+    def _sanitize_evidenced_value(
+        ev: Optional[EvidencedValue],
+        field_path: str,
+        unknowns: List[DossierUnknown],
+    ) -> Optional[EvidencedValue]:
+        """Strip values without evidence refs — enforce 'no facts without proof' contract.
+
+        If an EvidencedValue has value != None but evidence_refs == [],
+        strip the value and emit a DossierUnknown. This prevents the dossier
+        from containing claims that look like facts but have no evidence trail.
+        """
+        if ev is None:
+            return None
+        if ev.value is not None and not ev.evidence_refs:
+            logger.info(
+                "sanitize_strip field=%s value=%r — no evidence refs resolved",
+                field_path, str(ev.value)[:60],
+            )
+            unknowns.append(DossierUnknown(
+                field_path=field_path,
+                reason_code="NO_EVIDENCE_IN_CORPUS",
+                message=(
+                    f"Value '{str(ev.value)[:80]}' was extracted but no evidence aliases "
+                    "resolved to valid candidates. Value stripped to enforce evidence contract."
+                ),
+                suggested_next_action="Re-index source documents or verify evidence aliases.",
+            ))
+            return None
+        return ev
 
     def _has_patent_corpus(self) -> bool:
         """Check if any patent doc_kinds are present in the downloaded corpus."""
@@ -484,7 +522,7 @@ class DossierReportGenerator:
 
         candidates_map = self._candidates_map(retrieved)
         context = self._context_str(retrieved)
-        candidates_str = self._format_candidates(candidates_map)
+        alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         result = self._call_llm(
             _PASSPORT_INSTRUCTION, context, question, candidates_str, _PassportExtractLLM
@@ -497,28 +535,29 @@ class DossierReportGenerator:
             )
             return DossierPassport(inn=self.inn)
 
-        cm = candidates_map
+        am = alias_map
+        _san = self._sanitize_evidenced_value  # shorthand
         passport = DossierPassport(
             inn=result.inn or self.inn,
-            trade_names=_ev_list(result.trade_names, cm),
-            fda_approval_date=_ev_to_evidenced_value(result.fda_approval_date, cm),
-            fda_indication=_ev_to_evidenced_value(result.fda_indication, cm),
-            registered_where=_ev_list(result.registered_where, cm),
-            chemical_formula=_ev_to_evidenced_value(result.chemical_formula, cm),
+            trade_names=_ev_list(result.trade_names, am),
+            fda_approval_date=_san(_ev_to_evidenced_value(result.fda_approval_date, am), "passport.fda_approval_date", unknowns),
+            fda_indication=_san(_ev_to_evidenced_value(result.fda_indication, am), "passport.fda_indication", unknowns),
+            registered_where=_ev_list(result.registered_where, am),
+            chemical_formula=_san(_ev_to_evidenced_value(result.chemical_formula, am), "passport.chemical_formula", unknowns),
             # S6-T4: PubChem chemistry block
-            smiles=_ev_to_evidenced_value(result.smiles, cm),
-            inchi_key=_ev_to_evidenced_value(result.inchi_key, cm),
-            molecular_weight=_ev_to_evidenced_value(result.molecular_weight, cm),
-            drug_class=_ev_to_evidenced_value(result.drug_class, cm),
-            mechanism_of_action=_ev_to_evidenced_value(result.mechanism_of_action, cm),
-            mah_holders=_ev_list(result.mah_holders, cm),
-            route_of_administration=_ev_to_evidenced_value(result.route_of_administration, cm),
-            dosage_forms=_ev_list(result.dosage_forms, cm),
-            key_dosages=_ev_list(result.key_dosages, cm),
+            smiles=_san(_ev_to_evidenced_value(result.smiles, am), "passport.smiles", unknowns),
+            inchi_key=_san(_ev_to_evidenced_value(result.inchi_key, am), "passport.inchi_key", unknowns),
+            molecular_weight=_san(_ev_to_evidenced_value(result.molecular_weight, am), "passport.molecular_weight", unknowns),
+            drug_class=_san(_ev_to_evidenced_value(result.drug_class, am), "passport.drug_class", unknowns),
+            mechanism_of_action=_san(_ev_to_evidenced_value(result.mechanism_of_action, am), "passport.mechanism_of_action", unknowns),
+            mah_holders=_ev_list(result.mah_holders, am),
+            route_of_administration=_san(_ev_to_evidenced_value(result.route_of_administration, am), "passport.route_of_administration", unknowns),
+            dosage_forms=_ev_list(result.dosage_forms, am),
+            key_dosages=_ev_list(result.key_dosages, am),
         )
 
-        # S6-T2: Validate — mandatory fields without evidence → unknowns
-        # Tier-1-only fields: registered_where is handled via registration block
+        # S7: Validate — ALL mandatory fields without evidence → unknowns
+        # Expanded from 4 to cover all 9 scalar fields + trade_names.
         mandatory_fields = [
             ("passport.fda_approval_date", passport.fda_approval_date,
              "Ensure FDA label or Drugs@FDA is indexed in corpus."),
@@ -528,6 +567,16 @@ class DossierReportGenerator:
              "Ensure FDA label or EMA EPAR/SmPC is indexed."),
             ("passport.mechanism_of_action", passport.mechanism_of_action,
              "Ensure FDA label, EMA SmPC, or drug_monograph is indexed."),
+            ("passport.chemical_formula", passport.chemical_formula,
+             "Ensure PubChem or drug_monograph is indexed."),
+            ("passport.route_of_administration", passport.route_of_administration,
+             "Ensure FDA label or SmPC is indexed."),
+            ("passport.smiles", passport.smiles,
+             "Ensure PubChem compound data (doc_kind=pubchem) is attached."),
+            ("passport.inchi_key", passport.inchi_key,
+             "Ensure PubChem compound data (doc_kind=pubchem) is attached."),
+            ("passport.molecular_weight", passport.molecular_weight,
+             "Ensure PubChem compound data (doc_kind=pubchem) is attached."),
         ]
         for field_path, ev_val, next_action in mandatory_fields:
             if ev_val is None or not ev_val.evidence_refs:
@@ -583,7 +632,7 @@ class DossierReportGenerator:
 
             candidates_map = self._candidates_map(retrieved)
             context = self._context_str(retrieved)
-            candidates_str = self._format_candidates(candidates_map)
+            alias_map, candidates_str = self._build_alias_map(candidates_map)
 
             result = self._call_llm(
                 _REGISTRATIONS_INSTRUCTION, context,
@@ -598,15 +647,15 @@ class DossierReportGenerator:
                 continue
 
             for reg_llm in result.registrations:
-                cm = candidates_map
+                am = alias_map
                 ev_refs: List[str] = []
-                status = _ev_to_evidenced_value(reg_llm.status, cm)
+                status = _ev_to_evidenced_value(reg_llm.status, am)
                 if status and status.evidence_refs:
                     ev_refs.extend(status.evidence_refs)
-                mah = _ev_to_evidenced_value(reg_llm.mah, cm)
+                mah = _ev_to_evidenced_value(reg_llm.mah, am)
                 if mah and mah.evidence_refs:
                     ev_refs.extend(mah.evidence_refs)
-                identifiers = _ev_list(reg_llm.identifiers, cm)
+                identifiers = _ev_list(reg_llm.identifiers, am)
                 for ev in identifiers:
                     ev_refs.extend(ev.evidence_refs)
 
@@ -628,7 +677,7 @@ class DossierReportGenerator:
                 registration = DossierRegistration(
                     region=reg_llm.region or region,
                     status=status,
-                    forms_strengths=_ev_list(reg_llm.forms_strengths, cm),
+                    forms_strengths=_ev_list(reg_llm.forms_strengths, am),
                     mah=mah,
                     identifiers=identifiers,
                     evidence_refs=list(set(ev_refs)),
@@ -692,7 +741,7 @@ class DossierReportGenerator:
 
         candidates_map = self._candidates_map(retrieved)
         context = self._context_str(retrieved)
-        candidates_str = self._format_candidates(candidates_map)
+        alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         result = self._call_llm(
             _CLINICAL_INSTRUCTION, context, question, candidates_str, _ClinicalStudiesExtractLLM
@@ -706,7 +755,7 @@ class DossierReportGenerator:
             return []
 
         studies: List[DossierClinicalStudy] = []
-        cm = candidates_map
+        am = alias_map
         for i, study_llm in enumerate(result.studies):
             ev_refs: List[str] = []
 
@@ -715,17 +764,17 @@ class DossierReportGenerator:
                     ev_refs.extend(ev_val.evidence_refs)
                 return ev_val
 
-            title = _collect(_ev_to_evidenced_value(study_llm.title, cm))
-            study_id = _collect(_ev_to_evidenced_value(study_llm.study_id, cm))
-            phase = _collect(_ev_to_evidenced_value(study_llm.phase, cm))
-            study_type = _collect(_ev_to_evidenced_value(study_llm.study_type, cm))
-            n_enrolled = _collect(_ev_to_evidenced_value(study_llm.n_enrolled, cm))
-            comparator = _collect(_ev_to_evidenced_value(study_llm.comparator, cm))
-            regimen = _collect(_ev_to_evidenced_value(study_llm.regimen_dosing, cm))
-            conclusion = _collect(_ev_to_evidenced_value(study_llm.conclusion, cm))
-            status = _collect(_ev_to_evidenced_value(study_llm.status, cm))
-            countries = _ev_list(study_llm.countries, cm)
-            efficacy = _ev_list(study_llm.efficacy_keypoints, cm)
+            title = _collect(_ev_to_evidenced_value(study_llm.title, am))
+            study_id = _collect(_ev_to_evidenced_value(study_llm.study_id, am))
+            phase = _collect(_ev_to_evidenced_value(study_llm.phase, am))
+            study_type = _collect(_ev_to_evidenced_value(study_llm.study_type, am))
+            n_enrolled = _collect(_ev_to_evidenced_value(study_llm.n_enrolled, am))
+            comparator = _collect(_ev_to_evidenced_value(study_llm.comparator, am))
+            regimen = _collect(_ev_to_evidenced_value(study_llm.regimen_dosing, am))
+            conclusion = _collect(_ev_to_evidenced_value(study_llm.conclusion, am))
+            status = _collect(_ev_to_evidenced_value(study_llm.status, am))
+            countries = _ev_list(study_llm.countries, am)
+            efficacy = _ev_list(study_llm.efficacy_keypoints, am)
             for ev in countries + efficacy:
                 ev_refs.extend(ev.evidence_refs)
 
@@ -783,7 +832,7 @@ class DossierReportGenerator:
 
         candidates_map = self._candidates_map(retrieved)
         context = self._context_str(retrieved)
-        candidates_str = self._format_candidates(candidates_map)
+        alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         result = self._call_llm(
             _PATENTS_INSTRUCTION, context, question, candidates_str, _PatentFamiliesExtractLLM
@@ -797,25 +846,25 @@ class DossierReportGenerator:
             return []
 
         families: List[DossierPatentFamily] = []
-        cm = candidates_map
+        am = alias_map
         for fam_llm in result.families:
             ev_refs: List[str] = []
 
-            rep = _ev_to_evidenced_value(fam_llm.representative_pub, cm)
+            rep = _ev_to_evidenced_value(fam_llm.representative_pub, am)
             if rep and rep.evidence_refs:
                 ev_refs.extend(rep.evidence_refs)
-            priority = _ev_to_evidenced_value(fam_llm.priority_date, cm)
+            priority = _ev_to_evidenced_value(fam_llm.priority_date, am)
             if priority and priority.evidence_refs:
                 ev_refs.extend(priority.evidence_refs)
-            what_blocks = _ev_to_evidenced_value(fam_llm.what_blocks, cm)
+            what_blocks = _ev_to_evidenced_value(fam_llm.what_blocks, am)
             if what_blocks and what_blocks.evidence_refs:
                 ev_refs.extend(what_blocks.evidence_refs)
-            summary = _ev_to_evidenced_value(fam_llm.summary, cm)
+            summary = _ev_to_evidenced_value(fam_llm.summary, am)
             if summary and summary.evidence_refs:
                 ev_refs.extend(summary.evidence_refs)
-            assignees = _ev_list(fam_llm.assignees, cm)
-            coverage = _ev_list(fam_llm.country_coverage, cm)
-            expiry = _ev_list(fam_llm.expiry_by_country, cm)
+            assignees = _ev_list(fam_llm.assignees, am)
+            coverage = _ev_list(fam_llm.country_coverage, am)
+            expiry = _ev_list(fam_llm.expiry_by_country, am)
             for ev in assignees + coverage + expiry:
                 ev_refs.extend(ev.evidence_refs)
 
@@ -887,7 +936,7 @@ class DossierReportGenerator:
 
         candidates_map = self._candidates_map(retrieved)
         context = self._context_str(retrieved)
-        candidates_str = self._format_candidates(candidates_map)
+        alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         result = self._call_llm(
             _SYNTHESIS_INSTRUCTION, context, question, candidates_str, _SynthesisExtractLLM
@@ -902,11 +951,11 @@ class DossierReportGenerator:
             return []
 
         steps: List[DossierSynthesisStep] = []
-        cm = candidates_map
+        am = alias_map
         for step_llm in result.steps:
             if step_llm.description is None:
                 continue
-            desc = _ev_to_evidenced_value(step_llm.description, cm)
+            desc = _ev_to_evidenced_value(step_llm.description, am)
             if desc is None or not desc.evidence_refs:
                 self._add_unknown(
                     unknowns, f"synthesis_steps[{step_llm.step_number}].description",
@@ -915,8 +964,8 @@ class DossierReportGenerator:
                 )
                 continue
 
-            reagents = _ev_list(step_llm.reagents, cm)
-            intermediates = _ev_list(step_llm.intermediates, cm)
+            reagents = _ev_list(step_llm.reagents, am)
+            intermediates = _ev_list(step_llm.intermediates, am)
             ev_refs = list(desc.evidence_refs)
             for ev in reagents + intermediates:
                 ev_refs.extend(ev.evidence_refs)
