@@ -90,8 +90,9 @@ class _EvidencedValueLLM(BaseModel):
     evidence_ids: List[str] = Field(
         default_factory=list,
         description=(
-            "Optional: list of evidence aliases when multiple candidates support this value. "
-            "Each alias must appear in the Available Evidence Candidates list (e.g. [\"E1\", \"E4\"])."
+            "REQUIRED when value is non-null: list of evidence aliases from the Available Evidence Candidates list. "
+            "At least one alias must be provided (e.g. [\"E1\", \"E4\"]). "
+            "Empty list is NOT acceptable when value is set. Use exact alias format: E1, E2, ... not '1' or 'evidence_1'."
         )
     )
 
@@ -211,7 +212,11 @@ _CLINICAL_INSTRUCTION = """
 You are a pharmaceutical dossier extraction system.
 Extract structured clinical study cards from the provided context.
 For each study: title, registry ID (NCT#), phase, study type, enrollment N, countries, comparator, dosing regimen, key efficacy findings (primary endpoint result, p-value, CI), conclusion, status.
-CRITICAL: Each value must reference an evidence alias (E1, E2, ...) from the candidates list.
+CRITICAL RULES FOR EVIDENCE ALIASES:
+- Every non-null field value MUST include at least one evidence alias from the candidates list (E1, E2, E3, ...).
+- Use the alias exactly as shown: E1, E2, E3 — NOT "1", NOT "evidence_1", NOT full evidence IDs.
+- If you cannot find a supporting snippet for a field, set value=null rather than omitting the alias.
+- A study card where ALL fields have empty evidence_ids will be rejected entirely — do not submit such cards.
 If a field is not stated in context, set it to null. Do NOT hallucinate N, p-values, or conclusions.
 """.strip()
 
@@ -263,6 +268,7 @@ def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
         source_url=source_url,
         page=page,
         snippet=snippet[:400],
+        doc_kind=doc_kind or None,
         mime_type=mime_type,
         content_hash=content_hash,
         locator=locator,

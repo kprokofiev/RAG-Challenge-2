@@ -255,6 +255,8 @@ class BM25Retriever:
                 "doc_id": item["_doc_id"],
                 "doc_title": item["_doc_title"],
                 "_retrieval_source": "bm25",
+                "doc_kind": item["_metainfo"].get("doc_kind", ""),
+                "source_url": item["_metainfo"].get("source_url", ""),
             })
 
         _log.info(
@@ -473,7 +475,9 @@ class VectorRetriever:
                     "text": text,
                     "type": chunk.get("type", "content"),
                     "doc_id": metainfo.get("doc_id", report.get("name")),
-                    "doc_title": metainfo.get("title", metainfo.get("company_name"))
+                    "doc_title": metainfo.get("title", metainfo.get("company_name")),
+                    "doc_kind": metainfo.get("doc_kind", ""),
+                    "source_url": metainfo.get("source_url", ""),
                 })
         candidates.sort(key=lambda r: r["distance"], reverse=True)
         return candidates[:top_n]
