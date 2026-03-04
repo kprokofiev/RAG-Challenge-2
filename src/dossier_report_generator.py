@@ -245,9 +245,17 @@ def _ev_id(doc_id: str, page: Optional[int], text: str) -> str:
     return f"ev_{doc_id[:8]}_{page or 0}_{h}"
 
 
+# doc_kinds whose original artifact is JSON (not PDF)
+_JSON_DOC_KINDS = {"pubchem", "label", "us_fda", "ctgov", "ctgov_results", "ctgov_protocol"}
+
+
 def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
-                    title: Optional[str], source_url: Optional[str]) -> DossierEvidence:
+                    title: Optional[str], source_url: Optional[str],
+                    doc_kind: Optional[str] = None,
+                    content_hash: Optional[str] = None,
+                    locator: Optional[str] = None) -> DossierEvidence:
     ev_id = _ev_id(doc_id, page, snippet)
+    mime_type = "application/json" if doc_kind and doc_kind.lower() in _JSON_DOC_KINDS else None
     return DossierEvidence(
         evidence_id=ev_id,
         doc_id=doc_id,
@@ -255,6 +263,9 @@ def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
         source_url=source_url,
         page=page,
         snippet=snippet[:400],
+        mime_type=mime_type,
+        content_hash=content_hash,
+        locator=locator,
     )
 
 
@@ -373,9 +384,10 @@ class DossierReportGenerator:
             text = item.get("text", "")
             title = item.get("doc_title") or item.get("title", "")
             source_url = item.get("source_url", "")
+            doc_kind = item.get("doc_kind")
             if not text:
                 continue
-            ev = _build_evidence(doc_id, page, text, title, source_url)
+            ev = _build_evidence(doc_id, page, text, title, source_url, doc_kind=doc_kind)
             candidates[ev.evidence_id] = ev
             self._evidence_registry[ev.evidence_id] = ev
         return candidates

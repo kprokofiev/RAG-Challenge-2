@@ -46,6 +46,10 @@ class DossierEvidence(BaseModel):
     source_url: Optional[str] = Field(None, description="Original source URL")
     page: Optional[int] = Field(None, description="Page number; None for structured-data sources")
     snippet: str = Field(description="Verbatim text snippet (200-400 chars) from the source")
+    # JSON evidence locator fields (for JSON-as-document sources like openFDA, PubChem)
+    mime_type: Optional[str] = Field(None, description="MIME type of original artifact, e.g. application/json")
+    content_hash: Optional[str] = Field(None, description="SHA-256 hash of original artifact bytes")
+    locator: Optional[str] = Field(None, description="JSON Pointer (RFC 6901) or JSONPath to the exact value, e.g. /results/0/indications_and_usage/0")
 
 
 # ── Unknown (typed gap) ───────────────────────────────────────────────────────
