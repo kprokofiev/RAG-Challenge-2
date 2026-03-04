@@ -380,24 +380,49 @@ class DossierReportGenerator:
             self._evidence_registry[ev.evidence_id] = ev
         return candidates
 
-    def _build_alias_map(self, candidates_map: Dict[str, DossierEvidence]) -> Tuple[Dict[str, str], str]:
+    def _build_alias_map(
+        self,
+        candidates_map: Dict[str, DossierEvidence],
+        token_budget: int = 0,
+    ) -> Tuple[Dict[str, str], str]:
         """
         Build alias mapping E1..EN → real evidence_id and formatted prompt text.
 
         Returns (alias_map, formatted_candidates_str).
         Using short aliases instead of raw ev_ids prevents LLM from truncating
         or mutating long IDs (the old prefix-match risk).
+
+        When *token_budget* > 0, stops adding candidates once the cumulative
+        token count exceeds the budget.  Candidates are already ranked by
+        retrieval score (highest first), so the budget naturally keeps the
+        most relevant evidence and trims the tail.
         """
+        import tiktoken as _tiktoken
+
         alias_map: Dict[str, str] = {}
         lines: List[str] = []
+        running_tokens = 0
+        effective_budget = token_budget or int(os.getenv("DDKIT_EVIDENCE_TOKEN_BUDGET", "0"))
+        _enc = _tiktoken.get_encoding("o200k_base") if effective_budget > 0 else None
+
         for i, (ev_id, ev) in enumerate(candidates_map.items(), 1):
             alias = f"E{i}"
-            alias_map[alias] = ev_id
             pg = f"p.{ev.page}" if ev.page else "p.?"
             src = ev.title or ev.source_url or ev.doc_id or "?"
-            lines.append(
-                f"[{alias}] {src[:60]} ({pg}) | {ev.snippet[:200]}"
-            )
+            line = f"[{alias}] {src[:60]} ({pg}) | {ev.snippet[:200]}"
+
+            if effective_budget > 0:
+                line_tokens = len(_enc.encode(line))
+                if running_tokens + line_tokens > effective_budget and lines:
+                    logger.info(
+                        "evidence_token_budget_reached after E%d, budget=%d, used=%d",
+                        i - 1, effective_budget, running_tokens,
+                    )
+                    break
+                running_tokens += line_tokens
+
+            alias_map[alias] = ev_id
+            lines.append(line)
         return alias_map, "\n".join(lines)
 
     def _call_llm(self, instruction: str, context: str, question: str,
@@ -910,27 +935,31 @@ class DossierReportGenerator:
         return families
 
     def _generate_synthesis_steps(self, unknowns: List[DossierUnknown]) -> List[DossierSynthesisStep]:
-        """Generate synthesis steps from patent text."""
-        if not self._has_patent_corpus():
-            self._add_unknown(
-                unknowns, "synthesis_steps[*]", "PATENT_DISCOVERY_GAP",
-                f"No patent documents in corpus for {self.inn}. Cannot extract synthesis steps.",
-                "Attach patent PDFs to corpus. See patent_families unknowns for discovery gap details."
-            )
-            return []
+        """Generate synthesis steps from patent text, with EPAR/assessment_report fallback."""
+        # S7-E1: Primary sources are patents; if no patent corpus, try EPAR as fallback
+        _PATENT_DOC_KINDS = ["patent_pdf", "patent", "drug_monograph"]
+        _EPAR_FALLBACK_KINDS = ["epar", "assessment_report"]
 
-        patent_doc_kinds = ["patent_pdf", "patent", "drug_monograph"]
+        use_epar_fallback = False
+        if not self._has_patent_corpus():
+            use_epar_fallback = True
+            logger.info("synthesis_epar_fallback inn=%s — no patent corpus, trying EPAR", self.inn)
+
+        patent_doc_kinds = _EPAR_FALLBACK_KINDS if use_epar_fallback else _PATENT_DOC_KINDS
         question = (
             f"For {self.inn}: extract synthesis/manufacturing steps from patent or monograph text. "
             "For each step: step number, description, starting materials/reagents, intermediates, yield."
         )
         retrieved = self._retrieve(question, patent_doc_kinds, top_k=60)
         if not retrieved:
+            reason = "PATENT_DISCOVERY_GAP" if use_epar_fallback else "NO_EVIDENCE_IN_CORPUS"
+            msg = (
+                f"No synthesis-relevant passages found for {self.inn} in "
+                f"{'EPAR/assessment_report (fallback)' if use_epar_fallback else 'patent corpus'}."
+            )
             self._add_unknown(
-                unknowns, "synthesis_steps[*]", "NO_EVIDENCE_IN_CORPUS",
-                f"Patent corpus present but no synthesis-relevant passages found for {self.inn}. "
-                "Patent may be title-only (RU CSV) without claims/synthesis text.",
-                "Ensure patent PDF (full text) is attached, not only metadata."
+                unknowns, "synthesis_steps[*]", reason, msg,
+                "Attach patent PDFs with full text (claims + examples) to corpus."
             )
             return []
 

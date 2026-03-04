@@ -390,14 +390,25 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     pp_total = len(passport_scalar_fields) + len(passport_list_fields)
     passport_pct = round(pp_filled / pp_total * 100, 1) if pp_total else 0.0
 
-    # ── Registrations coverage (S6-T5) ───────────────────────────────────────
-    # registrations_coverage = number of regions with non-empty registration records
-    # reg_pct = fraction of registrations that have evidence_refs
-    reg_pct = round(
-        sum(1 for r in report.registrations if r.evidence_refs) / max(len(report.registrations), 1) * 100,
-        1
-    ) if report.registrations else 0.0
-    registrations_coverage = len(report.registrations)  # raw count of non-empty regions
+    # ── Registrations coverage (S7: per-field) ──────────────────────────────
+    # Per-registration completeness: status (required), mah (required),
+    # identifiers (required, list).
+    # Score = filled_mandatory_with_evidence / 3 per registration, averaged.
+    _REG_MANDATORY_COUNT = 3  # status, mah, identifiers
+
+    reg_field_scores: list = []
+    for reg in report.registrations:
+        filled = 0
+        if _ev_filled(reg.status):
+            filled += 1
+        if _ev_filled(reg.mah):
+            filled += 1
+        if reg.identifiers and any(_ev_filled(ident) for ident in reg.identifiers):
+            filled += 1
+        reg_field_scores.append(round(filled / _REG_MANDATORY_COUNT * 100, 1))
+
+    reg_pct = round(sum(reg_field_scores) / len(reg_field_scores), 1) if reg_field_scores else 0.0
+    registrations_coverage = len(report.registrations)
     regions_with_data = list({r.region for r in report.registrations})
     has_empty_registrations = any(
         not r.evidence_refs and not r.identifiers

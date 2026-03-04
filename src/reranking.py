@@ -1,9 +1,12 @@
+import logging
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import requests
 import src.prompts as prompts
 from concurrent.futures import ThreadPoolExecutor
+
+_log = logging.getLogger(__name__)
 
 
 class JinaReranker:
@@ -166,3 +169,80 @@ class LLMReranker:
         # Sort results by combined score in descending order
         all_results.sort(key=lambda x: x["combined_score"], reverse=True)
         return all_results
+
+
+class CrossEncoderReranker:
+    """S7-B2: Cross-encoder reranker using sentence-transformers.
+
+    Feature-flagged via DDKIT_RERANKER=cross_encoder (default: llm).
+    Falls back to LLMReranker if sentence-transformers is not installed.
+
+    10-20x faster than LLM reranking, deterministic, zero marginal API cost.
+    """
+
+    _DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
+
+    def __init__(self):
+        model_name = os.getenv("DDKIT_CROSS_ENCODER_MODEL", self._DEFAULT_MODEL)
+        try:
+            from sentence_transformers import CrossEncoder
+            self._model = CrossEncoder(model_name)
+            _log.info("cross_encoder_loaded model=%s", model_name)
+        except ImportError:
+            _log.warning(
+                "sentence-transformers not installed — CrossEncoderReranker unavailable. "
+                "Install with: pip install sentence-transformers"
+            )
+            self._model = None
+
+    def rerank_documents(
+        self,
+        query: str,
+        documents: list,
+        documents_batch_size: int = 4,  # unused, kept for interface compat
+        llm_weight: float = 0.7,
+    ):
+        """Rerank documents using cross-encoder scores + vector distance."""
+        if self._model is None:
+            _log.warning("cross_encoder_fallback_to_llm — model not loaded")
+            return LLMReranker().rerank_documents(query, documents, documents_batch_size, llm_weight)
+
+        vector_weight = 1 - llm_weight
+        pairs = [(query, doc["text"]) for doc in documents]
+        scores = self._model.predict(pairs)
+
+        # Normalize scores to [0, 1] range (cross-encoder outputs logits)
+        import numpy as np
+        scores_arr = np.array(scores, dtype=np.float64)
+        min_s, max_s = scores_arr.min(), scores_arr.max()
+        if max_s > min_s:
+            norm_scores = (scores_arr - min_s) / (max_s - min_s)
+        else:
+            norm_scores = np.ones_like(scores_arr) * 0.5
+
+        all_results = []
+        for doc, ce_score in zip(documents, norm_scores):
+            doc_with_score = doc.copy()
+            doc_with_score["relevance_score"] = round(float(ce_score), 4)
+            doc_with_score["combined_score"] = round(
+                llm_weight * float(ce_score) + vector_weight * doc.get("distance", 0),
+                4,
+            )
+            all_results.append(doc_with_score)
+
+        all_results.sort(key=lambda x: x["combined_score"], reverse=True)
+        return all_results
+
+
+def get_reranker():
+    """Factory: return reranker based on DDKIT_RERANKER env var.
+
+    Values: "cross_encoder" | "llm" (default: "llm").
+    """
+    reranker_type = os.getenv("DDKIT_RERANKER", "llm").lower().strip()
+    if reranker_type == "cross_encoder":
+        ce = CrossEncoderReranker()
+        if ce._model is not None:
+            return ce
+        _log.warning("cross_encoder requested but unavailable, falling back to LLM")
+    return LLMReranker()

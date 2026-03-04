@@ -9,7 +9,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import numpy as np
-from src.reranking import LLMReranker
+from src.reranking import LLMReranker, get_reranker
 from src.tokenizer import tokenize as _pharma_tokenize
 
 _log = logging.getLogger(__name__)
@@ -574,7 +574,7 @@ class HybridRetriever:
             bm25_db_dir=vector_db_dir,   # not used for case retrieval; dir kept for compat
             documents_dir=documents_dir,
         )
-        self.reranker = LLMReranker()
+        self.reranker = get_reranker()  # S7-B2: factory selects LLM or cross-encoder
 
     def retrieve_by_company_name(
         self,

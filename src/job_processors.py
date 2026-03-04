@@ -283,6 +283,23 @@ class DocParseIndexProcessor:
                 "index_done: corpus settled case=%s run=%s indexed_or_parsed=%d failed=%d total=%d",
                 case_id, run_id, len(indexed_or_parsed), len(failed), len(docs),
             )
+            # S7-C2: Publish event so dossier workers can react immediately
+            # instead of relying solely on polling.  Listeners can SUBSCRIBE to
+            # "ddkit:events:index_done" and parse the JSON payload.
+            try:
+                pub_rdb = _redis_client()
+                if pub_rdb is not None:
+                    import json as _json
+                    pub_rdb.publish("ddkit:events:index_done", _json.dumps({
+                        "tenant_id": tenant_id,
+                        "case_id": case_id,
+                        "run_id": run_id,
+                        "indexed": len(indexed_or_parsed),
+                        "failed": len(failed),
+                    }))
+                    logger.info("index_done_published case=%s run=%s", case_id, run_id)
+            except Exception as pub_exc:
+                logger.warning("index_done publish failed (non-fatal): %s", pub_exc)
             # Trigger async case-level index build (#7). Run in a background thread
             # so we don't block the current job callback path.
             import threading
