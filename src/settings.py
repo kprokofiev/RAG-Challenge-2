@@ -25,6 +25,10 @@ class WorkerSettings(BaseSettings):
     queue_doc_parse_index: str = Field("ddkit:doc_parse_index", env="QUEUE_DOC_PARSE_INDEX")
     queue_report_generate: str = Field("ddkit:report_generate", env="QUEUE_REPORT_GENERATE")
     queue_case_view_generate: str = Field("ddkit:case_view_generate", env="QUEUE_CASE_VIEW_GENERATE")
+    queue_dossier_generate: str = Field("ddkit:dossier_generate", env="QUEUE_DOSSIER_GENERATE")
+
+    # Sprint-4: dossier schema version
+    ddkit_dossier_schema_version: str = Field("3.0", env="DDKIT_DOSSIER_SCHEMA_VERSION")
 
     # Optional settings
     log_level: str = Field("INFO", env="LOG_LEVEL")
@@ -128,7 +132,7 @@ class WorkerSettings(BaseSettings):
 
     @validator('worker_mode')
     def validate_worker_mode(cls, v):
-        allowed = {"all", "doc_parse_index", "report_generate", "case_view_generate"}
+        allowed = {"all", "doc_parse_index", "report_generate", "case_view_generate", "dossier_generate"}
         if v not in allowed:
             raise ValueError(f"WORKER_MODE must be one of {sorted(allowed)}")
         return v

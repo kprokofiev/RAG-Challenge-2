@@ -10,7 +10,7 @@ from threading import Lock
 from typing import Dict, Any, Optional, Set, List
 
 from src.queue_handler import JobQueueHandler
-from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, CaseViewGenerateProcessor, JobCallback
+from src.job_processors import DocParseIndexProcessor, ReportGenerateProcessor, CaseViewGenerateProcessor, DossierGenerateProcessor, JobCallback
 from src.settings import settings
 from src.storage_client import StorageClient
 
@@ -25,12 +25,14 @@ class DDKitWorker:
         self.doc_processor = DocParseIndexProcessor()
         self.report_processor = ReportGenerateProcessor()
         self.case_view_processor = CaseViewGenerateProcessor()
+        self.dossier_processor = DossierGenerateProcessor()
         self.running = False
         self.job_attempts: Dict[str, int] = {}
         self.job_attempts_lock = Lock()
         self.mode = settings.worker_mode
         self.concurrency = max(1, settings.worker_concurrency)
         self._watchdog_thread: Optional[threading.Thread] = None
+        self._index_done_event = threading.Event()  # S7-C2: set by pubsub subscriber
 
     def start(self):
         """Start the worker loop."""
@@ -47,6 +49,13 @@ class DDKitWorker:
 
         # Start watchdog in a background daemon thread (#1)
         self._start_watchdog()
+
+        # S7-C2: Start Redis pubsub listener for index_done events.
+        # When an index_done event fires, the subscriber reduces the poll
+        # sleep to 0 so the next _get_next_job() iteration picks it up
+        # immediately instead of waiting for the polling interval.
+        if self.mode in ("report_generate", "dossier_generate", "all"):
+            self._start_index_done_subscriber()
 
         try:
             self._worker_loop()
@@ -71,6 +80,41 @@ class DDKitWorker:
             settings.watchdog_max_reclaims,
         )
 
+    def _start_index_done_subscriber(self) -> None:
+        """S7-C2: Subscribe to ddkit:events:index_done so dossier/report workers
+        react immediately instead of waiting for the next poll cycle."""
+        t = threading.Thread(
+            target=self._index_done_subscriber_loop,
+            name="ddkit-index-done-sub",
+            daemon=True,
+        )
+        t.start()
+        logger.info("index_done_subscriber_started channel=ddkit:events:index_done")
+
+    def _index_done_subscriber_loop(self) -> None:
+        """Background loop: listens for index_done PUBLISH events."""
+        import redis
+        while self.running:
+            try:
+                rdb = redis.Redis.from_url(
+                    os.getenv("DDKIT_REDIS_URL", "redis://localhost:6379/0"),
+                    decode_responses=True,
+                )
+                pubsub = rdb.pubsub()
+                pubsub.subscribe("ddkit:events:index_done")
+                for message in pubsub.listen():
+                    if not self.running:
+                        break
+                    if message["type"] == "message":
+                        logger.info(
+                            "index_done_event_received data=%s", str(message["data"])[:200]
+                        )
+                        # Wake up the worker loop immediately
+                        self._index_done_event.set()
+            except Exception as exc:
+                logger.warning("index_done_subscriber error (reconnecting in 5s): %s", exc)
+                time.sleep(5)
+
     def _watchdog_loop(self) -> None:
         """
         Background loop: periodically scan processing lists and reclaim stale jobs.
@@ -84,11 +128,13 @@ class DDKitWorker:
             settings.queue_doc_parse_index,
             settings.queue_report_generate,
             settings.queue_case_view_generate,
+            settings.queue_dossier_generate,
         ]
         mode_queues: List[str] = {
             "doc_parse_index": [settings.queue_doc_parse_index],
             "report_generate": [settings.queue_report_generate],
             "case_view_generate": [settings.queue_case_view_generate],
+            "dossier_generate": [settings.queue_dossier_generate],
         }.get(self.mode, all_queues)
 
         while self.running:
@@ -141,8 +187,10 @@ class DDKitWorker:
                     if job_data:
                         futures.add(executor.submit(self._process_job, job_data))
                     else:
-                        # No jobs available, sleep briefly
-                        time.sleep(1)
+                        # No jobs available — wait briefly, but wake up immediately
+                        # if an index_done event arrives (S7-C2).
+                        if self._index_done_event.wait(timeout=1.0):
+                            self._index_done_event.clear()
 
                 except Exception as e:
                     logger.error(f"Error in worker loop: {e}")
@@ -157,15 +205,20 @@ class DDKitWorker:
             return self.queue_handler.dequeue_job("report_generate", timeout=timeout)
         if self.mode == "case_view_generate":
             return self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
+        if self.mode == "dossier_generate":
+            return self.queue_handler.dequeue_job("dossier_generate", timeout=timeout)
 
-        # default: try doc_parse_index first, then report_generate, then case_view_generate
+        # default (all): poll queues in priority order
         job_data = self.queue_handler.dequeue_job("doc_parse_index", timeout=timeout)
         if job_data:
             return job_data
         job_data = self.queue_handler.dequeue_job("report_generate", timeout=timeout)
         if job_data:
             return job_data
-        return self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
+        job_data = self.queue_handler.dequeue_job("case_view_generate", timeout=timeout)
+        if job_data:
+            return job_data
+        return self.queue_handler.dequeue_job("dossier_generate", timeout=timeout)
 
     def _process_job(self, job_data: Dict[str, Any]):
         """Process a single job with retry logic."""
@@ -226,6 +279,8 @@ class DDKitWorker:
             return self.report_processor.process_job(job_data)
         elif job_type == "case_view_generate":
             return self.case_view_processor.process_job(job_data)
+        elif job_type == "dossier_generate":
+            return self.dossier_processor.process_job(job_data)
         else:
             logger.error(f"Unknown job type: {job_type}")
             return False
@@ -324,6 +379,8 @@ class DDKitWorker:
         elif job_type == "report_generate":
             return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}"
         elif job_type == "case_view_generate":
+            return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}"
+        elif job_type == "dossier_generate":
             return f"{job_type}:{job_data.get('tenant_id')}:{job_data.get('case_id')}"
         return None
 

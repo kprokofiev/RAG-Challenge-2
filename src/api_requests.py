@@ -28,8 +28,7 @@ def _get_llm_timeout_seconds() -> float:
 class BaseOpenaiProcessor:
     def __init__(self):
         self.llm = self.set_up_llm()
-        self.default_model = 'gpt-4o-2024-08-06'
-        # self.default_model = 'gpt-4o-mini-2024-07-18',
+        self.default_model = os.getenv("DDKIT_DEFAULT_MODEL", "gpt-5.2")
 
     def set_up_llm(self):
         load_dotenv()
@@ -44,14 +43,32 @@ class BaseOpenaiProcessor:
         self,
         model=None,
         temperature=0.5,
-        seed=None, # For deterministic ouptputs
+        seed=None,  # For deterministic outputs
         system_content='You are a helpful assistant.',
         human_content='Hello!',
         is_structured=False,
-        response_format=None
+        response_format=None,
+        max_completion_tokens: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,  # "none"|"low"|"medium"|"high"
         ):
         if model is None:
             model = self.default_model
+
+        # Resolve reasoning_effort: env override, then auto-set "none" for gpt-5.x
+        if reasoning_effort is None:
+            reasoning_effort = os.getenv("DDKIT_REASONING_EFFORT") or None
+        if reasoning_effort is None and model.startswith("gpt-5"):
+            reasoning_effort = "none"
+
+        # Resolve max_completion_tokens from env if not passed
+        if max_completion_tokens is None:
+            _env_mct = os.getenv("DDKIT_MAX_COMPLETION_TOKENS", "").strip()
+            if _env_mct:
+                try:
+                    max_completion_tokens = int(_env_mct)
+                except ValueError:
+                    pass
+
         params = {
             "model": model,
             "seed": seed,
@@ -60,11 +77,20 @@ class BaseOpenaiProcessor:
                 {"role": "user", "content": human_content}
             ]
         }
-        
-        # Reasoning models do not support temperature
-        if "o3-mini" not in model:
+
+        # temperature: skip for reasoning models and gpt-5.x with reasoning_effort != "none"
+        _is_reasoning = model.startswith("o1") or model.startswith("o3") or model.startswith("o4")
+        _gpt5_thinking = model.startswith("gpt-5") and reasoning_effort and reasoning_effort != "none"
+        if not _is_reasoning and not _gpt5_thinking:
             params["temperature"] = temperature
-            
+
+        # reasoning_effort only applies to unstructured calls (parse() doesn't accept it)
+        if reasoning_effort is not None and not is_structured:
+            params["reasoning_effort"] = reasoning_effort
+
+        if max_completion_tokens is not None:
+            params["max_completion_tokens"] = max_completion_tokens
+
         if not is_structured:
             completion = self.llm.chat.completions.create(**params)
             content = completion.choices[0].message.content
@@ -493,7 +519,7 @@ class AsyncOpenaiProcessor:
 
     async def process_structured_ouputs_requests(
         self,
-        model="gpt-4o-mini-2024-07-18",
+        model=None,
         temperature=0.5,
         seed=None,
         system_content="You are a helpful assistant.",
@@ -509,14 +535,35 @@ class AsyncOpenaiProcessor:
         token_encoding_name="o200k_base",
         max_attempts=5,
         logging_level=20,
-        progress_callback=None
+        progress_callback=None,
+        max_completion_tokens: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,
     ):
+        if model is None:
+            model = os.getenv("DDKIT_DEFAULT_MODEL", "gpt-5.2")
+
+        # Resolve reasoning_effort
+        if reasoning_effort is None:
+            reasoning_effort = os.getenv("DDKIT_REASONING_EFFORT") or None
+        if reasoning_effort is None and model.startswith("gpt-5"):
+            reasoning_effort = "none"
+
+        # Resolve max_completion_tokens
+        if max_completion_tokens is None:
+            _env_mct = os.getenv("DDKIT_MAX_COMPLETION_TOKENS", "").strip()
+            if _env_mct:
+                try:
+                    max_completion_tokens = int(_env_mct)
+                except ValueError:
+                    pass
+
         # Create requests for jsonl
         jsonl_requests = []
+        _is_reasoning = model.startswith("o1") or model.startswith("o3") or model.startswith("o4")
+        _gpt5_thinking = model.startswith("gpt-5") and reasoning_effort and reasoning_effort != "none"
         for idx, query in enumerate(queries):
             request = {
                 "model": model,
-                "temperature": temperature,
                 "seed": seed,
                 "messages": [
                     {"role": "system", "content": system_content},
@@ -525,6 +572,12 @@ class AsyncOpenaiProcessor:
                 'response_format': type_to_response_format_param(response_format),
                 'metadata': {'original_index': idx}
             }
+            if not _is_reasoning and not _gpt5_thinking:
+                request["temperature"] = temperature
+            if reasoning_effort is not None:
+                request["reasoning_effort"] = reasoning_effort
+            if max_completion_tokens is not None:
+                request["max_completion_tokens"] = max_completion_tokens
             jsonl_requests.append(request)
             
         # Get unique filepaths if files already exist

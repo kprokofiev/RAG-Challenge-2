@@ -185,25 +185,101 @@ class TextSplitter():
 
         return {"parents": parents, "children": children}
 
+    # Regex to detect Markdown table blocks (header + separator + rows)
+    _TABLE_RE = re.compile(
+        r"(\|[^\n]+\|\n\|[-:\s|]+\|\n(?:\|[^\n]+\|\n?)+)",
+        re.MULTILINE,
+    )
+
+    def _structural_presplit(self, text: str) -> List[Dict[str, any]]:
+        """Pre-split text into structural blocks, keeping Markdown tables intact."""
+        blocks: List[Dict[str, any]] = []
+        last_end = 0
+        for m in self._TABLE_RE.finditer(text):
+            start, end = m.start(), m.end()
+            if start > last_end:
+                pre = text[last_end:start].strip()
+                if pre:
+                    blocks.append({"text": pre, "is_table": False})
+            blocks.append({"text": text[start:end].strip(), "is_table": True})
+            last_end = end
+        if last_end < len(text):
+            remainder = text[last_end:].strip()
+            if remainder:
+                blocks.append({"text": remainder, "is_table": False})
+        if not blocks:
+            blocks.append({"text": text, "is_table": False})
+        return blocks
+
     def _split_page(self, page: Dict[str, any], chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = None) -> List[Dict[str, any]]:
-        """Split page text into chunks. The original text includes markdown tables."""
+        """Split page text into chunks with table-aware logic.
+
+        Markdown tables are kept whole if they fit within 3x chunk_size.
+        Tables larger than that are split by row groups (preserving the header).
+        Non-table text uses the standard RecursiveCharacterTextSplitter.
+        """
         if chunk_size is None:
             chunk_size = settings.chunk_size_tokens
         if chunk_overlap is None:
             chunk_overlap = settings.chunk_overlap_tokens
+
         text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             model_name="gpt-4o",
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap
         )
-        chunks = text_splitter.split_text(page['text'])
+
+        # Large table limit — tables below this are kept as single chunks
+        large_table_limit = chunk_size * 3
+
+        blocks = self._structural_presplit(page['text'])
         chunks_with_meta = []
-        for chunk in chunks:
-            chunks_with_meta.append({
-                "page": page['page'],
-                "length_tokens": self.count_tokens(chunk),
-                "text": chunk
-            })
+        page_num = page['page']
+
+        for block in blocks:
+            if block["is_table"]:
+                block_tokens = self.count_tokens(block["text"])
+                if block_tokens <= large_table_limit:
+                    # Keep table as single chunk
+                    chunks_with_meta.append({
+                        "page": page_num,
+                        "length_tokens": block_tokens,
+                        "text": block["text"],
+                    })
+                else:
+                    # Split large table by row groups, preserving header
+                    lines = block["text"].split("\n")
+                    header = "\n".join(lines[:2]) if len(lines) >= 2 else lines[0]
+                    rows = lines[2:]
+                    current_chunk = header
+                    for row in rows:
+                        candidate = current_chunk + "\n" + row
+                        if self.count_tokens(candidate) > chunk_size:
+                            if current_chunk.strip() != header.strip():
+                                chunks_with_meta.append({
+                                    "page": page_num,
+                                    "length_tokens": self.count_tokens(current_chunk),
+                                    "text": current_chunk,
+                                })
+                            current_chunk = header + "\n" + row
+                        else:
+                            current_chunk = candidate
+                    if current_chunk.strip() != header.strip():
+                        chunks_with_meta.append({
+                            "page": page_num,
+                            "length_tokens": self.count_tokens(current_chunk),
+                            "text": current_chunk,
+                        })
+            else:
+                # Normal text — standard splitter
+                sub_chunks = text_splitter.split_text(block["text"])
+                for sc in sub_chunks:
+                    chunks_with_meta.append({
+                        "page": page_num,
+                        "length_tokens": self.count_tokens(sc),
+                        "text": sc,
+                    })
+
         return chunks_with_meta
 
     def _dedupe_chunks(self, chunks: List[Dict[str, any]]) -> List[Dict[str, any]]:

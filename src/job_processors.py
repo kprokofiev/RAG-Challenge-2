@@ -14,6 +14,7 @@ import redis as redis_lib
 
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
+from src.dossier_report_generator import DossierReportGenerator
 from src.case_view_v2_generator import CaseViewV2Generator
 from src.pubmed_pipeline import PubMedIngestor
 from src.storage_client import StorageClient
@@ -178,6 +179,9 @@ class DocParseIndexProcessor:
         the entire corpus for this case is "settled" (no docs stuck in non-terminal states).
         If so, set the ddkit:run:{tenant}:{case}:{run_id}:index_done Redis flag (#12).
 
+        NOTE: run_id should always be provided to avoid stale-flag issues across runs.
+        When run_id is None, a warning is emitted and the legacy (unscoped) key is used.
+
         Terminal statuses (corpus settled):
           - indexed  : successfully parsed + embedded + uploaded
           - parsed   : upload done but callback to api-gateway pending (transient; treated as terminal here)
@@ -190,6 +194,12 @@ class DocParseIndexProcessor:
         """
         if not self.ddkit_db.is_configured():
             return
+        if not run_id:
+            logger.warning(
+                "index_done_check: run_id is None for case=%s — using legacy unscoped key. "
+                "This can cause stale-flag issues across consecutive runs.",
+                case_id,
+            )
         try:
             docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
             if not docs:
@@ -220,17 +230,26 @@ class DocParseIndexProcessor:
                     rdb = _redis_client()
                     queue_len = 0
                     fetch_queue_len = 0
+                    processing_len = 0
                     if rdb is not None:
                         try:
                             queue_len = rdb.llen("ddkit:doc_parse_index")
                             fetch_queue_len = rdb.llen("ddkit:doc_fetch_render")
-                        except Exception:
-                            pass
-                    # Only treat as terminal if BOTH queues are drained.
-                    # If doc_fetch_render still has items, docs are en-route to rendered state.
-                    if queue_len == 0 and fetch_queue_len == 0:
+                            # Also check the BRPOPLPUSH processing list — items dequeued
+                            # but not yet ACK'd are actively being parsed and must NOT be
+                            # treated as terminal (this is the main source of the race condition
+                            # where a heavy PDF is dequeued, queue_len becomes 0, but the
+                            # doc is still being processed in another worker thread).
+                            processing_len = rdb.llen("ddkit:doc_parse_index:processing")
+                        except Exception as exc:
+                            logger.warning(
+                                "index_done_check: Redis queue length query failed case=%s: %s",
+                                case_id, exc,
+                            )
+                    # Only treat as terminal if ALL queues AND the processing list are drained.
+                    if queue_len == 0 and fetch_queue_len == 0 and processing_len == 0:
                         logger.warning(
-                            "index_done_check: %d docs stuck in pre-queue state but both queues empty — "
+                            "index_done_check: %d docs stuck in pre-queue state but all queues empty — "
                             "treating as terminal to unblock corpus case=%s statuses=%s",
                             len(in_progress), case_id,
                             {str(d.get("status", "")).lower() for d in in_progress},
@@ -238,8 +257,9 @@ class DocParseIndexProcessor:
                         # Fall through to set index_done below
                     else:
                         logger.info(
-                            "index_done_check: %d docs still in progress case=%s parse_queue=%d fetch_queue=%d",
-                            len(in_progress), case_id, queue_len, fetch_queue_len,
+                            "index_done_check: %d docs still in progress case=%s "
+                            "parse_queue=%d fetch_queue=%d processing=%d",
+                            len(in_progress), case_id, queue_len, fetch_queue_len, processing_len,
                         )
                         return
                 else:
@@ -263,6 +283,23 @@ class DocParseIndexProcessor:
                 "index_done: corpus settled case=%s run=%s indexed_or_parsed=%d failed=%d total=%d",
                 case_id, run_id, len(indexed_or_parsed), len(failed), len(docs),
             )
+            # S7-C2: Publish event so dossier workers can react immediately
+            # instead of relying solely on polling.  Listeners can SUBSCRIBE to
+            # "ddkit:events:index_done" and parse the JSON payload.
+            try:
+                pub_rdb = _redis_client()
+                if pub_rdb is not None:
+                    import json as _json
+                    pub_rdb.publish("ddkit:events:index_done", _json.dumps({
+                        "tenant_id": tenant_id,
+                        "case_id": case_id,
+                        "run_id": run_id,
+                        "indexed": len(indexed_or_parsed),
+                        "failed": len(failed),
+                    }))
+                    logger.info("index_done_published case=%s run=%s", case_id, run_id)
+            except Exception as pub_exc:
+                logger.warning("index_done publish failed (non-fatal): %s", pub_exc)
             # Trigger async case-level index build (#7). Run in a background thread
             # so we don't block the current job callback path.
             import threading
@@ -1895,6 +1932,260 @@ class CaseViewGenerateProcessor:
                     return False
                 vector_count += 1
         logger.info("Downloaded artifacts: chunks=%d vectors=%d", chunk_count, vector_count)
+        return True
+
+
+class DossierGenerateProcessor:
+    """
+    Processor for ddkit:dossier_generate queue — Sprint 4.
+
+    Generates a DossierReport v3.0 (passport + registrations + clinical_studies +
+    patent_families + synthesis_steps + unknowns + evidence_registry) from the
+    indexed corpus for a case.  The output JSON is uploaded to S3 at:
+      tenants/{tenant}/cases/{case}/reports/{report_id}/dossier_v3.json
+
+    Also mirrors the dossier into the legacy report slot so the pharm_search
+    API /report/{report_id} endpoint can serve it immediately.
+    """
+
+    def __init__(self):
+        self.storage_client = StorageClient()
+        self.ddkit_db = DDKitDB()
+
+    def _corpus_ready_for_dossier(self, tenant_id: str, case_id: str, run_id: Optional[str]) -> Tuple[bool, str]:
+        """Check whether the corpus is ready for dossier generation.
+
+        Reuses the same index_done / DB-fallback logic as ReportGenerateProcessor.
+        """
+        index_done = get_run_flag(tenant_id, case_id, "index_done", run_id)
+        if not index_done:
+            if self.ddkit_db.is_configured():
+                try:
+                    docs = self.ddkit_db.list_case_documents(tenant_id=tenant_id, case_id=case_id)
+                    terminal = {"indexed", "failed", "parsed", "skipped", "unsupported",
+                                "blocked_paywall", "captcha", "forbidden_403", "rate_limited_429",
+                                "requires_login", "robots_denied", "timeout", "parsed_empty"}
+                    in_progress = [d for d in docs if str(d.get("status", "")).lower() not in terminal]
+                    indexed = [d for d in docs if str(d.get("status", "")).lower() == "indexed"]
+                    if in_progress:
+                        return False, f"docs_still_indexing:{len(in_progress)}"
+                    if not indexed:
+                        return False, "no_indexed_docs"
+                    set_run_flag(tenant_id, case_id, "index_done", run_id)
+                except Exception as exc:
+                    logger.warning("Dossier corpus fallback check failed: %s", exc)
+                    return True, ""  # fail-open
+            else:
+                return True, ""  # no DB → fail-open
+        return True, ""
+
+    def process_job(self, job_data: Dict[str, Any]) -> bool:
+        """
+        Process a dossier_generate job.
+
+        Expected job_data keys:
+            tenant_id, case_id, report_id (optional), run_id (optional),
+            sections_plan_key (dossier sections plan S3 key), job_id (optional),
+            trace_id (optional), deadline_s (optional, unix timestamp)
+        """
+        tenant_id = job_data["tenant_id"]
+        case_id = job_data["case_id"]
+        report_id = job_data.get("report_id") or f"dossier_{case_id}"
+        run_id = job_data.get("run_id")
+        job_id = job_data.get("job_id")
+        trace_id = job_data.get("trace_id")
+        deadline_s = job_data.get("deadline_s")
+        attempt = int(job_data.get("attempt", 0))
+        enqueued_at = float(job_data.get("enqueued_at", time.time()))
+
+        logger.info(
+            "dossier_generate_start tenant=%s case=%s report=%s run=%s trace=%s attempt=%d",
+            tenant_id, case_id, report_id, run_id, trace_id, attempt,
+        )
+
+        # ── Preflight: wait for corpus to be indexed ──────────────────────────
+        ready, reason = self._corpus_ready_for_dossier(tenant_id, case_id, run_id)
+        if not ready:
+            elapsed = time.time() - enqueued_at
+            if elapsed >= _PREFLIGHT_MAX_WAIT_S:
+                logger.warning(
+                    "dossier_preflight_timeout tenant=%s case=%s elapsed=%.1fs reason=%s — generating partial",
+                    tenant_id, case_id, elapsed, reason,
+                )
+                job_data["is_partial"] = True
+            else:
+                backoff_idx = min(attempt, len(_PREFLIGHT_BACKOFF) - 1)
+                delay = _PREFLIGHT_BACKOFF[backoff_idx]
+                job_data["attempt"] = attempt + 1
+                logger.info(
+                    "dossier_preflight_requeue tenant=%s case=%s attempt=%d delay=%ds elapsed=%.1fs reason=%s",
+                    tenant_id, case_id, attempt, delay, elapsed, reason,
+                )
+                rdb = _redis_client()
+                if rdb is not None:
+                    try:
+                        time.sleep(delay)
+                        # Strip private queue-handler keys (bytes / internal) before re-serialising
+                        serialisable = {k: v for k, v in job_data.items() if not k.startswith("_")}
+                        rdb.lpush(settings.queue_dossier_generate, json.dumps(serialisable))
+                        return True
+                    except Exception as exc:
+                        logger.error("Failed to requeue dossier_generate: %s", exc)
+                        job_data["is_partial"] = True
+                else:
+                    job_data["is_partial"] = True
+
+        try:
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_running(job_id)
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+
+                # ── Download corpus artifacts (same as ReportGenerateProcessor) ────
+                ok = self._download_case_artifacts(temp_path, tenant_id, case_id)
+                if not ok:
+                    raise RuntimeError("Failed to download case artifacts from S3")
+
+                # ── Optionally download legacy sections plan (for MoA cross-check) ─
+                sections_plan_key = job_data.get("sections_plan_key")
+                sections_plan = None
+                if sections_plan_key:
+                    local_plan = temp_path / "sections_plan.json"
+                    if self.storage_client.download_to_path(sections_plan_key, local_plan):
+                        with open(local_plan, "r", encoding="utf-8") as f:
+                            sections_plan = json.load(f)
+
+                # ── Download legacy report JSON (for backward-compat sections[]) ───
+                legacy_sections = None
+                completeness = None
+                legacy_key = f"tenants/{tenant_id}/cases/{case_id}/reports/{report_id}/report.json"
+                local_legacy = temp_path / "legacy_report.json"
+                if self.storage_client.download_to_path(legacy_key, local_legacy):
+                    try:
+                        with open(local_legacy, "r", encoding="utf-8") as f:
+                            legacy_json = json.load(f)
+                        legacy_sections = legacy_json.get("sections")
+                        completeness = legacy_json.get("completeness")
+                    except Exception as ex:
+                        logger.warning("Could not parse legacy report JSON: %s", ex)
+
+                # ── Run DossierReportGenerator ────────────────────────────────────
+                t0 = time.perf_counter()
+                inn = job_data.get("inn") or job_data.get("drug_name") or case_id
+                generator = DossierReportGenerator(
+                    vector_db_dir=temp_path / "databases" / "vector_dbs",
+                    documents_dir=temp_path / "databases" / "chunked_reports",
+                    inn=inn,
+                    tenant_id=tenant_id,
+                    case_id=case_id,
+                )
+                dossier = generator.generate(
+                    case_id=case_id,
+                    run_id=run_id,
+                    deadline=deadline_s,
+                    legacy_sections=legacy_sections,
+                    completeness=completeness,
+                )
+                elapsed_s = time.perf_counter() - t0
+                logger.info(
+                    "dossier_generated case=%s report=%s elapsed_s=%.1f "
+                    "unknowns=%d evidence_registry=%d passport_pct=%s",
+                    case_id, report_id, elapsed_s,
+                    len(dossier.unknowns),
+                    len(dossier.evidence_registry),
+                    (dossier.dossier_quality or {}).get("passport_pct", "?"),
+                )
+
+                # ── Upload dossier JSON to S3 ─────────────────────────────────────
+                dossier_key = f"tenants/{tenant_id}/cases/{case_id}/reports/{report_id}/dossier_v3.json"
+                dossier_json = dossier.model_dump_json(indent=2)
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False, encoding="utf-8"
+                ) as tf:
+                    tf.write(dossier_json)
+                    tf_path = tf.name
+                try:
+                    upload_ok = self.storage_client.upload_file(dossier_key, tf_path)
+                    if not upload_ok:
+                        raise RuntimeError(f"S3 upload failed for {dossier_key}")
+                    logger.info("dossier_uploaded key=%s", dossier_key)
+                finally:
+                    try:
+                        os.unlink(tf_path)
+                    except OSError:
+                        pass
+
+                job_data["artifacts"] = {"dossier_v3": dossier_key}
+                job_data["status"] = "completed"
+                job_data["metrics"] = {
+                    "elapsed_s": round(elapsed_s, 1),
+                    "unknowns_count": len(dossier.unknowns),
+                    "evidence_registry_size": len(dossier.evidence_registry),
+                    "dossier_quality": dossier.dossier_quality or {},
+                }
+
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_succeeded(job_id)
+
+            return True
+
+        except Exception as exc:
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_failed(job_id, str(exc))
+            job_data["status"] = "failed"
+            logger.error("dossier_generate_failed case=%s: %s", case_id, exc)
+            return False
+
+    def _download_case_artifacts(self, temp_path: Path, tenant_id: str, case_id: str) -> bool:
+        """Download chunks + vectors from S3 (mirrors ReportGenerateProcessor logic)."""
+        import tarfile
+        base_prefix = f"tenants/{tenant_id}/cases/{case_id}/documents/"
+        keys = self.storage_client.list_objects(base_prefix)
+        if not keys:
+            logger.info(
+                "No document artifacts found under %s (empty corpus — proceeding)", base_prefix
+            )
+            (temp_path / "databases" / "chunked_reports").mkdir(parents=True, exist_ok=True)
+            (temp_path / "databases" / "vector_dbs").mkdir(parents=True, exist_ok=True)
+            return True
+
+        chunks_dir = temp_path / "databases" / "chunked_reports"
+        vectors_dir = temp_path / "databases" / "vector_dbs"
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        vectors_dir.mkdir(parents=True, exist_ok=True)
+
+        chunk_count = 0
+        vector_count = 0
+        for key in keys:
+            if "/chunks/" in key and key.endswith("chunks_bundle.tar.gz"):
+                bundle_path = chunks_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, bundle_path):
+                    logger.error("Failed to download chunk bundle %s", key)
+                    return False
+                try:
+                    with tarfile.open(bundle_path, "r:gz") as tar:
+                        members = [m for m in tar.getmembers() if m.name.endswith(".json")]
+                        tar.extractall(path=chunks_dir)
+                    chunk_count += len(members)
+                except Exception as exc:
+                    logger.error("Failed to extract chunk bundle %s: %s", key, exc)
+                    return False
+                continue
+            if "/chunks/" in key and key.endswith(".json") and not key.endswith("manifest.json"):
+                local_path = chunks_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.error("Failed to download chunk %s", key)
+                    return False
+                chunk_count += 1
+            if "/vectors/" in key and key.endswith(".faiss"):
+                local_path = vectors_dir / Path(key).name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.error("Failed to download vector %s", key)
+                    return False
+                vector_count += 1
+
+        logger.info("dossier_artifacts_downloaded chunks=%d vectors=%d", chunk_count, vector_count)
         return True
 
 

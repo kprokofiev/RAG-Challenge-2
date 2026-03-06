@@ -40,6 +40,14 @@ _ADAPTIVE_K_TABLE: Dict[str, int] = {
     # Manufacturers / other
     "manufacturers": 25,
     "manufacturing_quality": 25,
+    # Sprint-4: Dossier v3.0 sections
+    "dossier_passport": 40,
+    "dossier_registrations_ru": 30,
+    "dossier_registrations_eu": 30,
+    "dossier_registrations_us": 30,
+    "dossier_clinical_studies": 55,
+    "dossier_patent_families": 60,
+    "dossier_synthesis": 60,
 }
 
 # Prefixes for pattern matching (section_id.startswith(prefix))
@@ -52,6 +60,12 @@ _ADAPTIVE_K_PREFIXES: List[tuple] = [
     ("patent", 60),
     ("safety", 30),
     ("manufactur", 25),
+    ("dossier_passport", 40),
+    ("dossier_registrations", 30),
+    ("dossier_clinical", 55),
+    ("dossier_patent", 60),
+    ("dossier_synthesis", 60),
+    ("dossier_", 35),  # fallback for any other dossier section
 ]
 
 

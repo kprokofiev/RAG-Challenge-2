@@ -16,6 +16,7 @@ import numpy as np
 from tenacity import retry, wait_fixed, stop_after_attempt
 
 from src.settings import settings
+from src.tokenizer import tokenize as _pharma_tokenize
 
 
 class BM25Ingestor:
@@ -24,7 +25,7 @@ class BM25Ingestor:
 
     def create_bm25_index(self, chunks: List[str]) -> BM25Okapi:
         """Create a BM25 index from a list of text chunks."""
-        tokenized_chunks = [chunk.split() for chunk in chunks]
+        tokenized_chunks = [_pharma_tokenize(chunk) for chunk in chunks]
         return BM25Okapi(tokenized_chunks)
     
     def process_reports(self, all_reports_dir: Path, output_dir: Path):
