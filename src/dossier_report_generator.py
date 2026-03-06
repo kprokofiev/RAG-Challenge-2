@@ -223,15 +223,50 @@ If a field is not stated in context, set it to null. Do NOT hallucinate N, p-val
 _PATENTS_INSTRUCTION = """
 You are a pharmaceutical patent dossier extraction system.
 Extract patent family records from the provided context.
-For each family: family_id (use patent number if INPADOC unknown), representative publication number, priority date, assignees, what_blocks (compound/formulation/method_of_use/synthesis/other), one-sentence summary, country coverage, expiry dates per country (ONLY if explicitly stated in context).
-CRITICAL: Use ONLY evidence aliases (E1, E2, ...) from candidates list. Never hallucinate expiry dates. If expiry not stated, leave expiry_by_country empty.
+
+FOR EACH PATENT FAMILY, extract:
+1. family_id: INPADOC family ID if available, otherwise use representative publication number
+2. representative_pub: the most informative publication number (EP/WO preferred over national)
+3. priority_date: earliest priority date (YYYY-MM-DD format)
+4. assignees: all patent assignees/applicants/owners
+5. what_blocks: classify what the patent protects. Use EXACTLY one of:
+   - "compound" = covers the active substance/molecule itself
+   - "formulation" = covers a specific pharmaceutical formulation/dosage form
+   - "method_of_use" = covers a specific therapeutic use/indication/method of treatment
+   - "synthesis" = covers a manufacturing/synthesis process
+   - "other" = if none of the above clearly applies
+   Base classification on the patent title, abstract, and claims. If insufficient text, use "other".
+6. summary: one-sentence description of what the patent covers (from title/abstract)
+7. country_coverage: list of countries where patent publications exist (derive from publication
+   numbers: EP->EP, WO->WO, US->US, JP->JP, CN->CN, RU->RU, etc.)
+8. expiry_by_country: expiry dates per country. ONLY fill if expiry/legal status is EXPLICITLY
+   stated in the context. Do NOT calculate expiry from priority+20 years. If no expiry data, leave empty.
+
+CRITICAL RULES:
+- Use ONLY evidence aliases (E1, E2, ...) from the candidates list
+- Never hallucinate expiry dates or legal status
+- Every field with a value MUST have at least one evidence alias
+- If data is missing for a family, still include the family with available fields
+- Group publications into families by INPADOC family_id when available
 """.strip()
 
 _SYNTHESIS_INSTRUCTION = """
 You are a pharmaceutical chemistry extraction system.
-Extract synthesis/manufacturing steps from the provided patent or monograph context.
-For each step: step number, description, reagents/starting materials, intermediates produced.
-CRITICAL: Each description must reference an evidence alias (E1, E2, ...) from candidates. Do NOT invent synthesis steps not in context.
+Extract synthesis/manufacturing steps ONLY from patent text or official monograph sections
+(Examples, Preparations, Manufacturing Process).
+
+FOR EACH STEP, extract:
+1. step_number: sequential step index (1, 2, 3, ...)
+2. description: what happens in this step (reaction, purification, etc.)
+3. reagents: starting materials and reagents used
+4. intermediates: products/intermediates formed
+
+CRITICAL RULES:
+- Each description MUST reference an evidence alias (E1, E2, ...) from candidates
+- Do NOT invent synthesis steps not in context
+- Do NOT add reagents or intermediates not explicitly mentioned
+- Focus on sections titled "Examples", "Preparations", "Synthesis", "Manufacturing Process"
+- If the patent only describes composition/use without synthesis, return empty steps
 """.strip()
 
 
