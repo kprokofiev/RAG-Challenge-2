@@ -211,7 +211,24 @@ CRITICAL: Use ONLY the aliases shown in brackets (E1, E2, ...). Never invent reg
 _CLINICAL_INSTRUCTION = """
 You are a pharmaceutical dossier extraction system.
 Extract structured clinical study cards from the provided context.
-For each study: title, registry ID (NCT#), phase, study type, enrollment N, countries, comparator, dosing regimen, key efficacy findings (primary endpoint result, p-value, CI), conclusion, status.
+
+FOR EACH STUDY, extract:
+1. title: official study title or brief title
+2. registry_id: NCT number (e.g., NCT12345678) or other registry ID
+3. phase: Phase 1, Phase 2, Phase 3, Phase 4, etc.
+4. study_type: interventional, observational, etc.
+5. enrollment: number of participants (integer)
+6. countries: list of unique country names from locations data (e.g., ["United States", "Germany", "Japan"])
+7. comparator: comparator arm description (placebo, active control, etc.)
+8. dosing_regimen: dosing details from the intervention description
+9. primary_endpoint: primary outcome measure description
+10. primary_result: primary endpoint result value with units
+11. p_value: p-value for primary endpoint (as string, e.g., "0.001", "<0.0001")
+12. confidence_interval: confidence interval (e.g., "95% CI: 0.65-0.82")
+13. status: extract from OverallStatus field (e.g., "Completed", "Recruiting", "Terminated", "Active, not recruiting")
+14. conclusion: if an explicit conclusion is stated, use it verbatim. If NOT, synthesize 1-2 sentences
+    from primary outcome numeric results (effect size, p-value, CI). If no results data exists, set null.
+
 CRITICAL RULES FOR EVIDENCE ALIASES:
 - Every non-null field value MUST include at least one evidence alias from the candidates list (E1, E2, E3, ...).
 - Use the alias exactly as shown: E1, E2, E3 — NOT "1", NOT "evidence_1", NOT full evidence IDs.
