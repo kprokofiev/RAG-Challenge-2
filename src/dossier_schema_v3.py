@@ -1,8 +1,16 @@
 """
-Dossier Report Schema v3.0
-==========================
-Sprint 4 — structured dosier: passport + registrations + clinical_studies +
+Dossier Report Schema v3.0 (Sprint 7.5 additions)
+===================================================
+Sprint 4 — structured dossier: passport + registrations + clinical_studies +
 patent_families + synthesis_steps + unknowns + evidence_registry.
+
+Sprint 7.5 additions:
+  - product_contexts[] — multi-product context separation
+  - primary_docs in registrations (enriched PrimaryDoc model)
+  - synthesis_steps[].kind typification
+  - dossier_quality_v2 (coverage + decision_readiness)
+  - run_manifest for reproducibility
+  - passport_scope / passport_notice for multi-context
 
 Rule: every field has evidence (doc_id + page + snippet) OR goes to unknowns
 with a typed reason_code.  No hallucination / "likely" values without proof.
@@ -10,6 +18,7 @@ with a typed reason_code.  No hallucination / "likely" values without proof.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field, validator
@@ -81,6 +90,76 @@ class EvidencedValue(BaseModel):
     )
 
 
+# ── Sprint 7.5: Primary doc reference ────────────────────────────────────────
+
+class PrimaryDoc(BaseModel):
+    """Reference to a primary Tier-1 regulatory document."""
+    doc_id: str = Field(description="Document UUID from corpus")
+    doc_kind: str = Field(description="Document type (smpc, label, grls_card, epar, ...)")
+    source_url: Optional[str] = Field(None, description="Original URL")
+    mime_type: Optional[str] = Field(None, description="MIME type (application/pdf, text/html, ...)")
+    title: Optional[str] = Field(None, description="Document title")
+    page_hint: Optional[str] = Field(None, description="Page/locator hint if known")
+
+
+# ── Sprint 7.5: Product context ─────────────────────────────────────────────
+
+class ProductContext(BaseModel):
+    """
+    One product context — a unique combination of region/route/form/strength/MAH.
+    Prevents semantic mixing of e.g. US OTC ibuprofen 200mg tablet vs EU IV 400mg/4ml.
+    context_id is deterministic (hash of normalized fields).
+    """
+    context_id: str = Field(description="Deterministic ID: hash(region+route+form+strength+mah)")
+    label: str = Field(description="Human-readable label, e.g. 'EU - IV - 400mg/4ml - Kabi'")
+    region: Optional[str] = Field(None, description="Region code (US/EU/RU/EAEU)")
+    route: Optional[str] = Field(None, description="Route of administration (oral/IV/topical/...)")
+    dosage_forms: List[str] = Field(default_factory=list, description="Dosage forms")
+    strengths: List[str] = Field(default_factory=list, description="Strengths")
+    mah: Optional[str] = Field(None, description="MAH or identifier")
+    identifiers: List[str] = Field(default_factory=list, description="Registration numbers")
+    primary_docs: List[PrimaryDoc] = Field(default_factory=list, description="Tier-1 docs for this context")
+    evidence_refs: List[str] = Field(default_factory=list, description="Evidence IDs")
+
+
+# ── Sprint 7.5: Run manifest ────────────────────────────────────────────────
+
+class RunManifest(BaseModel):
+    """Minimal manifest for run reproducibility and QA audit trail."""
+    run_id: str = Field(description="Pipeline run UUID")
+    report_id: str = Field(description="Report ID")
+    case_id: Optional[str] = Field(None)
+    pipeline_version: Optional[str] = Field(None, description="Git SHA or tag")
+    config_digest: Optional[str] = Field(None, description="Hash of env/config")
+    stages: List[Dict[str, Any]] = Field(default_factory=list, description="Stage timings")
+    docs_attached: int = Field(0)
+    docs_indexed: int = Field(0)
+    docs_failed: int = Field(0)
+    critical_failures: List[str] = Field(default_factory=list)
+
+
+# ── Sprint 7.5: Quality v2 ──────────────────────────────────────────────────
+
+class DossierQualityV2(BaseModel):
+    """
+    Separated metrics: coverage (data completeness) + decision_readiness (actionability).
+    Prevents "green 100%" when critical unknowns exist.
+    """
+    coverage: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-block coverage: passport, registrations, clinical, patents, synthesis (0.0-1.0)"
+    )
+    decision_readiness: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-gate readiness: GREEN/YELLOW/RED for registrations, patents_legal, context_integrity"
+    )
+    critical_unknowns: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of critical unknowns with reason_code, count, impact"
+    )
+    notes: List[str] = Field(default_factory=list, description="Human-readable notes")
+
+
 # ── Passport ─────────────────────────────────────────────────────────────────
 
 class DossierPassport(BaseModel):
@@ -133,6 +212,15 @@ class DossierPassport(BaseModel):
         default_factory=list,
         description="Key approved doses / regimens"
     )
+    # Sprint 7.5: multi-context awareness
+    passport_scope: Optional[str] = Field(
+        None,
+        description="'single_context' or 'multi_context_ambiguous' — set when >1 product context detected"
+    )
+    passport_notice: Optional[str] = Field(
+        None,
+        description="Notice when passport contains product-specific fields from mixed contexts"
+    )
 
 
 # ── Registration ─────────────────────────────────────────────────────────────
@@ -140,6 +228,9 @@ class DossierPassport(BaseModel):
 class DossierRegistration(BaseModel):
     """One marketing authorization record (one country/region)."""
     region: str = Field(description="Region/country code, e.g. 'RU', 'EU', 'US', 'EAEU'")
+    context_id: Optional[str] = Field(
+        None, description="Sprint 7.5: link to ProductContext.context_id"
+    )
     status: Optional[EvidencedValue] = Field(None, description="Registered / cancelled / expired")
     forms_strengths: List[EvidencedValue] = Field(
         default_factory=list,
@@ -150,9 +241,9 @@ class DossierRegistration(BaseModel):
         default_factory=list,
         description="Registration numbers (GRLS reg#, NDA#, EMA/H/C/#, etc.)"
     )
-    primary_docs: List[str] = Field(
+    primary_docs: List[PrimaryDoc] = Field(
         default_factory=list,
-        description="doc_ids of primary regulatory documents for this registration"
+        description="Sprint 7.5: enriched Tier-1 doc references for this registration"
     )
     evidence_refs: List[str] = Field(
         default_factory=list,
@@ -250,8 +341,16 @@ class DossierSynthesisStep(BaseModel):
     """
     One step in a synthesis / manufacturing process extracted from patent text.
     Only populated when patent text is in corpus — otherwise DossierUnknown.
+    Sprint 7.5: added `kind` field for api_synthesis vs formulation_process classification.
     """
     step_number: int = Field(description="Step index (1-based)")
+    kind: str = Field(
+        "unknown",
+        description=(
+            "Sprint 7.5: step type classification. One of: "
+            "api_synthesis | formulation_process | manufacturing_process | unknown"
+        )
+    )
     description: EvidencedValue = Field(description="Description of the step with evidence")
     reagents: List[EvidencedValue] = Field(
         default_factory=list,
@@ -288,6 +387,12 @@ class DossierReport(BaseModel):
     run_id: Optional[str] = Field(None, description="Pipeline run ID")
     generated_at: str = Field(description="ISO-8601 generation timestamp")
 
+    # Sprint 7.5: product contexts for multi-product INN disambiguation
+    product_contexts: List[ProductContext] = Field(
+        default_factory=list,
+        description="Sprint 7.5: product contexts derived from registrations (region+route+form+strength+mah)"
+    )
+
     # Core sections
     passport: DossierPassport
     registrations: List[DossierRegistration] = Field(default_factory=list)
@@ -319,9 +424,19 @@ class DossierReport(BaseModel):
     dossier_quality: Optional[Dict[str, Any]] = Field(
         None,
         description=(
-            "Coverage per block: passport%, registrations%, clinical%, patents%, synthesis%. "
+            "Legacy quality: passport%, registrations%, clinical%, patents%, synthesis%. "
             "Evidence completeness: fraction of fields with ≥1 evidence_ref."
         )
+    )
+    # Sprint 7.5: quality v2 (coverage + decision readiness)
+    dossier_quality_v2: Optional[DossierQualityV2] = Field(
+        None,
+        description="Sprint 7.5: separated coverage vs decision_readiness metrics"
+    )
+    # Sprint 7.5: run reproducibility manifest
+    run_manifest: Optional[RunManifest] = Field(
+        None,
+        description="Sprint 7.5: audit-grade run metadata for reproducibility"
     )
 
     class Config:
@@ -511,6 +626,243 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         "unknown_reason_distribution": reason_dist,
         "evidence_registry_size": len(report.evidence_registry),
     }
+
+
+# ── Sprint 7.5: Product context builder ──────────────────────────────────────
+
+def _context_id(region: str, route: str, form: str, strength: str, mah: str) -> str:
+    """Deterministic context_id from normalized fields."""
+    key = "|".join(s.strip().lower() for s in [region, route, form, strength, mah])
+    return "ctx_" + hashlib.md5(key.encode()).hexdigest()[:12]
+
+
+def build_product_contexts(
+    registrations: List[DossierRegistration],
+    evidence_registry: List[DossierEvidence],
+) -> List[ProductContext]:
+    """
+    Sprint 7.5 TZ-1: Build product_contexts from registrations.
+
+    Groups registrations by (region, route, form, strength, mah) → ProductContext.
+    Assigns context_id to each registration and builds primary_docs from evidence.
+    """
+    ctx_map: Dict[str, ProductContext] = {}
+
+    for reg in registrations:
+        region = (reg.region or "").strip().upper()
+        # Extract form/strength/mah values
+        forms = []
+        for fs in reg.forms_strengths:
+            if fs.value:
+                val = fs.value if isinstance(fs.value, str) else str(fs.value)
+                forms.append(val)
+        mah_val = ""
+        if reg.mah and reg.mah.value:
+            mah_val = str(reg.mah.value)
+
+        # For MVP: one context per registration (region + mah + forms combo)
+        form_str = "; ".join(sorted(forms)) if forms else ""
+        ctx = _context_id(region, "", form_str, "", mah_val)
+
+        if ctx not in ctx_map:
+            label_parts = [region]
+            if forms:
+                label_parts.append(form_str[:60])
+            if mah_val:
+                label_parts.append(mah_val[:40])
+            label = " - ".join(label_parts)
+
+            # Build primary_docs from evidence refs
+            primary_docs: List[PrimaryDoc] = []
+            seen_doc_ids: set = set()
+            _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
+                                "us_fda", "approval_letter", "pil", "assessment_report"}
+            for ev_id in reg.evidence_refs:
+                for ev in evidence_registry:
+                    if ev.evidence_id == ev_id and ev.doc_id not in seen_doc_ids:
+                        if ev.doc_kind and ev.doc_kind in _TIER1_DOC_KINDS:
+                            primary_docs.append(PrimaryDoc(
+                                doc_id=ev.doc_id,
+                                doc_kind=ev.doc_kind,
+                                source_url=ev.source_url,
+                                mime_type=None,
+                                title=ev.title,
+                            ))
+                            seen_doc_ids.add(ev.doc_id)
+
+            ctx_map[ctx] = ProductContext(
+                context_id=ctx,
+                label=label,
+                region=region,
+                route=None,
+                dosage_forms=forms,
+                strengths=[],
+                mah=mah_val or None,
+                identifiers=[i.value for i in reg.identifiers if i.value] if reg.identifiers else [],
+                primary_docs=primary_docs,
+                evidence_refs=list(reg.evidence_refs),
+            )
+        else:
+            # Merge identifiers + evidence_refs
+            existing = ctx_map[ctx]
+            for i in reg.identifiers:
+                if i.value and i.value not in existing.identifiers:
+                    existing.identifiers.append(i.value)
+            for ref in reg.evidence_refs:
+                if ref not in existing.evidence_refs:
+                    existing.evidence_refs.append(ref)
+
+        # Assign context_id to registration
+        reg.context_id = ctx
+
+        # Also populate registration primary_docs from evidence if empty
+        if not reg.primary_docs:
+            _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
+                                "us_fda", "approval_letter", "pil", "assessment_report"}
+            seen: set = set()
+            for ev_id in reg.evidence_refs:
+                for ev in evidence_registry:
+                    if ev.evidence_id == ev_id and ev.doc_id not in seen:
+                        if ev.doc_kind and ev.doc_kind in _TIER1_DOC_KINDS:
+                            reg.primary_docs.append(PrimaryDoc(
+                                doc_id=ev.doc_id,
+                                doc_kind=ev.doc_kind,
+                                source_url=ev.source_url,
+                                title=ev.title,
+                            ))
+                            seen.add(ev.doc_id)
+
+    return list(ctx_map.values())
+
+
+# ── Sprint 7.5: Synthesis kind classifier ────────────────────────────────────
+
+_FORMULATION_KEYWORDS = {
+    "granulation", "granulate", "sieving", "tableting", "tablet press", "coating",
+    "film-coated", "cores", "encapsulation", "capsule fill", "blending", "mixing",
+    "compression", "drying", "spray-dry", "lyophilization", "packaging",
+    "excipient", "binder", "disintegrant", "lubricant", "filler",
+}
+_MANUFACTURING_KEYWORDS = {
+    "manufacturing", "scale-up", "batch", "gmp", "quality control", "in-process",
+    "sterilization", "sterile", "aseptic", "clean room", "validation",
+}
+_API_SYNTHESIS_KEYWORDS = {
+    "synthesis", "reaction", "reflux", "distill", "crystalliz", "recrystalliz",
+    "precipitat", "filtrat", "chromatograph", "purif", "coupling", "hydrogenat",
+    "acylat", "alkylat", "oxidat", "reduct", "saponif", "esterif",
+    "salt formation", "free base", "yield", "mol", "mmol", "equiv",
+}
+
+
+def classify_synthesis_kind(description_text: str) -> str:
+    """
+    Sprint 7.5 TZ-4: Classify a synthesis step description.
+    Returns: api_synthesis | formulation_process | manufacturing_process | unknown
+    """
+    text = (description_text or "").lower()
+    api_score = sum(1 for kw in _API_SYNTHESIS_KEYWORDS if kw in text)
+    form_score = sum(1 for kw in _FORMULATION_KEYWORDS if kw in text)
+    mfg_score = sum(1 for kw in _MANUFACTURING_KEYWORDS if kw in text)
+
+    if api_score >= 2 or (api_score >= 1 and form_score == 0 and mfg_score == 0):
+        return "api_synthesis"
+    if form_score >= 2 or (form_score >= 1 and api_score == 0):
+        return "formulation_process"
+    if mfg_score >= 2 or (mfg_score >= 1 and api_score == 0 and form_score == 0):
+        return "manufacturing_process"
+    if api_score == 1:
+        return "api_synthesis"
+    if form_score == 1:
+        return "formulation_process"
+    return "unknown"
+
+
+# ── Sprint 7.5: Quality v2 builder ──────────────────────────────────────────
+
+def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
+    """
+    Sprint 7.5 TZ-5: Compute quality_v2 with coverage + decision_readiness.
+    """
+    q = report.dossier_quality or {}
+
+    # Coverage (normalized 0.0 - 1.0)
+    coverage = {
+        "passport": round(q.get("passport_pct", 0) / 100, 2),
+        "registrations": round(q.get("registrations_pct", 0) / 100, 2),
+        "clinical": round(q.get("clinical_pct", 0) / 100, 2),
+        "patents": round(q.get("patents_pct", 0) / 100, 2),
+        "synthesis": round(q.get("synthesis_pct", 0) / 100, 2),
+    }
+
+    # Decision readiness gates
+    reason_dist = q.get("unknown_reason_distribution", {})
+    legal_unknowns = reason_dist.get("LEGAL_STATUS_NOT_AVAILABLE", 0)
+    no_doc_unknowns = reason_dist.get("NO_DOCUMENT_IN_CORPUS", 0)
+
+    # Patents legal readiness
+    total_families = len(report.patent_families)
+    families_with_expiry = sum(1 for f in report.patent_families if f.expiry_by_country)
+    patents_legal_pct = (families_with_expiry / total_families) if total_families > 0 else 0.0
+
+    if patents_legal_pct >= 0.7 and legal_unknowns == 0:
+        patents_legal = "GREEN"
+    elif patents_legal_pct >= 0.3 or legal_unknowns <= 5:
+        patents_legal = "YELLOW"
+    else:
+        patents_legal = "RED"
+
+    # Context integrity
+    ctx_count = len(report.product_contexts)
+    if ctx_count <= 1:
+        context_integrity = "GREEN"
+    elif all(r.context_id for r in report.registrations):
+        context_integrity = "GREEN"
+    else:
+        context_integrity = "YELLOW" if ctx_count <= 3 else "RED"
+
+    # Registrations primary docs
+    regs_with_docs = sum(1 for r in report.registrations if r.primary_docs)
+    if regs_with_docs >= len(report.registrations) and report.registrations:
+        registrations_gate = "GREEN"
+    elif regs_with_docs > 0:
+        registrations_gate = "YELLOW"
+    else:
+        registrations_gate = "RED" if report.registrations else "YELLOW"
+
+    decision_readiness = {
+        "registrations": registrations_gate,
+        "patents_legal": patents_legal,
+        "context_integrity": context_integrity,
+    }
+
+    # Critical unknowns
+    critical_unknowns: List[Dict[str, Any]] = []
+    if legal_unknowns > 0:
+        critical_unknowns.append({
+            "reason_code": "LEGAL_STATUS_NOT_AVAILABLE",
+            "count": legal_unknowns,
+            "impact": f"patents_legal={patents_legal}",
+        })
+    if no_doc_unknowns > 0:
+        critical_unknowns.append({
+            "reason_code": "NO_DOCUMENT_IN_CORPUS",
+            "count": no_doc_unknowns,
+            "impact": "registrations may be incomplete",
+        })
+
+    notes: List[str] = []
+    if ctx_count > 1:
+        notes.append(f"Multiple product contexts detected: {ctx_count}")
+    if patents_legal_pct < 1.0 and total_families > 0:
+        notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
+
+    return DossierQualityV2(
+        coverage=coverage,
+        decision_readiness=decision_readiness,
+        critical_unknowns=critical_unknowns,
+        notes=notes,
+    )
 
 
 # ── JSON Schema export ────────────────────────────────────────────────────────
