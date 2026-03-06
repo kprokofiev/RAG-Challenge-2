@@ -525,7 +525,7 @@ class DossierReportGenerator:
 
     def _has_patent_corpus(self) -> bool:
         """Check if any patent doc_kinds are present in the downloaded corpus."""
-        patent_kinds = {"patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent"}
+        patent_kinds = {"patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"}
         for doc_path in self.documents_dir.glob("*.json"):
             try:
                 with open(doc_path, encoding="utf-8") as f:
@@ -858,7 +858,7 @@ class DossierReportGenerator:
             )
             return []
 
-        patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent"]
+        patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"]
         question = (
             f"For {self.inn}: identify all patent families. "
             "For each: representative publication number (EP/WO/US), priority date, assignee, "
