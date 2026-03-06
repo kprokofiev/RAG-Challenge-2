@@ -108,6 +108,25 @@ class WorkerSettings(BaseSettings):
     ddkit_rerank_sample_k: int = Field(80, env="DDKIT_RERANK_SAMPLE_K")
     ddkit_final_candidates_k: int = Field(40, env="DDKIT_FINAL_CANDIDATES_K")
 
+    # Sprint-8: per-stage timeout budgets (seconds).
+    # These define maximum wall-clock time for each pipeline stage.
+    # Exceeding the budget causes the job to fail with reason_code "stage_timeout".
+    ddkit_build_timeout_s: int = Field(300, env="DDKIT_BUILD_TIMEOUT_S")          # dossier:build  5 min
+    ddkit_fetch_timeout_s: int = Field(120, env="DDKIT_FETCH_TIMEOUT_S")           # fetch/render per doc  2 min
+    ddkit_parse_timeout_s: int = Field(180, env="DDKIT_PARSE_TIMEOUT_S")           # parse/index per doc  3 min
+    ddkit_generate_timeout_s: int = Field(3600, env="DDKIT_GENERATE_TIMEOUT_S")    # report generate  1 h
+    ddkit_external_api_timeout_s: int = Field(30, env="DDKIT_EXTERNAL_API_TIMEOUT_S")  # single external API call  30 s
+
+    # Sprint-8: retry policy for external API calls.
+    ddkit_retry_max: int = Field(3, env="DDKIT_RETRY_MAX")                        # max retries (4xx/5xx/timeout)
+    ddkit_retry_backoff_base_s: float = Field(1.0, env="DDKIT_RETRY_BACKOFF_BASE_S")  # base backoff (exponential)
+    ddkit_retry_backoff_max_s: float = Field(60.0, env="DDKIT_RETRY_BACKOFF_MAX_S")   # max backoff cap
+
+    # Sprint-8: storage cleanup.
+    ddkit_rendered_html_ttl_days: int = Field(7, env="DDKIT_RENDERED_HTML_TTL_DAYS")   # delete rendered HTML after N days
+    ddkit_max_docs_per_case: int = Field(500, env="DDKIT_MAX_DOCS_PER_CASE")           # hard cap on docs per case
+    ddkit_max_case_size_mb: int = Field(2048, env="DDKIT_MAX_CASE_SIZE_MB")            # max total S3 size per case (MB)
+
     @validator('storage_endpoint_url', pre=True)
     def resolve_storage_endpoint(cls, v):
         if v:

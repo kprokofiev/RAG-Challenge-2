@@ -35,7 +35,11 @@ from src.dossier_schema_v3 import (
     DossierPatentFamily,
     DossierSynthesisStep,
     DossierReport,
+    RunManifest,
     compute_dossier_quality,
+    build_product_contexts,
+    classify_synthesis_kind,
+    compute_dossier_quality_v2,
 )
 from src.evidence_builder import EvidenceCandidatesBuilder
 from src.retrieval import HybridRetriever
@@ -1071,8 +1075,12 @@ class DossierReportGenerator:
 
             key_docs = list({self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry})
 
+            # Sprint 7.5 TZ-4: classify synthesis kind
+            kind = classify_synthesis_kind(str(desc.value or ""))
+
             step = DossierSynthesisStep(
                 step_number=step_llm.step_number or (len(steps) + 1),
+                kind=kind,
                 description=desc,
                 reagents=reagents,
                 intermediates=intermediates,
@@ -1142,8 +1150,27 @@ class DossierReportGenerator:
         logger.info("synthesis_steps done (%.1fs)", time.time() - start_ts)
 
         # ── F: Assemble report ────────────────────────────────────────────────
+        import uuid as _uuid
+
         report_id = f"dossier_{case_id}_{int(time.time())}"
         evidence_list = list(self._evidence_registry.values())
+
+        # Sprint 7.5 TZ-6b: ensure run_id is always set
+        if not run_id:
+            run_id = str(_uuid.uuid4())
+            logger.info("run_id was None, generated: %s", run_id)
+
+        # Sprint 7.5 TZ-1: build product_contexts + set passport scope
+        product_contexts = build_product_contexts(registrations, evidence_list)
+        if len(product_contexts) > 1:
+            passport.passport_scope = "multi_context_ambiguous"
+            passport.passport_notice = (
+                f"This passport contains molecule-level fields only. "
+                f"{len(product_contexts)} product contexts detected — "
+                "product-specific data (route, dosage, indications) may vary by context."
+            )
+        else:
+            passport.passport_scope = "single_context"
 
         report = DossierReport(
             schema_version="3.0",
@@ -1151,6 +1178,7 @@ class DossierReportGenerator:
             case_id=case_id,
             run_id=run_id,
             generated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            product_contexts=product_contexts,
             passport=passport,
             registrations=registrations,
             clinical_studies=clinical_studies,
@@ -1162,16 +1190,42 @@ class DossierReportGenerator:
             completeness=completeness,
         )
 
-        # Compute quality scores
+        # Compute legacy quality scores
         report.dossier_quality = compute_dossier_quality(report)
 
+        # Sprint 7.5 TZ-5: compute quality_v2
+        report.dossier_quality_v2 = compute_dossier_quality_v2(report)
+
+        # Sprint 7.5 TZ-6b: run_manifest
         elapsed = time.time() - start_ts
+        report.run_manifest = RunManifest(
+            run_id=run_id,
+            report_id=report_id,
+            case_id=case_id,
+            pipeline_version=os.getenv("PIPELINE_VERSION", None),
+            config_digest=None,
+            stages=[
+                {"name": "passport", "status": "ok"},
+                {"name": "registrations", "status": "ok", "count": len(registrations)},
+                {"name": "clinical_studies", "status": "ok", "count": len(clinical_studies)},
+                {"name": "patent_families", "status": "ok", "count": len(patent_families)},
+                {"name": "synthesis_steps", "status": "ok", "count": len(synthesis_steps)},
+                {"name": "total", "elapsed_s": round(elapsed, 1)},
+            ],
+            docs_attached=0,
+            docs_indexed=0,
+            docs_failed=0,
+        )
+
         logger.info(
-            "DossierReport v3.0 assembled: passport_fields=%d registrations=%d "
-            "clinical=%d patents=%d synthesis=%d unknowns=%d evidence=%d elapsed=%.1fs",
-            len(evidence_list),
+            "DossierReport v3.0 assembled: contexts=%d registrations=%d "
+            "clinical=%d patents=%d synthesis=%d unknowns=%d evidence=%d elapsed=%.1fs "
+            "run_id=%s quality_v2_gates=%s",
+            len(product_contexts),
             len(registrations), len(clinical_studies), len(patent_families),
             len(synthesis_steps), len(unknowns), len(evidence_list), elapsed,
+            run_id,
+            report.dossier_quality_v2.decision_readiness if report.dossier_quality_v2 else "N/A",
         )
 
         return report
