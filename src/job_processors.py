@@ -22,6 +22,7 @@ from src.settings import settings
 from src.ddkit_db import DDKitDB
 from src.text_splitter import TextSplitter
 from src.ingestion import VectorDBIngestor
+from src.log_utils import get_bound_logger
 
 logger = logging.getLogger(__name__)
 
@@ -425,10 +426,13 @@ class DocParseIndexProcessor:
         run_id = job_data.get("run_id")
         attempt = job_data.get("attempt", 0)
 
-        logger.info(
-            "doc_parse_index_start tenant=%s case=%s doc=%s job=%s trace=%s run=%s attempt=%s",
-            tenant_id, case_id, doc_id, job_id, trace_id, run_id, attempt,
+        # S8: structured bound logger with correlation context
+        log = get_bound_logger(
+            "ddkit.parse_index",
+            tenant_id=tenant_id, case_id=case_id, run_id=run_id,
+            job_id=job_id, trace_id=trace_id, stage="parse_index",
         )
+        log.info("doc_parse_index_start", doc_id=doc_id, doc_kind=doc_kind, attempt=attempt)
         metrics: Dict[str, Any] = {
             "job_type": "doc_parse_index",
             "job_id": job_id,
@@ -1188,10 +1192,13 @@ class ReportGenerateProcessor:
         trace_id = job_data.get("trace_id")
         run_id = job_data.get("run_id")
 
-        logger.info(
-            "report_generate_start tenant=%s case=%s report=%s attempt=%d trace=%s run=%s",
-            tenant_id, case_id, report_id, attempt, trace_id, run_id,
+        # S8: structured bound logger
+        log = get_bound_logger(
+            "ddkit.report_generate",
+            tenant_id=tenant_id, case_id=case_id, run_id=run_id,
+            job_id=job_id, trace_id=trace_id, stage="report_generate",
         )
+        log.info("report_generate_start", report_id=report_id, attempt=attempt)
 
         try:
             # ── Preflight readiness gate ──────────────────────────────────────
