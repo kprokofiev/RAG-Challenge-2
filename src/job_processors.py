@@ -2135,6 +2135,31 @@ class DossierGenerateProcessor:
                 )
 
                 # ── Upload dossier JSON to S3 ─────────────────────────────────────
+                # ── Sprint 9: Coverage Ledger ──────────────────────────────────────
+                try:
+                    from src.coverage_ledger import CoverageLedgerBuilder
+                    db_documents = []
+                    if self.ddkit_db.is_configured():
+                        db_documents = self.ddkit_db.list_case_documents(tenant_id, case_id)
+                    ledger_builder = CoverageLedgerBuilder(use_case="ra_regulatory_screening")
+                    coverage_ledger = ledger_builder.build(
+                        db_documents=db_documents,
+                        dossier_report=dossier.model_dump() if dossier else None,
+                        evidence_registry=[
+                            ev.model_dump() for ev in (dossier.evidence_registry or [])
+                        ] if dossier else None,
+                    )
+                    dossier.coverage_ledger = coverage_ledger
+                    logger.info(
+                        "coverage_ledger_built case=%s readiness=%s declared=%d indexed=%d",
+                        case_id,
+                        coverage_ledger.get("totals", {}).get("decision_readiness", "?"),
+                        coverage_ledger.get("totals", {}).get("declared_sources", 0),
+                        coverage_ledger.get("totals", {}).get("indexed_docs", 0),
+                    )
+                except Exception as cov_exc:
+                    logger.warning("coverage_ledger_failed case=%s: %s", case_id, cov_exc)
+
                 dossier_key = f"tenants/{tenant_id}/cases/{case_id}/reports/{report_id}/dossier_v3.json"
                 dossier_json = dossier.model_dump_json(indent=2)
                 with tempfile.NamedTemporaryFile(

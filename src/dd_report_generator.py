@@ -469,7 +469,31 @@ class DDReportGenerator:
             is_partial=bool(is_partial),
             partial_reasons=list(partial_reasons or []),
         )
-        return {
+
+        # Sprint 9: Coverage ledger (source-universe-aware)
+        coverage_ledger = None
+        try:
+            from src.coverage_ledger import CoverageLedgerBuilder
+            db_documents = []
+            if self.ddkit_db is not None and getattr(self.ddkit_db, "is_configured", lambda: False)():
+                db_documents = self.ddkit_db.list_case_documents(
+                    tenant_id=self.tenant_id or "",
+                    case_id=self.case_id or "",
+                )
+            builder = CoverageLedgerBuilder(use_case="ra_regulatory_screening")
+            coverage_ledger = builder.build(
+                db_documents=db_documents,
+                evidence_registry=list(evidence_index_map.values()),
+            )
+            logger.info(
+                "coverage_ledger_built case=%s readiness=%s",
+                self.case_id,
+                coverage_ledger.get("totals", {}).get("decision_readiness", "?"),
+            )
+        except Exception as cov_exc:
+            logger.warning("coverage_ledger_failed case=%s: %s", self.case_id, cov_exc)
+
+        result = {
             "report_id": f"dd_report_{self.case_id}_{int(time.time())}",
             "case_id": self.case_id,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -479,6 +503,9 @@ class DDReportGenerator:
             "documents": documents,
             "completeness": completeness,
         }
+        if coverage_ledger:
+            result["coverage_ledger"] = coverage_ledger
+        return result
 
     def _load_documents_meta(self) -> List[Dict[str, Any]]:
         documents: List[Dict[str, Any]] = []

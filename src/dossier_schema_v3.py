@@ -433,6 +433,15 @@ class DossierReport(BaseModel):
         None,
         description="Sprint 7.5: separated coverage vs decision_readiness metrics"
     )
+    # Sprint 9: coverage ledger (source-universe-aware coverage)
+    coverage_ledger: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Sprint 9: source-universe-aware coverage ledger. "
+            "Tracks declared/reachable/attached/indexed/extracted/evidenced per source and section. "
+            "Distinct from quality_v2 (artifact quality) — this measures source universe completeness."
+        )
+    )
     # Sprint 7.5: run reproducibility manifest
     run_manifest: Optional[RunManifest] = Field(
         None,
