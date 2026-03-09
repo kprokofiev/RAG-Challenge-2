@@ -1,0 +1,391 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "updated_at": "2026-03-09",
+    "description": "Benchmark suite for PharmSearch coverage validation. 15 INN cases covering diverse drug profiles.",
+    "categories": ["simple", "multi_context", "ru_heavy", "patent_heavy", "clinical_heavy", "sparse_data"]
+  },
+  "benchmark_cases": [
+    {
+      "inn": "ibuprofen",
+      "category": ["simple", "multi_context"],
+      "use_case": "ra_regulatory_screening",
+      "description": "OTC NSAID, registered globally, multiple forms/routes, well-studied",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ema_smpc", "doc_kind": "smpc"},
+        {"source": "grls", "doc_kind": "grls_card"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "epo_ops", "doc_kind": "patent"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.chemical_formula",
+        "passport.mechanism_of_action",
+        "passport.route_of_administration",
+        "passport.dosage_forms",
+        "passport.trade_names",
+        "registrations.US.status",
+        "registrations.EU.status",
+        "registrations.RU.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "clinical": "ready",
+        "patents": "partial",
+        "chemistry": "ready"
+      },
+      "known_limitations": [
+        "EAEU portal not implemented",
+        "OCR disabled for RU instruction PDFs"
+      ],
+      "must_not_mix_contexts": true
+    },
+    {
+      "inn": "metformin",
+      "category": ["simple", "clinical_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "Antidiabetic, >500 CTGov trials, global registrations",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.chemical_formula",
+        "passport.mechanism_of_action",
+        "passport.fda_approval_date",
+        "registrations.US.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "clinical": "ready",
+        "chemistry": "ready"
+      },
+      "known_limitations": [
+        "CTGov pagination limited to 500 — truncated results"
+      ],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "trimebutine",
+      "category": ["ru_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "GI drug, strong RU presence, limited US/EU data",
+      "must_find_docs": [
+        {"source": "grls", "doc_kind": "grls_card"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.chemical_formula",
+        "registrations.RU.status",
+        "registrations.RU.mah"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "partial",
+        "clinical": "partial",
+        "chemistry": "ready"
+      },
+      "known_limitations": [
+        "No US FDA registration",
+        "GRLS captcha may block scraping"
+      ],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "tirzepatide",
+      "category": ["clinical_heavy", "patent_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "Novel GLP-1/GIP agonist (Eli Lilly), recently approved, many active trials",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ema_smpc", "doc_kind": "smpc"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "epo_ops", "doc_kind": "patent"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.fda_approval_date",
+        "passport.fda_indication",
+        "passport.mechanism_of_action",
+        "registrations.US.status",
+        "registrations.EU.status",
+        "patent_families[].representative_pub"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "clinical": "ready",
+        "patents": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "semaglutide",
+      "category": ["multi_context", "clinical_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "GLP-1 agonist with oral/SC forms, multiple indications (diabetes + obesity)",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ema_smpc", "doc_kind": "smpc"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "epo_ops", "doc_kind": "patent"}
+      ],
+      "must_fill_fields": [
+        "passport.fda_approval_date",
+        "passport.mechanism_of_action",
+        "passport.route_of_administration",
+        "registrations.US.status",
+        "registrations.EU.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "clinical": "ready",
+        "patents": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": true
+    },
+    {
+      "inn": "pembrolizumab",
+      "category": ["clinical_heavy", "patent_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "PD-1 checkpoint inhibitor (Keytruda), many indications and trials",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ema_epar", "doc_kind": "epar"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "epo_ops", "doc_kind": "patent"}
+      ],
+      "must_fill_fields": [
+        "passport.fda_approval_date",
+        "passport.mechanism_of_action",
+        "registrations.US.status",
+        "registrations.EU.status",
+        "patent_families[].priority_date"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "clinical": "ready",
+        "patents": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "atorvastatin",
+      "category": ["simple"],
+      "use_case": "ra_regulatory_screening",
+      "description": "Statin, off-patent, generics available globally",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.chemical_formula",
+        "passport.fda_approval_date",
+        "registrations.US.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "clinical": "ready",
+        "chemistry": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "remdesivir",
+      "category": ["sparse_data"],
+      "use_case": "ra_regulatory_screening",
+      "description": "Antiviral (COVID-19), limited patent landscape, emergency use authorizations",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.fda_approval_date",
+        "passport.mechanism_of_action",
+        "registrations.US.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "partial",
+        "clinical": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "adalimumab",
+      "category": ["multi_context", "patent_heavy"],
+      "use_case": "ip_patent_screening",
+      "description": "Anti-TNF biosimilar landscape, complex patent cliff, multiple biosimilar entrants",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "epo_ops", "doc_kind": "patent"},
+        {"source": "lens_org", "doc_kind": "patent"}
+      ],
+      "must_fill_fields": [
+        "patent_families[].representative_pub",
+        "patent_families[].priority_date",
+        "patent_families[].expiry_by_country",
+        "registrations.US.status"
+      ],
+      "expected_decision_readiness": {
+        "patents": "ready",
+        "registrations": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "osimertinib",
+      "category": ["clinical_heavy"],
+      "use_case": "medical_clinical_screening",
+      "description": "3rd-gen EGFR TKI (Tagrisso), oncology with phase III data",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ctgov", "doc_kind": "ctgov"},
+        {"source": "ema_epar", "doc_kind": "epar"}
+      ],
+      "must_fill_fields": [
+        "passport.mechanism_of_action",
+        "clinical_studies[].study_id",
+        "clinical_studies[].phase",
+        "registrations.US.status",
+        "registrations.EU.status"
+      ],
+      "expected_decision_readiness": {
+        "clinical": "ready",
+        "registrations": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "diclofenac",
+      "category": ["simple", "ru_heavy", "multi_context"],
+      "use_case": "ra_regulatory_screening",
+      "description": "NSAID, many forms (oral/topical/IM/suppository), strong RU market",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "grls", "doc_kind": "grls_card"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.chemical_formula",
+        "passport.dosage_forms",
+        "registrations.RU.status",
+        "registrations.US.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "partial",
+        "chemistry": "ready"
+      },
+      "known_limitations": [
+        "Multiple product contexts (topical vs oral vs IM)"
+      ],
+      "must_not_mix_contexts": true
+    },
+    {
+      "inn": "trastuzumab",
+      "category": ["patent_heavy", "clinical_heavy"],
+      "use_case": "ip_patent_screening",
+      "description": "HER2 monoclonal antibody, biosimilar competition, complex IP landscape",
+      "must_find_docs": [
+        {"source": "epo_ops", "doc_kind": "patent"},
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ctgov", "doc_kind": "ctgov"}
+      ],
+      "must_fill_fields": [
+        "patent_families[].representative_pub",
+        "patent_families[].assignees",
+        "registrations.US.status",
+        "registrations.EU.status"
+      ],
+      "expected_decision_readiness": {
+        "patents": "ready",
+        "registrations": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "dapagliflozin",
+      "category": ["clinical_heavy"],
+      "use_case": "medical_clinical_screening",
+      "description": "SGLT2 inhibitor, expanded from diabetes to HF and CKD",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "ema_smpc", "doc_kind": "smpc"},
+        {"source": "ctgov", "doc_kind": "ctgov"}
+      ],
+      "must_fill_fields": [
+        "passport.mechanism_of_action",
+        "passport.fda_indication",
+        "clinical_studies[].study_id",
+        "registrations.US.status",
+        "registrations.EU.status"
+      ],
+      "expected_decision_readiness": {
+        "clinical": "ready",
+        "registrations": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "amoxicillin",
+      "category": ["simple", "ru_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "Widely used antibiotic, many generic producers, strong RU presence",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "grls", "doc_kind": "grls_card"},
+        {"source": "pubchem", "doc_kind": "pubchem"}
+      ],
+      "must_fill_fields": [
+        "passport.chemical_formula",
+        "passport.drug_class",
+        "registrations.US.status",
+        "registrations.RU.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "ready",
+        "chemistry": "ready"
+      },
+      "known_limitations": [],
+      "must_not_mix_contexts": false
+    },
+    {
+      "inn": "leflunomide",
+      "category": ["sparse_data", "ru_heavy"],
+      "use_case": "ra_regulatory_screening",
+      "description": "DMARD for rheumatoid arthritis, moderate data density, RU market presence",
+      "must_find_docs": [
+        {"source": "openfda", "doc_kind": "label"},
+        {"source": "grls", "doc_kind": "grls_card"},
+        {"source": "pubchem", "doc_kind": "pubchem"},
+        {"source": "ctgov", "doc_kind": "ctgov"}
+      ],
+      "must_fill_fields": [
+        "passport.mechanism_of_action",
+        "passport.chemical_formula",
+        "registrations.US.status",
+        "registrations.RU.status"
+      ],
+      "expected_decision_readiness": {
+        "registrations": "partial",
+        "clinical": "partial",
+        "chemistry": "ready"
+      },
+      "known_limitations": [
+        "Limited patent data (off-patent)"
+      ],
+      "must_not_mix_contexts": false
+    }
+  ]
+}
