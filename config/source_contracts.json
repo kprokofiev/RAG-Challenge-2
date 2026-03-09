@@ -1,0 +1,362 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "updated_at": "2026-03-09",
+    "description": "Source contracts define what each Tier-1 source is expected to deliver. Used by CoverageLedgerBuilder to assess contract completeness."
+  },
+  "contracts": [
+    {
+      "source_id": "openfda",
+      "display_name": "openFDA Drug Labels",
+      "tier": "tier1",
+      "region": "US",
+      "section": "registrations",
+      "doc_kinds_expected": ["label", "us_fda"],
+      "must_have_fields": [
+        "passport.fda_approval_date",
+        "passport.fda_indication",
+        "passport.route_of_administration",
+        "passport.dosage_forms",
+        "registrations.US.status",
+        "registrations.US.mah"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["dailymed"],
+      "byo_required": false,
+      "api_endpoint": "https://api.fda.gov/drug/label.json",
+      "integration_file": "pharm_search/apps/ddkit-doc-worker/src/processor.ts",
+      "known_limitations": [
+        "Returns only current label, not historical versions",
+        "No direct link to approval letter"
+      ]
+    },
+    {
+      "source_id": "dailymed",
+      "display_name": "DailyMed",
+      "tier": "tier1",
+      "region": "US",
+      "section": "registrations",
+      "doc_kinds_expected": ["label"],
+      "must_have_fields": [
+        "passport.fda_indication",
+        "passport.route_of_administration"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["openfda"],
+      "byo_required": false,
+      "api_endpoint": "https://dailymed.nlm.nih.gov/dailymed/",
+      "integration_file": "pharm_search/apps/ddkit-doc-worker/src/processor.ts",
+      "known_limitations": [
+        "Fallback for FDA label when openFDA returns 403"
+      ]
+    },
+    {
+      "source_id": "ema_smpc",
+      "display_name": "EMA SmPC",
+      "tier": "tier1",
+      "region": "EU",
+      "section": "registrations",
+      "doc_kinds_expected": ["smpc"],
+      "must_have_fields": [
+        "registrations.EU.status",
+        "registrations.EU.mah",
+        "passport.route_of_administration",
+        "passport.dosage_forms",
+        "passport.fda_indication"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["ema_epar", "ema_pil"],
+      "byo_required": false,
+      "api_endpoint": "fetchEuDocSources() in ddkit_handler.go:1665-1723",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/ddkit_handler.go",
+      "known_limitations": [
+        "URL-based only; depends on EMA product page structure",
+        "OCR disabled by default (DOCLING_DO_OCR=false) - image-based SmPCs produce 0 text"
+      ]
+    },
+    {
+      "source_id": "ema_pil",
+      "display_name": "EMA PIL (Patient Information Leaflet)",
+      "tier": "tier1",
+      "region": "EU",
+      "section": "registrations",
+      "doc_kinds_expected": ["pil"],
+      "must_have_fields": [],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["ema_smpc"],
+      "byo_required": false,
+      "api_endpoint": "fetchEuDocSources() in ddkit_handler.go:1665-1723",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/ddkit_handler.go",
+      "known_limitations": [
+        "PIL is less detailed than SmPC; primarily patient-facing"
+      ]
+    },
+    {
+      "source_id": "ema_epar",
+      "display_name": "EMA EPAR / Assessment Report",
+      "tier": "tier1",
+      "region": "EU",
+      "section": "registrations",
+      "doc_kinds_expected": ["epar", "assessment_report"],
+      "must_have_fields": [
+        "registrations.EU.status",
+        "registrations.EU.mah"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["ema_smpc"],
+      "byo_required": false,
+      "api_endpoint": "fetchEuDocSources() in ddkit_handler.go:1665-1723",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/ddkit_handler.go",
+      "known_limitations": [
+        "Large PDFs (100+ pages) may timeout on parse",
+        "Not all centrally authorized products have public EPARs"
+      ]
+    },
+    {
+      "source_id": "grls",
+      "display_name": "GRLS (State Register of Medicines, Russia)",
+      "tier": "tier1",
+      "region": "RU",
+      "section": "registrations",
+      "doc_kinds_expected": ["grls_card", "grls"],
+      "must_have_fields": [
+        "registrations.RU.status",
+        "registrations.RU.mah",
+        "registrations.RU.identifiers"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": [],
+      "byo_required": false,
+      "api_endpoint": "grls.rosminzdrav.ru (ASP.NET scraping)",
+      "integration_file": "ru_enrichment/apps/ru-api/src/services/grlsParser.ts",
+      "known_limitations": [
+        "Canvas CAPTCHA blocker (requires CAPTCHA_API_KEY)",
+        "instruction_url always nil from Go client (grls.go:parseDetails)",
+        "Go client has no captcha handling; ru-api TS has paid captcha solving"
+      ]
+    },
+    {
+      "source_id": "grls_instruction",
+      "display_name": "GRLS Instruction PDF (RU SmPC-equivalent)",
+      "tier": "tier1",
+      "region": "RU",
+      "section": "registrations",
+      "doc_kinds_expected": ["ru_instruction"],
+      "must_have_fields": [
+        "passport.fda_indication",
+        "passport.route_of_administration",
+        "passport.dosage_forms"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["grls"],
+      "byo_required": false,
+      "api_endpoint": "GRLS card page -> instruction PDF link",
+      "integration_file": "ru_enrichment/apps/ru-api/src/services/grlsParser.ts",
+      "known_limitations": [
+        "instruction_url extraction not implemented (always nil)",
+        "Even if URL found, OCR disabled for RU PDFs",
+        "EasyOCR lang=['en'] — Cyrillic not recognized"
+      ]
+    },
+    {
+      "source_id": "ctgov",
+      "display_name": "ClinicalTrials.gov v2 API",
+      "tier": "tier1",
+      "region": "US",
+      "section": "clinical",
+      "doc_kinds_expected": ["ctgov", "ctgov_protocol", "ctgov_results", "ctgov_documents", "ctgov_lay_summary"],
+      "must_have_fields": [
+        "clinical_studies[].study_id",
+        "clinical_studies[].phase",
+        "clinical_studies[].status"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": [],
+      "byo_required": false,
+      "api_endpoint": "https://clinicaltrials.gov/api/v2/studies",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/clinical_aggregate_handler.go",
+      "known_limitations": [
+        "No pagination — max 500 studies per request",
+        "Search-URL handling added for URLs without NCT ID"
+      ]
+    },
+    {
+      "source_id": "pubmed",
+      "display_name": "PubMed / PMC E-utilities",
+      "tier": "tier1",
+      "region": "Global",
+      "section": "clinical",
+      "doc_kinds_expected": ["publication", "scientific_pdf", "scientific_pmc"],
+      "must_have_fields": [],
+      "must_have_primary_docs": 0,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": [],
+      "byo_required": false,
+      "api_endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/",
+      "integration_file": "pharm_search/apps/ddkit-doc-worker/src/processor.ts",
+      "known_limitations": [
+        "Only OA articles have full text; paywalled articles use abstract only",
+        "Unpaywall API used for OA resolution"
+      ]
+    },
+    {
+      "source_id": "epo_ops",
+      "display_name": "EPO OPS (European Patent Office)",
+      "tier": "tier1",
+      "region": "EU",
+      "section": "patents",
+      "doc_kinds_expected": ["patent", "patent_pdf"],
+      "must_have_fields": [
+        "patent_families[].representative_pub",
+        "patent_families[].priority_date",
+        "patent_families[].assignees"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["lens_org", "google_patents"],
+      "byo_required": false,
+      "api_endpoint": "https://ops.epo.org/3.2/",
+      "integration_file": "pharm_search/packages/clients/epoops/epoops.go",
+      "known_limitations": [
+        "Abstract not parsed from biblio XML (title only)",
+        "normalizeINN() is a stub — no salt form normalization",
+        "Fair-use delay 1.2-1.7s between requests",
+        "Search range inconsistency: 1-25 vs 1-100"
+      ]
+    },
+    {
+      "source_id": "rospatent",
+      "display_name": "Rospatent (Russian Patent Office)",
+      "tier": "tier1",
+      "region": "RU",
+      "section": "patents",
+      "doc_kinds_expected": ["ru_patent_fips", "patent"],
+      "must_have_fields": [
+        "patent_families[].representative_pub",
+        "patent_families[].priority_date"
+      ],
+      "must_have_primary_docs": 0,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["eapo"],
+      "byo_required": false,
+      "api_endpoint": "Rospatent CSV bulk export + FIPS API",
+      "integration_file": "ru_enrichment/patents_ru_eapo_ingestor/app/ingest_ru_eapo.py",
+      "known_limitations": [
+        "Data freshness depends on Rospatent opendata release cadence (monthly)",
+        "abstract_ru = None hardcoded",
+        "legal_status_ru = None — not in bulk dataset"
+      ]
+    },
+    {
+      "source_id": "patentsview",
+      "display_name": "PatentsView (US Patents)",
+      "tier": "tier1",
+      "region": "US",
+      "section": "patents",
+      "doc_kinds_expected": ["patent"],
+      "must_have_fields": [
+        "patent_families[].representative_pub"
+      ],
+      "must_have_primary_docs": 0,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["lens_org"],
+      "byo_required": false,
+      "api_endpoint": "https://api.patentsview.org/",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/patent_handler.go",
+      "known_limitations": [
+        "Queries by assignee name (unreliable for brand->company mapping)",
+        "US-EU family matching uses string-contains on assignee (patent_handler.go:1401-1421)"
+      ]
+    },
+    {
+      "source_id": "pubchem",
+      "display_name": "PubChem",
+      "tier": "tier1",
+      "region": "Global",
+      "section": "chemistry",
+      "doc_kinds_expected": ["pubchem", "drug_monograph"],
+      "must_have_fields": [
+        "passport.chemical_formula",
+        "passport.smiles",
+        "passport.inchi_key",
+        "passport.molecular_weight"
+      ],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": [],
+      "byo_required": false,
+      "api_endpoint": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{INN}/JSON",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/ddkit_handler.go (ensureSeedSourcesFinal)",
+      "known_limitations": [
+        "Summary data only; no detailed PK/PD"
+      ]
+    },
+    {
+      "source_id": "manufacturing_svc",
+      "display_name": "Manufacturing Service",
+      "tier": "tier1",
+      "region": "Global",
+      "section": "manufacturing",
+      "doc_kinds_expected": ["manufacturers"],
+      "must_have_fields": [],
+      "must_have_primary_docs": 1,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": ["esklp", "pharmacompass"],
+      "byo_required": false,
+      "api_endpoint": "http://manufacturing-svc:8088",
+      "integration_file": "pharm_search/apps/api-gateway/handlers/ddkit_handler.go",
+      "known_limitations": [
+        "Depends on manufacturing-svc:8088 being deployed",
+        "Timeout can exceed 30s for complex INNs"
+      ]
+    },
+    {
+      "source_id": "ru_clinical",
+      "display_name": "RU Clinical Trials (ClinLine + ESKLP)",
+      "tier": "tier1",
+      "region": "RU",
+      "section": "clinical",
+      "doc_kinds_expected": ["clinical_trials", "ru_clinical_permission"],
+      "must_have_fields": [
+        "clinical_studies[].study_id",
+        "clinical_studies[].status"
+      ],
+      "must_have_primary_docs": 0,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": [],
+      "byo_required": false,
+      "api_endpoint": "http://ru-api:9092/ru/clinical/aggregate",
+      "integration_file": "ru_enrichment/apps/ru-api/src/routes/clinical.aggregate.ts",
+      "known_limitations": [
+        "Depends on ru_enrichment stack running"
+      ]
+    },
+    {
+      "source_id": "lens_org",
+      "display_name": "Lens.org (Global Patent Search)",
+      "tier": "tier1",
+      "region": "Global",
+      "section": "patents",
+      "doc_kinds_expected": ["patent", "patent_family_summary"],
+      "must_have_fields": [],
+      "must_have_primary_docs": 0,
+      "evidence_requirement": "page_or_snippet",
+      "fallback_sources": [],
+      "byo_required": false,
+      "api_endpoint": "https://api.lens.org/patent/search",
+      "integration_file": "ru_enrichment/apps/ru-api/src/services/lensClient.ts",
+      "known_limitations": [
+        "Requires LENS_TOKEN env var",
+        "Rate-limited by Lens.org API"
+      ]
+    }
+  ]
+}

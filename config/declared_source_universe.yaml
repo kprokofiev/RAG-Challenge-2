@@ -1,0 +1,358 @@
+# Declared Source Universe v1.0
+# PharmSearch — Sprint 9
+# This config defines which sources the system promises to cover per use case / region / section.
+# Any new source must be explicitly added here before use.
+# Tier definitions:
+#   tier1: mandatory, system guarantees attempt to reach
+#   tier2: optional, system attempts if available
+#   byo:   bring-your-own, user must supply credentials/data
+#   unsupported: known gap, explicitly documented
+
+version: "1.0"
+updated_at: "2026-03-09"
+
+use_cases:
+
+  # ─────────────────────────────────────────────────
+  # USE CASE 1: Regulatory Affairs Screening
+  # ─────────────────────────────────────────────────
+  ra_regulatory_screening:
+    description: "Full regulatory, clinical, patent, manufacturing screening for RA due diligence"
+    sections:
+
+      registrations:
+        description: "Marketing authorization status per region"
+        regions:
+          US:
+            tier1_sources:
+              - source_id: openfda
+                doc_kinds: [label, us_fda]
+                description: "FDA drug labels via openFDA API"
+              - source_id: dailymed
+                doc_kinds: [label]
+                description: "DailyMed label fallback"
+            tier2_sources:
+              - source_id: drugsatfda
+                doc_kinds: [approval_letter, complete_response_letter, anda_package]
+                description: "Drugs@FDA approval documents"
+              - source_id: rems
+                doc_kinds: [rems_document]
+                description: "FDA REMS documents"
+            byo_sources: []
+            unsupported: []
+
+          EU:
+            tier1_sources:
+              - source_id: ema_smpc
+                doc_kinds: [smpc]
+                description: "EMA SmPC PDF via product page"
+              - source_id: ema_pil
+                doc_kinds: [pil]
+                description: "EMA PIL PDF"
+              - source_id: ema_epar
+                doc_kinds: [epar, assessment_report]
+                description: "EMA EPAR / assessment report PDF"
+            tier2_sources: []
+            byo_sources: []
+            unsupported: []
+
+          RU:
+            tier1_sources:
+              - source_id: grls
+                doc_kinds: [grls_card, grls]
+                description: "GRLS registry card via ru-api Playwright scraper"
+              - source_id: grls_instruction
+                doc_kinds: [ru_instruction]
+                description: "GRLS instruction PDF (SmPC-equivalent)"
+            tier2_sources:
+              - source_id: ru_quality_letter
+                doc_kinds: [ru_quality_letter]
+                description: "Roszdravnadzor quality letters"
+            byo_sources: []
+            unsupported: []
+
+          EAEU:
+            tier1_sources:
+              - source_id: eaeu_portal
+                doc_kinds: [eaeu_document]
+                description: "EAEU drug registry portal (portal.eaeunion.org)"
+            tier2_sources: []
+            byo_sources: []
+            unsupported:
+              - source_id: eaeu_portal
+                reason: "EAEU portal client is a URL builder only; no data retrieval implemented (ddkit_handler.go:806-808 returns nil)"
+
+      clinical:
+        description: "Clinical trials data"
+        regions:
+          US:
+            tier1_sources:
+              - source_id: ctgov
+                doc_kinds: [ctgov, ctgov_protocol, ctgov_results, ctgov_documents, ctgov_lay_summary]
+                description: "ClinicalTrials.gov v2 API (up to 500 studies)"
+            tier2_sources:
+              - source_id: pubmed
+                doc_kinds: [publication, scientific_pdf, scientific_pmc]
+                description: "PubMed / PMC full-text via E-utilities"
+            byo_sources: []
+            unsupported: []
+
+          EU:
+            tier1_sources:
+              - source_id: ctis
+                doc_kinds: [ctis, ctis_results]
+                description: "EU Clinical Trials via eu-etl-svc:8082"
+            tier2_sources: []
+            byo_sources: []
+            unsupported:
+              - source_id: ctis
+                reason: "eu-etl-svc is a separate deployment; if not running, EU clinical data is empty (clinical_aggregate_handler.go:464-589)"
+
+          RU:
+            tier1_sources:
+              - source_id: ru_clinical
+                doc_kinds: [clinical_trials, ru_clinical_permission]
+                description: "RU clinical via ru-api (CTGov RU filter + clinline.ru)"
+            tier2_sources: []
+            byo_sources: []
+            unsupported: []
+
+      patents:
+        description: "Patent landscape"
+        regions:
+          EU:
+            tier1_sources:
+              - source_id: epo_ops
+                doc_kinds: [patent, patent_pdf]
+                description: "EPO OPS API (OAuth2) — search, biblio, INPADOC families"
+            tier2_sources:
+              - source_id: epo_register
+                doc_kinds: [patent]
+                description: "EPO Register — legal status, SPC"
+              - source_id: google_patents
+                doc_kinds: [patent_pdf]
+                description: "Google Patents PDF download"
+            byo_sources: []
+            unsupported: []
+
+          US:
+            tier1_sources:
+              - source_id: patentsview
+                doc_kinds: [patent]
+                description: "PatentsView API — US patent data"
+            tier2_sources:
+              - source_id: lens_org
+                doc_kinds: [patent]
+                description: "Lens.org API — global patent search"
+            byo_sources: []
+            unsupported: []
+
+          RU:
+            tier1_sources:
+              - source_id: rospatent
+                doc_kinds: [ru_patent_fips, patent]
+                description: "Rospatent CSV bulk export + FIPS API via ru-api"
+            tier2_sources:
+              - source_id: eapo
+                doc_kinds: [patent]
+                description: "EAPO patents via Lens.org integration"
+            byo_sources: []
+            unsupported: []
+
+          Global:
+            tier1_sources:
+              - source_id: lens_org
+                doc_kinds: [patent, patent_family_summary]
+                description: "Lens.org global patent search"
+            tier2_sources: []
+            byo_sources: []
+            unsupported: []
+
+      safety:
+        description: "Safety and pharmacovigilance"
+        tier1_sources:
+          - source_id: fda_label_safety
+            doc_kinds: [label]
+            description: "FDA label boxed warnings / contraindications (same label doc)"
+        tier2_sources:
+          - source_id: pubchem
+            doc_kinds: [pubchem, drug_monograph]
+            description: "PubChem compound safety data"
+        byo_sources: []
+        unsupported:
+          - source_id: faers
+            reason: "FAERS adverse event reports not integrated"
+          - source_id: eudravigilance
+            reason: "EudraVigilance not integrated"
+
+      manufacturing:
+        description: "Manufacturing sites, GMP, API suppliers"
+        tier1_sources:
+          - source_id: manufacturing_svc
+            doc_kinds: [manufacturers]
+            description: "Manufacturing service :8088 (FDA FEI, WHO PQ, Apollo)"
+        tier2_sources:
+          - source_id: esklp
+            doc_kinds: []
+            description: "ESKLP manufacturing data via ru-api"
+          - source_id: pharmacompass
+            doc_kinds: []
+            description: "PharmaCompass CMO/API data"
+        byo_sources: []
+        unsupported: []
+
+      chemistry:
+        description: "Chemical identity, MoA, PK/PD"
+        tier1_sources:
+          - source_id: pubchem
+            doc_kinds: [pubchem, drug_monograph]
+            description: "PubChem REST API — formula, SMILES, InChI, molecular weight"
+        tier2_sources: []
+        byo_sources: []
+        unsupported:
+          - source_id: drugbank
+            reason: "DrugBank requires commercial license"
+
+  # ─────────────────────────────────────────────────
+  # USE CASE 2: Medical / Clinical Screening
+  # ─────────────────────────────────────────────────
+  medical_clinical_screening:
+    description: "Clinical-heavy screening for medical affairs"
+    sections:
+
+      clinical:
+        description: "Clinical trials and publications"
+        regions:
+          US:
+            tier1_sources:
+              - source_id: ctgov
+                doc_kinds: [ctgov, ctgov_protocol, ctgov_results, ctgov_documents]
+                description: "ClinicalTrials.gov v2 API"
+              - source_id: pubmed
+                doc_kinds: [publication, scientific_pdf, scientific_pmc]
+                description: "PubMed / PMC"
+            tier2_sources: []
+          EU:
+            tier1_sources:
+              - source_id: ctis
+                doc_kinds: [ctis]
+                description: "CTIS via eu-etl-svc"
+            tier2_sources: []
+          RU:
+            tier1_sources:
+              - source_id: ru_clinical
+                doc_kinds: [clinical_trials, ru_clinical_permission]
+                description: "RU clinical via ru-api"
+            tier2_sources: []
+
+      safety:
+        description: "Safety profile from labels and SmPC"
+        tier1_sources:
+          - source_id: fda_label_safety
+            doc_kinds: [label]
+          - source_id: ema_smpc
+            doc_kinds: [smpc]
+        tier2_sources: []
+
+      registrations:
+        description: "Regulatory context for clinical assessment"
+        regions:
+          US:
+            tier1_sources:
+              - source_id: openfda
+                doc_kinds: [label, us_fda]
+          EU:
+            tier1_sources:
+              - source_id: ema_smpc
+                doc_kinds: [smpc]
+              - source_id: ema_epar
+                doc_kinds: [epar]
+          RU:
+            tier1_sources:
+              - source_id: grls
+                doc_kinds: [grls_card]
+
+  # ─────────────────────────────────────────────────
+  # USE CASE 3: IP / Patent Screening
+  # ─────────────────────────────────────────────────
+  ip_patent_screening:
+    description: "Patent-heavy screening for IP due diligence"
+    sections:
+
+      patents:
+        description: "Full patent landscape"
+        regions:
+          EU:
+            tier1_sources:
+              - source_id: epo_ops
+                doc_kinds: [patent, patent_pdf]
+              - source_id: epo_register
+                doc_kinds: [patent]
+            tier2_sources:
+              - source_id: google_patents
+                doc_kinds: [patent_pdf]
+          US:
+            tier1_sources:
+              - source_id: patentsview
+                doc_kinds: [patent]
+              - source_id: lens_org
+                doc_kinds: [patent]
+            tier2_sources: []
+          RU:
+            tier1_sources:
+              - source_id: rospatent
+                doc_kinds: [ru_patent_fips, patent]
+              - source_id: eapo
+                doc_kinds: [patent]
+            tier2_sources: []
+          Global:
+            tier1_sources:
+              - source_id: lens_org
+                doc_kinds: [patent, patent_family_summary, ip_landscape]
+            tier2_sources: []
+
+      registrations:
+        description: "Regulatory context for patent assessment"
+        regions:
+          US:
+            tier1_sources:
+              - source_id: openfda
+                doc_kinds: [label, us_fda]
+          EU:
+            tier1_sources:
+              - source_id: ema_smpc
+                doc_kinds: [smpc]
+          RU:
+            tier1_sources:
+              - source_id: grls
+                doc_kinds: [grls_card]
+
+# Wave 2 (Deep Research) sources — applied across all use cases when research:run is triggered
+wave2_deep_research:
+  description: "Sources discovered via gpt-researcher / open-deep-research (Wave 2)"
+  trigger: "POST /ddkit/research:run"
+  config_ref: "Vector_db/router-map.json"
+  expected_doc_kinds:
+    - publication
+    - preprint
+    - press_release
+    - congress_abstract
+    - poster_pdf
+    - review_article
+    - moa_overview
+    - rwe_study
+    - rwe_safety
+    - case_report
+    - pv_signal
+    - ddi_overview
+    - head_to_head
+    - network_meta
+    - hta_report
+    - guideline
+    - earnings_transcript
+    - ir_release
+    - investor_deck
+    - deal_news
+    - ip_landscape
+    - kol_signal
+  max_attach: 50  # DDKIT_RESEARCH_ATTACH_MAX
