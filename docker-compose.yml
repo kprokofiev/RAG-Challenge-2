@@ -40,6 +40,7 @@ services:
       # Required
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=redis://host.docker.internal:6379
+      - DDKIT_REDIS_URL=redis://host.docker.internal:6379/0
       - DDKIT_DB_DSN=postgresql://user:password@host.docker.internal:5432/pharm_search
       - STORAGE_ENDPOINT_URL=http://host.docker.internal:9000
       - STORAGE_ACCESS_KEY=minioadmin
@@ -97,6 +98,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=redis://host.docker.internal:6379
+      - DDKIT_REDIS_URL=redis://host.docker.internal:6379/0
       - DDKIT_DB_DSN=postgresql://user:password@host.docker.internal:5432/pharm_search
       - STORAGE_ENDPOINT_URL=http://host.docker.internal:9000
       - STORAGE_ACCESS_KEY=minioadmin
