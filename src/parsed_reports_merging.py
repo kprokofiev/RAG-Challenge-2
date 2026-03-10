@@ -313,6 +313,9 @@ class PageTextPreparation:
                 "checkbox_selected",
                 "checkbox_unselected",
                 "formula",
+                "code",
+                "reference",
+                "key_value_region",
             ):
                 if not text.strip():
                     i += 1
@@ -322,7 +325,9 @@ class PageTextPreparation:
                     i += 1
                 continue
 
-            raise ValueError(f"Unknown block type: {block_type}")
+            # Unknown block type — skip gracefully instead of crashing
+            i += 1
+            continue
 
         return final_blocks
 
