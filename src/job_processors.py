@@ -2045,6 +2045,8 @@ class DossierGenerateProcessor:
         try:
             if job_id and self.ddkit_db.is_configured():
                 self.ddkit_db.mark_job_running(job_id)
+            if self.ddkit_db.is_configured():
+                self.ddkit_db.update_report_status(report_id, tenant_id, case_id, "building")
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
@@ -2076,6 +2078,9 @@ class DossierGenerateProcessor:
                         completeness = legacy_json.get("completeness")
                     except Exception as ex:
                         logger.warning("Could not parse legacy report JSON: %s", ex)
+
+                if self.ddkit_db.is_configured():
+                    self.ddkit_db.update_report_status(report_id, tenant_id, case_id, "indexing")
 
                 # ── Sprint 7.5 / TZ-7: PubMed auto-ingest before dossier generation ─
                 inn = job_data.get("inn") or job_data.get("drug_name") or case_id
@@ -2109,6 +2114,8 @@ class DossierGenerateProcessor:
                     logger.info("pubmed_auto_ingest_disabled case=%s (DDKIT_PUBMED_ON_DOSSIER=0)", case_id)
 
                 # ── Run DossierReportGenerator ────────────────────────────────────
+                if self.ddkit_db.is_configured():
+                    self.ddkit_db.update_report_status(report_id, tenant_id, case_id, "generating")
                 t0 = time.perf_counter()
                 generator = DossierReportGenerator(
                     vector_db_dir=temp_path / "databases" / "vector_dbs",

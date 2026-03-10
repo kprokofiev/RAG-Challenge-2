@@ -101,6 +101,17 @@ class DDKitDB:
             logger.warning("DDKit DB upsert_document_by_source_url failed: %s", exc)
             return None, False
 
+    def update_report_status(self, report_id: str, tenant_id: str, case_id: str, status: str) -> None:
+        """Update report status to an intermediate stage (building/indexing/generating)."""
+        self._exec(
+            """
+            INSERT INTO reports (id, tenant_id, case_id, title, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, updated_at=NOW()
+            """,
+            (report_id, tenant_id, case_id, f"Dossier — {case_id}", status)
+        )
+
     def update_report_published(self, report_id: str, tenant_id: str, case_id: str, title: str,
                                  s3_report_json_key: str, sections_plan_key: Optional[str] = None) -> None:
         self._exec(
