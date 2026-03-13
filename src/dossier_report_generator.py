@@ -18,9 +18,10 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -219,9 +220,18 @@ Extract structured clinical study cards from the provided context.
 IMPORTANT: Extract ALL studies present in the context, regardless of phase (Phase 1, 2, 3, 4, or NA).
 Do NOT filter to only Phase 2/3 studies. Include observational studies, Phase 1 PK studies, etc.
 
+CRITICAL — STUDY IDENTIFICATION:
+- The study_id field (NCT number or other registry ID) is MANDATORY for each study card.
+- If a study has an NCT ID (e.g., NCT12345678), you MUST extract it into study_id.
+- If no registry ID can be found for a study, set study_id to null — but be aware that
+  study cards without a study_id will be FILTERED OUT of the final dossier.
+- Do NOT create study cards from general clinical summaries, label text, or review articles
+  that describe overall drug efficacy without identifying specific individual studies.
+- Each study card must correspond to ONE specific clinical study/trial, not a summary of multiple studies.
+
 FOR EACH STUDY, extract:
 1. title: official study title or brief title
-2. registry_id: NCT number (e.g., NCT12345678) or other registry ID
+2. study_id: NCT number (e.g., NCT12345678) or other registry ID — REQUIRED, extract from URL or text
 3. phase: Phase 1, Phase 2, Phase 3, Phase 4, etc.
 4. study_type: interventional, observational, etc.
 5. enrollment: number of participants (integer)
@@ -397,6 +407,66 @@ def _ev_list(llm_list: List[_EvidencedValueLLM],
         if ev is not None:
             result.append(ev)
     return result
+
+
+# ── Sprint 12: Clinical study ID validation ──────────────────────────────────
+
+_NCT_PATTERN = re.compile(r"NCT\d{7,8}", re.IGNORECASE)
+
+# Doc kinds that can only enrich existing studies, NOT create standalone cards
+_ENRICHMENT_ONLY_DOC_KINDS = {"scientific_pmc", "scientific_pdf", "publication", "preprint"}
+
+# Doc kinds that are authoritative CTGov sources (can create study cards)
+_CTGOV_DOC_KINDS = {"ctgov_protocol", "ctgov_results", "ctgov", "ctgov_documents", "trial_registry"}
+
+
+def _is_valid_clinical_card(study: "DossierClinicalStudy") -> bool:
+    """Sprint 12 WS1: A study card is valid for final output only if it has a study_id.
+
+    Cards without study_id are noise — typically extracted from label summaries,
+    review text, or mixed clinical context that doesn't identify a specific trial.
+    """
+    if study.study_id is None:
+        return False
+    if study.study_id.value is None:
+        return False
+    val = str(study.study_id.value).strip()
+    if not val:
+        return False
+    return True
+
+
+def _extract_nct_ids_from_corpus(documents_dir: Path) -> Set[str]:
+    """Sprint 12 WS1: Pre-scan corpus for NCT IDs to build a study candidate registry.
+
+    Scans all chunk JSON files in the documents directory for NCT\\d{7,8} patterns.
+    Returns a set of unique NCT IDs found in the corpus.
+    """
+    nct_ids: Set[str] = set()
+    for doc_path in documents_dir.glob("*.json"):
+        try:
+            with open(doc_path, encoding="utf-8") as f:
+                doc = json.load(f)
+            # Check metainfo for source_url with NCT
+            meta = doc.get("metainfo", {})
+            source_url = meta.get("source_url", "")
+            if source_url:
+                for m in _NCT_PATTERN.finditer(source_url):
+                    nct_ids.add(m.group(0).upper())
+            # Check title
+            title = meta.get("title", "")
+            if title:
+                for m in _NCT_PATTERN.finditer(title):
+                    nct_ids.add(m.group(0).upper())
+            # Scan text content (first 5000 chars of each page to avoid too much scanning)
+            pages = doc.get("content", {}).get("pages", [])
+            for page in pages:
+                text = page.get("text", "")[:5000]
+                for m in _NCT_PATTERN.finditer(text):
+                    nct_ids.add(m.group(0).upper())
+        except Exception:
+            continue
+    return nct_ids
 
 
 # ── DossierReportGenerator ────────────────────────────────────────────────────
@@ -828,14 +898,35 @@ class DossierReportGenerator:
         return deduped
 
     def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
-        """Generate structured clinical study cards."""
+        """Generate structured clinical study cards.
+
+        Sprint 12 WS1: Semantic cleanup —
+        1. Prioritize CTGov sources for retrieval (authoritative study data)
+        2. Include publications only as enrichment context (not standalone card generators)
+        3. Validate: only cards with study_id pass into final output
+        4. PubMed-derived cards without linkage to an NCT ID are filtered out
+        """
+        # Sprint 12: Pre-scan corpus for NCT IDs to know what studies exist
+        corpus_nct_ids = _extract_nct_ids_from_corpus(self.documents_dir)
+        if corpus_nct_ids:
+            logger.info(
+                "clinical_nct_prescan found %d NCT IDs in corpus: %s",
+                len(corpus_nct_ids), sorted(corpus_nct_ids)[:10],
+            )
+
+        # Sprint 12: Prioritize CTGov doc_kinds first, publications as supplementary
+        # Retrieval still includes publications for enrichment context,
+        # but the prompt now emphasizes per-study NCT-based extraction
         clinical_doc_kinds = [
-            "ctgov_protocol", "ctgov_results", "ctgov", "trial_registry",
+            "ctgov_protocol", "ctgov_results", "ctgov", "ctgov_documents",
+            "trial_registry",
             "scientific_pmc", "scientific_pdf", "publication",
         ]
         question = (
             f"For {self.inn}: list ALL clinical studies found in the context, regardless of phase. "
             "Include Phase 1, Phase 2, Phase 3, Phase 4, and studies with no phase specified. "
+            "IMPORTANT: Each study card MUST correspond to ONE specific clinical trial with a registry ID "
+            "(NCT number preferred). Do NOT create study cards from general drug summaries or label text. "
             "For each: NCT ID, trial name, phase, study type (RCT/non-RCT/obs), "
             "enrollment N, countries, comparator, dosing regimen, primary endpoint result, conclusion, status."
         )
@@ -864,6 +955,7 @@ class DossierReportGenerator:
             return []
 
         studies: List[DossierClinicalStudy] = []
+        filtered_no_id_count = 0
         am = alias_map
         for i, study_llm in enumerate(result.studies):
             ev_refs: List[str] = []
@@ -902,12 +994,38 @@ class DossierReportGenerator:
                 conclusion=conclusion, status=status,
                 evidence_refs=list(set(ev_refs)),
             )
+
+            # Sprint 12 WS1: Validation gate — reject cards without study_id
+            if not _is_valid_clinical_card(study):
+                filtered_no_id_count += 1
+                card_desc = (title.value if title and title.value else f"study_card_{i}")
+                logger.info(
+                    "clinical_card_filtered_no_id inn=%s card=%s — no study_id, excluded from final output",
+                    self.inn, str(card_desc)[:60],
+                )
+                continue
+
             studies.append(study)
+
+        # Sprint 12: Log filtering summary
+        if filtered_no_id_count > 0:
+            logger.info(
+                "clinical_study_filter inn=%s total_extracted=%d passed=%d filtered_no_id=%d",
+                self.inn, len(result.studies), len(studies), filtered_no_id_count,
+            )
+            self._add_unknown(
+                unknowns, "clinical_studies[*].filtered_no_study_id",
+                "NO_EVIDENCE_IN_CORPUS",
+                f"{filtered_no_id_count} study card(s) were extracted but lacked a study_id "
+                "(NCT number or registry ID). These were filtered out per Sprint 12 semantic integrity rules. "
+                "They likely came from label text or general clinical summaries, not from specific trial data.",
+                "Ensure per-study CTGov protocol/results pages are attached (not just aggregate search pages).",
+            )
 
         if not studies:
             self._add_unknown(
                 unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
-                "All extracted study cards lacked linked evidence; see individual unknowns above.",
+                "All extracted study cards lacked study_id or linked evidence; see individual unknowns above.",
             )
         return studies
 
