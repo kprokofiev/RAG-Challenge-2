@@ -652,6 +652,13 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         filled_ev_values_legacy / max(total_ev_values, 1) * 100, 1
     )
 
+    # Sprint 12: All clinical studies now have study_id (WS1 gate).
+    # Count studies with study_id for backward compat transparency.
+    studies_with_id = sum(
+        1 for cs in report.clinical_studies
+        if cs.study_id and cs.study_id.value
+    )
+
     return {
         "passport_pct": passport_pct,
         "passport_total_fields": pp_total,
@@ -661,7 +668,10 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         "regions_with_data": regions_with_data,
         "has_empty_registrations": has_empty_registrations,
         "clinical_pct": clinical_pct,
+        "clinical_studies_total": len(report.clinical_studies),
+        "clinical_studies_with_id": studies_with_id,
         "patents_pct": patent_pct,
+        "patent_families_total": len(report.patent_families),
         "synthesis_pct": synth_pct,
         "chemistry_filled": chemistry_filled,
         "evidence_coverage_pct": evidence_coverage_pct,
@@ -1124,11 +1134,27 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
 
     notes: List[str] = []
     if ctx_count > 1:
-        notes.append(f"Multiple product contexts detected: {ctx_count}")
+        # Sprint 12 WS2: differentiate registration-confirmed vs evidence-based contexts
+        if evidence_only_ctx > 0:
+            notes.append(
+                f"Product contexts: {reg_confirmed_ctx} registration-confirmed, "
+                f"{evidence_only_ctx} evidence-based (not registration-confirmed)"
+            )
+        else:
+            notes.append(f"Multiple product contexts detected: {ctx_count}")
     if patents_legal_pct < 1.0 and total_families > 0:
         notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
+    if total_families == 0:
+        # Sprint 12 WS3: Explicit note when patent_families is empty
+        notes.append(
+            "patent_families=[] — no minimally valid patent families in corpus. "
+            "For off-patent drugs this is expected; for on-patent drugs check EPO OPS/patent sources."
+        )
     if n_studies > 0 and clinical_cov < 0.5:
         notes.append(f"clinical_field_completeness={round(clinical_cov*100,1)}% — many meta-fields (status/countries/conclusion) are empty")
+    # Sprint 12 WS1: Note about study_id gate
+    if n_studies > 0:
+        notes.append(f"clinical_studies: all {n_studies} have study_id (Sprint 12 WS1 gate applied)")
 
     return DossierQualityV2(
         coverage=coverage,
