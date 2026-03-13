@@ -469,6 +469,68 @@ def _extract_nct_ids_from_corpus(documents_dir: Path) -> Set[str]:
     return nct_ids
 
 
+# ── Sprint 12 WS3: Patent family validation ──────────────────────────────────
+
+# Patterns that indicate synthetic/empty patent family shells
+_SYNTHETIC_PATENT_PATTERNS = [
+    "no families found",
+    "no patent families",
+    "no patents found",
+    "not found",
+    "no relevant patents",
+    "no active patents",
+    "off-patent",
+    "expired patent",
+    "patent expired",
+]
+
+
+def _is_synthetic_patent_family(family: "DossierPatentFamily") -> bool:
+    """Sprint 12 WS3: Detect synthetic empty shell patent families.
+
+    These are families created by the LLM with a family_id like
+    "ibuprofen (EPO OPS: no families found)" that contain no real data.
+    """
+    fid = (family.family_id or "").lower()
+    for pattern in _SYNTHETIC_PATENT_PATTERNS:
+        if pattern in fid:
+            return True
+    return False
+
+
+def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
+    """Sprint 12 WS3: Check if a patent family has minimum viable content.
+
+    A family must have at least:
+    - representative_pub OR priority_date (basic identification)
+    AND at least one of:
+    - assignees (who owns it)
+    - summary (what it covers)
+    - what_blocks (what it protects)
+
+    Without this minimum, the family is just an empty shell and should not
+    appear in the final dossier as if it's usable IP information.
+    """
+    # Check synthetic patterns first
+    if _is_synthetic_patent_family(family):
+        return False
+
+    # Must have basic identification
+    has_pub = family.representative_pub and family.representative_pub.value
+    has_priority = family.priority_date and family.priority_date.value
+    if not (has_pub or has_priority):
+        return False
+
+    # Must have at least one content field
+    has_assignees = bool(family.assignees)
+    has_summary = family.summary and family.summary.value
+    has_blocks = family.what_blocks and family.what_blocks.value
+    if not (has_assignees or has_summary or has_blocks):
+        return False
+
+    return True
+
+
 # ── DossierReportGenerator ────────────────────────────────────────────────────
 
 class DossierReportGenerator:
@@ -1073,6 +1135,8 @@ class DossierReportGenerator:
             return []
 
         families: List[DossierPatentFamily] = []
+        filtered_synthetic = 0
+        filtered_minimal = 0
         am = alias_map
         for fam_llm in result.families:
             ev_refs: List[str] = []
@@ -1110,16 +1174,6 @@ class DossierReportGenerator:
                 )
                 continue
 
-            # Expiry without data → warn in unknowns
-            if not expiry:
-                self._add_unknown(
-                    unknowns, f"patent_families[{family_id}].expiry_by_country",
-                    "LEGAL_STATUS_NOT_AVAILABLE",
-                    f"Patent expiry dates not found in corpus for family {family_id}. "
-                    "Legal status data requires EPO Register or OrangeBook integration.",
-                    "Integrate EPO Register API (eporegister.go) or OrangeBook service."
-                )
-
             fam = DossierPatentFamily(
                 family_id=family_id,
                 representative_pub=rep,
@@ -1132,7 +1186,65 @@ class DossierReportGenerator:
                 key_docs=key_docs,
                 evidence_refs=list(set(ev_refs)),
             )
+
+            # Sprint 12 WS3: Reject synthetic empty families
+            if _is_synthetic_patent_family(fam):
+                filtered_synthetic += 1
+                logger.info(
+                    "patent_family_filtered_synthetic inn=%s family_id=%s — synthetic shell detected",
+                    self.inn, family_id[:60],
+                )
+                continue
+
+            # Sprint 12 WS3: Reject minimally-invalid families
+            if not _is_minimally_valid_patent_family(fam):
+                filtered_minimal += 1
+                logger.info(
+                    "patent_family_filtered_minimal inn=%s family_id=%s — lacks minimum viable content "
+                    "(needs representative_pub/priority_date + assignees/summary/what_blocks)",
+                    self.inn, family_id[:60],
+                )
+                continue
+
+            # Expiry without data → warn in unknowns
+            if not expiry:
+                self._add_unknown(
+                    unknowns, f"patent_families[{family_id}].expiry_by_country",
+                    "LEGAL_STATUS_NOT_AVAILABLE",
+                    f"Patent expiry dates not found in corpus for family {family_id}. "
+                    "Legal status data requires EPO Register or OrangeBook integration.",
+                    "Integrate EPO Register API (eporegister.go) or OrangeBook service."
+                )
+
             families.append(fam)
+
+        # Sprint 12 WS3: Log filtering summary
+        if filtered_synthetic + filtered_minimal > 0:
+            logger.info(
+                "patent_family_filter inn=%s total_extracted=%d passed=%d "
+                "filtered_synthetic=%d filtered_minimal=%d",
+                self.inn, len(result.families), len(families),
+                filtered_synthetic, filtered_minimal,
+            )
+            if filtered_synthetic > 0:
+                self._add_unknown(
+                    unknowns, "patent_families[*].discovery",
+                    "PATENT_DISCOVERY_GAP",
+                    f"{filtered_synthetic} patent family shell(s) were synthetic placeholders "
+                    f"(e.g., '{self.inn} (EPO OPS: no families found)'). "
+                    "These indicate empty discovery, not real patent families. "
+                    "Filtered out per Sprint 12 semantic integrity rules.",
+                    "For off-patent drugs, empty patent_families is the honest state. "
+                    "For on-patent drugs, verify EPO OPS search or add manual patent sources."
+                )
+            if filtered_minimal > 0:
+                self._add_unknown(
+                    unknowns, "patent_families[*].minimal_validity",
+                    "NO_EVIDENCE_IN_CORPUS",
+                    f"{filtered_minimal} patent family(ies) lacked minimum viable content "
+                    "(no representative_pub/priority_date or no assignees/summary/what_blocks). "
+                    "Filtered out to prevent empty shells from appearing as usable IP data.",
+                )
 
         return families
 
