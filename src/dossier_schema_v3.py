@@ -830,14 +830,36 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
     else:
         context_integrity = "YELLOW" if ctx_count <= 3 else "RED"
 
-    # Registrations primary docs
-    regs_with_docs = sum(1 for r in report.registrations if r.primary_docs)
-    if regs_with_docs >= len(report.registrations) and report.registrations:
+    # WS2-P0: Registrations readiness — must check status, mah, identifiers,
+    # AND primary_docs.  primary_docs alone is NOT sufficient for GREEN.
+    # A registration without status/mah is essentially unverified.
+    def _reg_field_ok(ev_val) -> bool:
+        return ev_val is not None and ev_val.value is not None and bool(ev_val.evidence_refs)
+
+    regs_complete = 0  # has status + mah + identifiers + primary_docs
+    regs_partial = 0   # has some but not all
+    for r in report.registrations:
+        has_status = _reg_field_ok(r.status)
+        has_mah = _reg_field_ok(r.mah)
+        has_ids = bool(r.identifiers) and any(
+            i.value is not None and bool(i.evidence_refs) for i in r.identifiers
+        )
+        has_docs = bool(r.primary_docs)
+        filled = sum([has_status, has_mah, has_ids, has_docs])
+        if filled >= 3:  # at least status + mah + one of (ids, docs)
+            regs_complete += 1
+        elif filled >= 1:
+            regs_partial += 1
+
+    total_regs = len(report.registrations)
+    if total_regs == 0:
+        registrations_gate = "YELLOW"  # no registrations at all
+    elif regs_complete >= total_regs:
         registrations_gate = "GREEN"
-    elif regs_with_docs > 0:
+    elif regs_complete > 0 or regs_partial > 0:
         registrations_gate = "YELLOW"
     else:
-        registrations_gate = "RED" if report.registrations else "YELLOW"
+        registrations_gate = "RED"
 
     decision_readiness = {
         "registrations": registrations_gate,
