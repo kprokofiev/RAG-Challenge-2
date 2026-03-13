@@ -544,17 +544,52 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         for r in report.registrations
     )
 
-    # Clinical coverage
-    clinical_pct = round(
-        sum(1 for cs in report.clinical_studies if cs.evidence_refs) / max(len(report.clinical_studies), 1) * 100,
-        1
-    ) if report.clinical_studies else 0.0
+    # WS5-P0: Clinical coverage — measure per-study field completeness, not just evidence presence.
+    # A study card with evidence but null status/countries/conclusion should NOT be 100%.
+    # 6 key meta-fields per study: study_id, phase, status, n_enrolled, countries, conclusion
+    _CLINICAL_META_FIELDS = 6
+    if report.clinical_studies:
+        study_scores = []
+        for cs in report.clinical_studies:
+            filled = 0
+            if cs.study_id and cs.study_id.value:
+                filled += 1
+            if cs.phase and cs.phase.value:
+                filled += 1
+            if cs.status and cs.status.value:
+                filled += 1
+            if cs.n_enrolled and cs.n_enrolled.value:
+                filled += 1
+            if cs.countries:
+                filled += 1
+            if cs.conclusion and cs.conclusion.value:
+                filled += 1
+            study_scores.append(filled / _CLINICAL_META_FIELDS)
+        clinical_pct = round(sum(study_scores) / len(study_scores) * 100, 1)
+    else:
+        clinical_pct = 0.0
 
-    # Patents coverage
-    patent_pct = round(
-        sum(1 for pf in report.patent_families if pf.evidence_refs) / max(len(report.patent_families), 1) * 100,
-        1
-    ) if report.patent_families else 0.0
+    # WS5-P0: Patents coverage — measure per-family field completeness, not just evidence presence.
+    # Key fields: representative_pub, priority_date, assignees, what_blocks, expiry_by_country
+    _PATENT_KEY_FIELDS = 5
+    if report.patent_families:
+        fam_scores = []
+        for pf in report.patent_families:
+            filled = 0
+            if pf.representative_pub and pf.representative_pub.value:
+                filled += 1
+            if pf.priority_date and pf.priority_date.value:
+                filled += 1
+            if pf.assignees:
+                filled += 1
+            if pf.what_blocks and pf.what_blocks.value:
+                filled += 1
+            if pf.expiry_by_country:
+                filled += 1
+            fam_scores.append(filled / _PATENT_KEY_FIELDS)
+        patent_pct = round(sum(fam_scores) / len(fam_scores) * 100, 1)
+    else:
+        patent_pct = 0.0
 
     # Synthesis coverage
     synth_pct = round(
@@ -861,8 +896,31 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
     else:
         registrations_gate = "RED"
 
+    # WS5-P0: Clinical readiness — studies with empty meta-fields should not be GREEN
+    clinical_cov = coverage.get("clinical", 0)
+    n_studies = len(report.clinical_studies)
+    if n_studies == 0:
+        clinical_gate = "RED"
+    elif clinical_cov >= 0.6:
+        clinical_gate = "GREEN"
+    elif clinical_cov >= 0.3:
+        clinical_gate = "YELLOW"
+    else:
+        clinical_gate = "RED"
+
+    # WS5-P0: Patents discovery vs legal — separate gates
+    patents_cov = coverage.get("patents", 0)
+    if total_families == 0:
+        patents_discovery_gate = "RED"
+    elif patents_cov >= 0.6:
+        patents_discovery_gate = "GREEN"
+    else:
+        patents_discovery_gate = "YELLOW"
+
     decision_readiness = {
         "registrations": registrations_gate,
+        "clinical": clinical_gate,
+        "patents_discovery": patents_discovery_gate,
         "patents_legal": patents_legal,
         "context_integrity": context_integrity,
     }
@@ -881,12 +939,22 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
             "count": no_doc_unknowns,
             "impact": "registrations may be incomplete",
         })
+    # WS5-P0: Flag clinical meta-field gaps as critical unknown
+    no_ev_unknowns = reason_dist.get("NO_EVIDENCE_IN_CORPUS", 0)
+    if n_studies > 0 and clinical_cov < 0.5:
+        critical_unknowns.append({
+            "reason_code": "CLINICAL_META_FIELDS_INCOMPLETE",
+            "count": n_studies,
+            "impact": f"clinical={clinical_gate}, clinical_coverage={round(clinical_cov*100,1)}%",
+        })
 
     notes: List[str] = []
     if ctx_count > 1:
         notes.append(f"Multiple product contexts detected: {ctx_count}")
     if patents_legal_pct < 1.0 and total_families > 0:
         notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
+    if n_studies > 0 and clinical_cov < 0.5:
+        notes.append(f"clinical_field_completeness={round(clinical_cov*100,1)}% — many meta-fields (status/countries/conclusion) are empty")
 
     return DossierQualityV2(
         coverage=coverage,
