@@ -272,6 +272,12 @@ CRITICAL RULES:
 - Every field with a value MUST have at least one evidence alias
 - If data is missing for a family, still include the family with available fields
 - Group publications into families by INPADOC family_id when available
+- For representative_pub: ALWAYS extract the publication number (e.g. EP1234567, WO2005/123456, US7654321)
+  from the evidence text. Do NOT leave it null if any publication number is mentioned.
+- For assignees: extract ALL assignee/applicant/owner names found in the evidence for this family.
+  Do NOT return an empty list if assignee names appear in the evidence text.
+- For summary: derive from the patent title or abstract text in the evidence. Set null ONLY if
+  no title/abstract text exists in any evidence candidate for this family.
 """.strip()
 
 _SYNTHESIS_INSTRUCTION = """
