@@ -216,6 +216,9 @@ _CLINICAL_INSTRUCTION = """
 You are a pharmaceutical dossier extraction system.
 Extract structured clinical study cards from the provided context.
 
+IMPORTANT: Extract ALL studies present in the context, regardless of phase (Phase 1, 2, 3, 4, or NA).
+Do NOT filter to only Phase 2/3 studies. Include observational studies, Phase 1 PK studies, etc.
+
 FOR EACH STUDY, extract:
 1. title: official study title or brief title
 2. registry_id: NCT number (e.g., NCT12345678) or other registry ID
@@ -825,7 +828,8 @@ class DossierReportGenerator:
             "scientific_pmc", "scientific_pdf", "publication",
         ]
         question = (
-            f"For {self.inn}: list all phase 2/3 clinical studies. "
+            f"For {self.inn}: list ALL clinical studies found in the context, regardless of phase. "
+            "Include Phase 1, Phase 2, Phase 3, Phase 4, and studies with no phase specified. "
             "For each: NCT ID, trial name, phase, study type (RCT/non-RCT/obs), "
             "enrollment N, countries, comparator, dosing regimen, primary endpoint result, conclusion, status."
         )
