@@ -672,7 +672,7 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     }
 
 
-# ── Sprint 7.5: Product context builder ──────────────────────────────────────
+# ── Sprint 7.5 + Sprint 12: Product context builder ──────────────────────────
 
 def _context_id(region: str, route: str, form: str, strength: str, mah: str) -> str:
     """Deterministic context_id from normalized fields."""
@@ -680,21 +680,131 @@ def _context_id(region: str, route: str, form: str, strength: str, mah: str) -> 
     return "ctx_" + hashlib.md5(key.encode()).hexdigest()[:12]
 
 
+# Sprint 12 WS2: Route family normalization for context candidates
+_ROUTE_FAMILIES = {
+    "oral": {"oral", "po", "per os", "by mouth", "sublingual", "buccal"},
+    "injectable": {"iv", "intravenous", "im", "intramuscular", "sc", "subcutaneous",
+                   "injection", "infusion", "parenteral"},
+    "topical": {"topical", "cutaneous", "dermal", "transdermal", "patch"},
+    "inhalation": {"inhalation", "inhaled", "nasal", "intranasal", "pulmonary"},
+    "ophthalmic": {"ophthalmic", "eye", "ocular"},
+    "rectal": {"rectal", "suppository"},
+}
+
+# Sprint 12 WS2: Dosage form family normalization
+_FORM_FAMILIES = {
+    "tablet": {"tablet", "tab", "film-coated tablet", "enteric-coated tablet",
+               "chewable tablet", "dispersible tablet", "effervescent tablet",
+               "modified-release tablet", "extended-release tablet"},
+    "capsule": {"capsule", "cap", "softgel", "soft capsule", "hard capsule",
+                "liquid filled capsule", "modified-release capsule"},
+    "solution": {"solution", "oral solution", "syrup", "elixir", "drops",
+                 "oral suspension", "suspension"},
+    "injection": {"injection", "solution for injection", "powder for injection",
+                  "infusion", "concentrate for infusion"},
+    "cream_ointment": {"cream", "ointment", "gel", "paste", "emulsion"},
+    "suppository": {"suppository", "rectal"},
+    "patch": {"patch", "transdermal patch", "transdermal system"},
+    "inhaler": {"inhaler", "nebuliser", "nebulizer", "metered dose"},
+}
+
+
+def _normalize_route_family(text: str) -> Optional[str]:
+    """Sprint 12 WS2: Map a route description to a normalized family."""
+    text_lower = text.lower().strip()
+    for family, keywords in _ROUTE_FAMILIES.items():
+        for kw in keywords:
+            if kw in text_lower:
+                return family
+    return None
+
+
+def _normalize_form_family(text: str) -> Optional[str]:
+    """Sprint 12 WS2: Map a dosage form description to a normalized family."""
+    text_lower = text.lower().strip()
+    for family, keywords in _FORM_FAMILIES.items():
+        for kw in keywords:
+            if kw in text_lower:
+                return family
+    return None
+
+
+def _collect_evidence_context_signals(
+    evidence_registry: List[DossierEvidence],
+    registrations: List[DossierRegistration],
+) -> List[Dict[str, Any]]:
+    """Sprint 12 WS2: Collect context candidate signals from evidence beyond registrations.
+
+    Scans evidence snippets for form/route signals that may not be in registrations[].
+    Returns list of dicts with: source_type, region, route_family, form_family, evidence_refs.
+    This is used to detect additional product contexts (e.g., injectable vs oral) that
+    registrations alone may not capture.
+    """
+    import re as _re
+
+    # Regions already covered by registrations
+    reg_regions = {(r.region or "").upper().strip() for r in registrations}
+
+    # Doc kinds that hint at regions
+    _REGION_DOC_KINDS = {
+        "smpc": "EU", "epar": "EU", "pil": "EU", "assessment_report": "EU",
+        "label": "US", "us_fda": "US",
+        "grls_card": "RU", "grls": "RU", "ru_instruction": "RU",
+    }
+
+    signals: List[Dict[str, Any]] = []
+    seen_combos: set = set()
+
+    for ev in evidence_registry:
+        snippet_lower = (ev.snippet or "").lower()
+
+        # Detect region from doc_kind
+        region = _REGION_DOC_KINDS.get(ev.doc_kind, "")
+
+        # Detect route family from snippet
+        route_family = _normalize_route_family(snippet_lower)
+
+        # Detect form family from snippet
+        form_family = _normalize_form_family(snippet_lower)
+
+        if not (route_family or form_family):
+            continue
+
+        combo = (region, route_family or "", form_family or "")
+        if combo in seen_combos:
+            continue
+        seen_combos.add(combo)
+
+        signals.append({
+            "source_type": ev.doc_kind or "unknown",
+            "region": region,
+            "route_family": route_family,
+            "form_family": form_family,
+            "evidence_refs": [ev.evidence_id],
+        })
+
+    return signals
+
+
 def build_product_contexts(
     registrations: List[DossierRegistration],
     evidence_registry: List[DossierEvidence],
 ) -> List[ProductContext]:
     """
-    Sprint 7.5 TZ-1: Build product_contexts from registrations.
+    Sprint 7.5 TZ-1 + Sprint 12 WS2: Build product_contexts from registrations + evidence signals.
 
-    Groups registrations by (region, route, form, strength, mah) → ProductContext.
-    Assigns context_id to each registration and builds primary_docs from evidence.
+    Phase 1 (Sprint 7.5): Groups registrations by (region, route, form, strength, mah) → ProductContext.
+    Phase 2 (Sprint 12): Scans evidence for additional form/route signals not in registrations.
+    Creates weak/partial context notices for evidence-based signals that don't match existing contexts.
     """
+    _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
+                        "us_fda", "approval_letter", "pil", "assessment_report"}
+
     ctx_map: Dict[str, ProductContext] = {}
 
+    # ── Phase 1: Registration-driven contexts (existing logic) ────────────────
     for reg in registrations:
         region = (reg.region or "").strip().upper()
-        # Extract form/strength/mah values
         forms = []
         for fs in reg.forms_strengths:
             if fs.value:
@@ -704,7 +814,6 @@ def build_product_contexts(
         if reg.mah and reg.mah.value:
             mah_val = str(reg.mah.value)
 
-        # For MVP: one context per registration (region + mah + forms combo)
         form_str = "; ".join(sorted(forms)) if forms else ""
         ctx = _context_id(region, "", form_str, "", mah_val)
 
@@ -716,11 +825,8 @@ def build_product_contexts(
                 label_parts.append(mah_val[:40])
             label = " - ".join(label_parts)
 
-            # Build primary_docs from evidence refs
             primary_docs: List[PrimaryDoc] = []
             seen_doc_ids: set = set()
-            _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
-                                "us_fda", "approval_letter", "pil", "assessment_report"}
             for ev_id in reg.evidence_refs:
                 for ev in evidence_registry:
                     if ev.evidence_id == ev_id and ev.doc_id not in seen_doc_ids:
@@ -747,7 +853,6 @@ def build_product_contexts(
                 evidence_refs=list(reg.evidence_refs),
             )
         else:
-            # Merge identifiers + evidence_refs
             existing = ctx_map[ctx]
             for i in reg.identifiers:
                 if i.value and i.value not in existing.identifiers:
@@ -756,13 +861,9 @@ def build_product_contexts(
                 if ref not in existing.evidence_refs:
                     existing.evidence_refs.append(ref)
 
-        # Assign context_id to registration
         reg.context_id = ctx
 
-        # Also populate registration primary_docs from evidence if empty
         if not reg.primary_docs:
-            _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
-                                "us_fda", "approval_letter", "pil", "assessment_report"}
             seen: set = set()
             for ev_id in reg.evidence_refs:
                 for ev in evidence_registry:
@@ -775,6 +876,69 @@ def build_product_contexts(
                                 title=ev.title,
                             ))
                             seen.add(ev.doc_id)
+
+    # ── Phase 2 (Sprint 12 WS2): Evidence-based context enrichment ───────────
+    # Collect signals from evidence that may indicate additional product forms/routes
+    evidence_signals = _collect_evidence_context_signals(evidence_registry, registrations)
+
+    # Check if any signal represents a form/route not already captured
+    existing_form_families: set = set()
+    existing_route_families: set = set()
+    for ctx_obj in ctx_map.values():
+        for form in ctx_obj.dosage_forms:
+            fam = _normalize_form_family(form)
+            if fam:
+                existing_form_families.add(fam)
+        if ctx_obj.route:
+            rfam = _normalize_route_family(ctx_obj.route)
+            if rfam:
+                existing_route_families.add(rfam)
+
+    for signal in evidence_signals:
+        route_fam = signal.get("route_family")
+        form_fam = signal.get("form_family")
+        region = signal.get("region", "")
+
+        # Only create a context notice if it's a genuinely new form/route family
+        is_new_route = route_fam and route_fam not in existing_route_families
+        is_new_form = form_fam and form_fam not in existing_form_families
+
+        if not (is_new_route or is_new_form):
+            continue
+
+        # Create a weak/evidence-based context (not registration-grade)
+        form_desc = form_fam or ""
+        route_desc = route_fam or ""
+        ctx = _context_id(region or "EVIDENCE", route_desc, form_desc, "", "")
+
+        if ctx in ctx_map:
+            continue
+
+        label_parts = []
+        if region:
+            label_parts.append(region)
+        label_parts.append(f"{form_fam or '?'} ({route_fam or '?'})")
+        label_parts.append("[evidence-based, not registration-confirmed]")
+        label = " - ".join(label_parts)
+
+        ctx_map[ctx] = ProductContext(
+            context_id=ctx,
+            label=label,
+            region=region or None,
+            route=route_desc or None,
+            dosage_forms=[form_fam] if form_fam else [],
+            strengths=[],
+            mah=None,
+            identifiers=[],
+            primary_docs=[],
+            evidence_refs=signal.get("evidence_refs", []),
+        )
+
+        # Track discovered families so we don't duplicate
+        if route_fam:
+            existing_route_families.add(route_fam)
+        if form_fam:
+            existing_form_families.add(form_fam)
 
     return list(ctx_map.values())
 
@@ -856,11 +1020,21 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
     else:
         patents_legal = "RED"
 
-    # Context integrity
+    # Context integrity (Sprint 12 WS2: evidence-based contexts tracked separately)
     ctx_count = len(report.product_contexts)
+    # Count registration-confirmed vs evidence-only contexts
+    reg_confirmed_ctx = sum(
+        1 for c in report.product_contexts
+        if "[evidence-based" not in (c.label or "")
+    )
+    evidence_only_ctx = ctx_count - reg_confirmed_ctx
     if ctx_count <= 1:
         context_integrity = "GREEN"
     elif all(r.context_id for r in report.registrations):
+        context_integrity = "GREEN"
+    elif evidence_only_ctx > 0 and reg_confirmed_ctx <= 1:
+        # Has evidence signals for other forms but only 1 registration → still GREEN
+        # (evidence-based contexts are informational, not conflicting)
         context_integrity = "GREEN"
     else:
         context_integrity = "YELLOW" if ctx_count <= 3 else "RED"
