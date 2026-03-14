@@ -959,136 +959,223 @@ class DossierReportGenerator:
 
         return deduped
 
-    def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
-        """Generate structured clinical study cards.
+    # ── Sprint 13 WS1: Per-study helpers ──────────────────────────────────────
 
-        Sprint 12 WS1: Semantic cleanup —
-        1. Prioritize CTGov sources for retrieval (authoritative study data)
-        2. Include publications only as enrichment context (not standalone card generators)
-        3. Validate: only cards with study_id pass into final output
-        4. PubMed-derived cards without linkage to an NCT ID are filtered out
+    def _retrieve_clinical_evidence_for_study(
+        self, nct_id: str, top_k: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """Sprint 13 WS1: Retrieve evidence scoped to a single NCT study.
+
+        Uses the NCT ID as the primary query anchor so that FAISS retrieval
+        returns chunks most relevant to THIS specific study, not the drug broadly.
+        Primary doc_kinds: ctgov_protocol/ctgov_results/ctgov/ctgov_documents.
+        Secondary (enrichment): publication/scientific_pmc/scientific_pdf.
         """
-        # Sprint 12: Pre-scan corpus for NCT IDs to know what studies exist
-        corpus_nct_ids = _extract_nct_ids_from_corpus(self.documents_dir)
-        if corpus_nct_ids:
-            logger.info(
-                "clinical_nct_prescan found %d NCT IDs in corpus: %s",
-                len(corpus_nct_ids), sorted(corpus_nct_ids)[:10],
-            )
+        primary_kinds = list(_CTGOV_DOC_KINDS)
+        enrichment_kinds = list(_ENRICHMENT_ONLY_DOC_KINDS)
+        all_kinds = primary_kinds + enrichment_kinds
 
-        # Sprint 12: Prioritize CTGov doc_kinds first, publications as supplementary
-        # Retrieval still includes publications for enrichment context,
-        # but the prompt now emphasizes per-study NCT-based extraction
-        clinical_doc_kinds = [
-            "ctgov_protocol", "ctgov_results", "ctgov", "ctgov_documents",
-            "trial_registry",
-            "scientific_pmc", "scientific_pdf", "publication",
-        ]
         question = (
-            f"For {self.inn}: list ALL clinical studies found in the context, regardless of phase. "
-            "Include Phase 1, Phase 2, Phase 3, Phase 4, and studies with no phase specified. "
-            "IMPORTANT: Each study card MUST correspond to ONE specific clinical trial with a registry ID "
-            "(NCT number preferred). Do NOT create study cards from general drug summaries or label text. "
-            "For each: NCT ID, trial name, phase, study type (RCT/non-RCT/obs), "
-            "enrollment N, countries, comparator, dosing regimen, primary endpoint result, conclusion, status."
+            f"Clinical study {nct_id} for {self.inn}: "
+            f"extract study title, phase, type, enrollment, countries, "
+            f"comparator, dosing, primary endpoint, results, status, conclusion."
         )
-        retrieved = self._retrieve(question, clinical_doc_kinds, top_k=55)
-        if not retrieved:
-            self._add_unknown(
-                unknowns, "clinical_studies[*]", "NO_DOCUMENT_IN_CORPUS",
-                f"No clinical documents (CTGov/publications) indexed for {self.inn}.",
-                "Ensure CTGov protocol/results pages are in the corpus."
-            )
-            return []
+        return self._retrieve(question, all_kinds, top_k=top_k)
 
-        candidates_map = self._candidates_map(retrieved)
-        context = self._context_str(retrieved)
+    def _assemble_single_clinical_study(
+        self,
+        nct_id: str,
+        retrieved: List[Dict[str, Any]],
+        unknowns: List[DossierUnknown],
+    ) -> Optional[DossierClinicalStudy]:
+        """Sprint 13 WS1: Assemble one DossierClinicalStudy from study-scoped evidence.
+
+        Filters retrieved chunks to prefer those mentioning the specific NCT ID,
+        then calls LLM to extract exactly ONE study card.
+        Returns None if extraction fails or card lacks evidence.
+        """
+        # Partition: chunks mentioning this NCT vs general clinical
+        nct_upper = nct_id.upper()
+        scoped = [r for r in retrieved if nct_upper in (r.get("text", "") + r.get("doc_title", "")).upper()]
+        other = [r for r in retrieved if r not in scoped]
+
+        # Build evidence from scoped first, then pad with general if needed
+        combined = scoped + other
+        if not combined:
+            return None
+
+        candidates_map = self._candidates_map(combined[:30])
+        context = self._context_str(combined[:20])
         alias_map, candidates_str = self._build_alias_map(candidates_map)
 
+        # Single-study extraction prompt
+        instruction = (
+            f"You are a pharmaceutical dossier extraction system.\n"
+            f"Extract EXACTLY ONE clinical study card for study {nct_id} ({self.inn}).\n\n"
+            f"IMPORTANT:\n"
+            f"- study_id MUST be set to \"{nct_id}\".\n"
+            f"- Extract fields ONLY from evidence that relates to this specific study.\n"
+            f"- Do NOT mix data from other studies into this card.\n"
+            f"- If a field cannot be found for this study specifically, set it to null.\n\n"
+            f"Extract: title, study_id, phase, study_type, n_enrolled, countries, "
+            f"comparator, regimen_dosing, efficacy_keypoints, conclusion, status.\n\n"
+            f"CRITICAL: Use ONLY evidence aliases (E1, E2, ...) from the candidates list.\n"
+            f"Every non-null field MUST include at least one evidence alias."
+        )
+        question = f"Extract clinical study card for {nct_id} ({self.inn})"
+
         result = self._call_llm(
-            _CLINICAL_INSTRUCTION, context, question, candidates_str, _ClinicalStudiesExtractLLM
+            instruction, context, question, candidates_str, _ClinicalStudiesExtractLLM
         )
 
         if result is None or not result.studies:
+            return None
+
+        # Take only the first study (we asked for exactly one)
+        study_llm = result.studies[0]
+        am = alias_map
+        ev_refs: List[str] = []
+
+        def _collect(ev_val: Optional[EvidencedValue]) -> Optional[EvidencedValue]:
+            if ev_val and ev_val.evidence_refs:
+                ev_refs.extend(ev_val.evidence_refs)
+            return ev_val
+
+        title = _collect(_ev_to_evidenced_value(study_llm.title, am))
+        study_id_ev = _collect(_ev_to_evidenced_value(study_llm.study_id, am))
+        phase = _collect(_ev_to_evidenced_value(study_llm.phase, am))
+        study_type = _collect(_ev_to_evidenced_value(study_llm.study_type, am))
+        n_enrolled = _collect(_ev_to_evidenced_value(study_llm.n_enrolled, am))
+        comparator = _collect(_ev_to_evidenced_value(study_llm.comparator, am))
+        regimen = _collect(_ev_to_evidenced_value(study_llm.regimen_dosing, am))
+        conclusion = _collect(_ev_to_evidenced_value(study_llm.conclusion, am))
+        status = _collect(_ev_to_evidenced_value(study_llm.status, am))
+        countries = _ev_list(study_llm.countries, am)
+        efficacy = _ev_list(study_llm.efficacy_keypoints, am)
+        for ev in countries + efficacy:
+            ev_refs.extend(ev.evidence_refs)
+
+        if not ev_refs:
+            return None
+
+        # Force study_id to the known NCT ID (deterministic, not LLM-dependent)
+        if study_id_ev is None or not study_id_ev.value:
+            # Use the known NCT ID with whatever evidence refs we have
+            study_id_ev = EvidencedValue(value=nct_id, evidence_refs=ev_refs[:1])
+
+        study = DossierClinicalStudy(
+            title=title, study_id=study_id_ev, phase=phase, study_type=study_type,
+            n_enrolled=n_enrolled, countries=countries, comparator=comparator,
+            regimen_dosing=regimen, efficacy_keypoints=efficacy,
+            conclusion=conclusion, status=status,
+            evidence_refs=list(set(ev_refs)),
+        )
+        return study
+
+    def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
+        """Generate structured clinical study cards.
+
+        Sprint 13 WS1: Per-study assembly pipeline —
+        1. Pre-scan corpus for NCT IDs (deterministic candidate list)
+        2. For each NCT ID: scoped retrieval → scoped LLM extraction → one card
+        3. Dedup by NCT ID
+        4. Only cards with study_id pass (enforced by construction)
+
+        This replaces the Sprint 12 approach of one global LLM call + post-hoc filtering.
+        Each study gets its own evidence bucket, preventing cross-study contamination.
+        """
+        # Step 1: Pre-scan corpus for NCT IDs
+        corpus_nct_ids = _extract_nct_ids_from_corpus(self.documents_dir)
+        logger.info(
+            "clinical_nct_prescan found %d NCT IDs in corpus: %s",
+            len(corpus_nct_ids), sorted(corpus_nct_ids)[:20],
+        )
+
+        if not corpus_nct_ids:
+            # Fallback: try a broad retrieval to find any clinical study mentions
+            clinical_doc_kinds = list(_CTGOV_DOC_KINDS) + list(_ENRICHMENT_ONLY_DOC_KINDS)
+            retrieved = self._retrieve(
+                f"Clinical studies for {self.inn}: NCT IDs, trial registry identifiers",
+                clinical_doc_kinds, top_k=30,
+            )
+            # Scan retrieved text for NCT IDs
+            for item in retrieved:
+                text = item.get("text", "")
+                for m in _NCT_PATTERN.finditer(text):
+                    corpus_nct_ids.add(m.group(0).upper())
+            if corpus_nct_ids:
+                logger.info(
+                    "clinical_nct_fallback_scan found %d NCT IDs from retrieval: %s",
+                    len(corpus_nct_ids), sorted(corpus_nct_ids)[:10],
+                )
+
+        if not corpus_nct_ids:
             self._add_unknown(
-                unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
-                f"Could not extract clinical study cards for {self.inn} from available documents.",
+                unknowns, "clinical_studies[*]", "NO_DOCUMENT_IN_CORPUS",
+                f"No clinical studies with NCT IDs found in corpus for {self.inn}.",
+                "Ensure CTGov protocol/results pages are attached to corpus."
             )
             return []
 
+        # Step 2: Per-study retrieval and assembly
+        sorted_nct_ids = sorted(corpus_nct_ids)  # deterministic order
         studies: List[DossierClinicalStudy] = []
-        filtered_no_id_count = 0
-        am = alias_map
-        for i, study_llm in enumerate(result.studies):
-            ev_refs: List[str] = []
+        seen_nct: set = set()
+        failed_nct: List[str] = []
 
-            def _collect(ev_val: Optional[EvidencedValue]) -> Optional[EvidencedValue]:
-                if ev_val and ev_val.evidence_refs:
-                    ev_refs.extend(ev_val.evidence_refs)
-                return ev_val
-
-            title = _collect(_ev_to_evidenced_value(study_llm.title, am))
-            study_id = _collect(_ev_to_evidenced_value(study_llm.study_id, am))
-            phase = _collect(_ev_to_evidenced_value(study_llm.phase, am))
-            study_type = _collect(_ev_to_evidenced_value(study_llm.study_type, am))
-            n_enrolled = _collect(_ev_to_evidenced_value(study_llm.n_enrolled, am))
-            comparator = _collect(_ev_to_evidenced_value(study_llm.comparator, am))
-            regimen = _collect(_ev_to_evidenced_value(study_llm.regimen_dosing, am))
-            conclusion = _collect(_ev_to_evidenced_value(study_llm.conclusion, am))
-            status = _collect(_ev_to_evidenced_value(study_llm.status, am))
-            countries = _ev_list(study_llm.countries, am)
-            efficacy = _ev_list(study_llm.efficacy_keypoints, am)
-            for ev in countries + efficacy:
-                ev_refs.extend(ev.evidence_refs)
-
-            if not ev_refs:
-                # Study card has no evidence at all → skip + log unknown
-                self._add_unknown(
-                    unknowns, f"clinical_studies[{i}].*", "NO_EVIDENCE_IN_CORPUS",
-                    "LLM extracted study card but could not link any evidence_ids.",
-                )
+        for nct_id in sorted_nct_ids:
+            nct_upper = nct_id.upper()
+            if nct_upper in seen_nct:
                 continue
 
-            study = DossierClinicalStudy(
-                title=title, study_id=study_id, phase=phase, study_type=study_type,
-                n_enrolled=n_enrolled, countries=countries, comparator=comparator,
-                regimen_dosing=regimen, efficacy_keypoints=efficacy,
-                conclusion=conclusion, status=status,
-                evidence_refs=list(set(ev_refs)),
-            )
+            retrieved = self._retrieve_clinical_evidence_for_study(nct_id, top_k=30)
+            if not retrieved:
+                failed_nct.append(nct_id)
+                logger.info("clinical_per_study_no_evidence nct=%s inn=%s", nct_id, self.inn)
+                continue
 
-            # Sprint 12 WS1: Validation gate — reject cards without study_id
+            study = self._assemble_single_clinical_study(nct_id, retrieved, unknowns)
+            if study is None:
+                failed_nct.append(nct_id)
+                logger.info("clinical_per_study_assembly_failed nct=%s inn=%s", nct_id, self.inn)
+                continue
+
+            # Validate: must have study_id (enforced by construction, but verify)
             if not _is_valid_clinical_card(study):
-                filtered_no_id_count += 1
-                card_desc = (title.value if title and title.value else f"study_card_{i}")
-                logger.info(
-                    "clinical_card_filtered_no_id inn=%s card=%s — no study_id, excluded from final output",
-                    self.inn, str(card_desc)[:60],
-                )
+                failed_nct.append(nct_id)
                 continue
 
+            seen_nct.add(nct_upper)
             studies.append(study)
-
-        # Sprint 12: Log filtering summary
-        if filtered_no_id_count > 0:
             logger.info(
-                "clinical_study_filter inn=%s total_extracted=%d passed=%d filtered_no_id=%d",
-                self.inn, len(result.studies), len(studies), filtered_no_id_count,
+                "clinical_per_study_assembled nct=%s inn=%s phase=%s status=%s",
+                nct_id, self.inn,
+                study.phase.value if study.phase else "?",
+                study.status.value if study.status else "?",
             )
+
+        # Step 3: Log summary
+        logger.info(
+            "clinical_per_study_summary inn=%s candidates=%d assembled=%d failed=%d",
+            self.inn, len(sorted_nct_ids), len(studies), len(failed_nct),
+        )
+
+        if failed_nct:
             self._add_unknown(
-                unknowns, "clinical_studies[*].filtered_no_study_id",
+                unknowns, "clinical_studies[*].per_study_failed",
                 "NO_EVIDENCE_IN_CORPUS",
-                f"{filtered_no_id_count} study card(s) were extracted but lacked a study_id "
-                "(NCT number or registry ID). These were filtered out per Sprint 12 semantic integrity rules. "
-                "They likely came from label text or general clinical summaries, not from specific trial data.",
-                "Ensure per-study CTGov protocol/results pages are attached (not just aggregate search pages).",
+                f"{len(failed_nct)} NCT ID(s) found in corpus but could not assemble study cards: "
+                f"{', '.join(failed_nct[:5])}{'...' if len(failed_nct) > 5 else ''}. "
+                "Likely insufficient scoped evidence in retrieved chunks.",
+                "Ensure per-study CTGov protocol/results pages are attached.",
             )
 
         if not studies:
             self._add_unknown(
                 unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
-                "All extracted study cards lacked study_id or linked evidence; see individual unknowns above.",
+                f"Found {len(corpus_nct_ids)} NCT IDs but could not assemble any study cards.",
             )
+
         return studies
 
     def _generate_patent_families(self, unknowns: List[DossierUnknown]) -> List[DossierPatentFamily]:
