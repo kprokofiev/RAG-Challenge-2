@@ -673,6 +673,33 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         if cs.study_id and cs.study_id.value
     )
 
+    # Sprint 13 WS3: Count studies with core fields filled (study_id + at least 3 of
+    # phase, status, n_enrolled, countries, conclusion) — measures usable entities
+    _CORE_THRESHOLD = 3  # need at least 3 of 5 non-id fields
+    studies_with_core = 0
+    for cs in report.clinical_studies:
+        if not (cs.study_id and cs.study_id.value):
+            continue
+        core_filled = 0
+        if cs.phase and cs.phase.value:
+            core_filled += 1
+        if cs.status and cs.status.value:
+            core_filled += 1
+        if cs.n_enrolled and cs.n_enrolled.value:
+            core_filled += 1
+        if cs.countries:
+            core_filled += 1
+        if cs.conclusion and cs.conclusion.value:
+            core_filled += 1
+        if core_filled >= _CORE_THRESHOLD:
+            studies_with_core += 1
+
+    # Sprint 13 WS3: Context strength breakdown for v1 quality
+    ctx_strength_counts = {}
+    for c in report.product_contexts:
+        strength = getattr(c, "context_strength", None) or "unknown"
+        ctx_strength_counts[strength] = ctx_strength_counts.get(strength, 0) + 1
+
     return {
         "passport_pct": passport_pct,
         "passport_total_fields": pp_total,
@@ -684,6 +711,7 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         "clinical_pct": clinical_pct,
         "clinical_studies_total": len(report.clinical_studies),
         "clinical_studies_with_id": studies_with_id,
+        "clinical_studies_with_core_fields": studies_with_core,
         "patents_pct": patent_pct,
         "patent_families_total": len(report.patent_families),
         "synthesis_pct": synth_pct,
@@ -693,6 +721,7 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         "unknowns_count": len(report.unknowns),
         "unknown_reason_distribution": reason_dist,
         "evidence_registry_size": len(report.evidence_registry),
+        "context_strength_breakdown": ctx_strength_counts,
     }
 
 
@@ -1143,9 +1172,31 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
     else:
         registrations_gate = "RED"
 
-    # WS5-P0: Clinical readiness — studies with empty meta-fields should not be GREEN
+    # Sprint 13 WS3: Clinical readiness — semantic-aware gate
+    # Uses both field coverage AND core-field completeness
     clinical_cov = coverage.get("clinical", 0)
     n_studies = len(report.clinical_studies)
+
+    # Sprint 13 WS3: Count studies with core fields (study_id + 3+ of phase/status/n_enrolled/countries/conclusion)
+    _CORE_THRESHOLD_V2 = 3
+    studies_with_core = 0
+    for cs in report.clinical_studies:
+        if not (cs.study_id and cs.study_id.value):
+            continue
+        core_filled = 0
+        if cs.phase and cs.phase.value:
+            core_filled += 1
+        if cs.status and cs.status.value:
+            core_filled += 1
+        if cs.n_enrolled and cs.n_enrolled.value:
+            core_filled += 1
+        if cs.countries:
+            core_filled += 1
+        if cs.conclusion and cs.conclusion.value:
+            core_filled += 1
+        if core_filled >= _CORE_THRESHOLD_V2:
+            studies_with_core += 1
+
     if n_studies == 0:
         clinical_gate = "RED"
     elif clinical_cov >= 0.6:
@@ -1219,9 +1270,12 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
         )
     if n_studies > 0 and clinical_cov < 0.5:
         notes.append(f"clinical_field_completeness={round(clinical_cov*100,1)}% — many meta-fields (status/countries/conclusion) are empty")
-    # Sprint 12 WS1: Note about study_id gate
+    # Sprint 13 WS3: Clinical integrity note — shows usable entities vs total
     if n_studies > 0:
-        notes.append(f"clinical_studies: all {n_studies} have study_id (Sprint 12 WS1 gate applied)")
+        notes.append(
+            f"clinical_studies: {n_studies} total, all have study_id (per-NCT assembly), "
+            f"{studies_with_core}/{n_studies} with core fields (phase+status+enrollment+countries+conclusion >= 3/5)"
+        )
 
     return DossierQualityV2(
         coverage=coverage,
