@@ -109,6 +109,8 @@ class ProductContext(BaseModel):
     One product context — a unique combination of region/route/form/strength/MAH.
     Prevents semantic mixing of e.g. US OTC ibuprofen 200mg tablet vs EU IV 400mg/4ml.
     context_id is deterministic (hash of normalized fields).
+
+    Sprint 13 WS2: Added context_strength and context_origin for trust classification.
     """
     context_id: str = Field(description="Deterministic ID: hash(region+route+form+strength+mah)")
     label: str = Field(description="Human-readable label, e.g. 'EU - IV - 400mg/4ml - Kabi'")
@@ -120,6 +122,18 @@ class ProductContext(BaseModel):
     identifiers: List[str] = Field(default_factory=list, description="Registration numbers")
     primary_docs: List[PrimaryDoc] = Field(default_factory=list, description="Tier-1 docs for this context")
     evidence_refs: List[str] = Field(default_factory=list, description="Evidence IDs")
+    # Sprint 13 WS2: Trust classification
+    context_strength: Optional[str] = Field(
+        None,
+        description=(
+            "Sprint 13: Trust level classification. One of: "
+            "registration_confirmed | evidence_supported | weak_signal"
+        )
+    )
+    context_origin: Optional[str] = Field(
+        None,
+        description="Sprint 13: How this context was derived (e.g., 'registration: US ANDA', 'evidence: label snippet')"
+    )
 
 
 # ── Sprint 7.5: Run manifest ────────────────────────────────────────────────
@@ -801,18 +815,29 @@ def build_product_contexts(
     evidence_registry: List[DossierEvidence],
 ) -> List[ProductContext]:
     """
-    Sprint 7.5 TZ-1 + Sprint 12 WS2: Build product_contexts from registrations + evidence signals.
+    Sprint 7.5 TZ-1 + Sprint 12 WS2 + Sprint 13 WS2:
+    Build product_contexts from registrations + evidence signals.
 
-    Phase 1 (Sprint 7.5): Groups registrations by (region, route, form, strength, mah) → ProductContext.
-    Phase 2 (Sprint 12): Scans evidence for additional form/route signals not in registrations.
-    Creates weak/partial context notices for evidence-based signals that don't match existing contexts.
+    Phase 1: Registration-driven contexts → context_strength=registration_confirmed
+    Phase 2: Evidence-based contexts → context_strength=evidence_supported or weak_signal
+    Sprint 13: Adds context_strength / context_origin, fixes route/form consistency,
+    deduplicates evidence contexts that map to same form/route family.
     """
     _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
                         "us_fda", "approval_letter", "pil", "assessment_report"}
 
+    # Sprint 13 WS2: Form families that imply specific routes (for consistency)
+    _FORM_TO_ROUTE = {
+        "cream_ointment": "topical",
+        "patch": "topical",
+        "suppository": "rectal",
+        "injection": "injectable",
+        "inhaler": "inhalation",
+    }
+
     ctx_map: Dict[str, ProductContext] = {}
 
-    # ── Phase 1: Registration-driven contexts (existing logic) ────────────────
+    # ── Phase 1: Registration-driven contexts ────────────────────────────────
     for reg in registrations:
         region = (reg.region or "").strip().upper()
         forms = []
@@ -850,6 +875,12 @@ def build_product_contexts(
                             ))
                             seen_doc_ids.add(ev.doc_id)
 
+            # Sprint 13 WS2: Determine registration origin description
+            reg_ids = [i.value for i in reg.identifiers if i.value] if reg.identifiers else []
+            origin = f"registration: {region}"
+            if reg_ids:
+                origin += f" {reg_ids[0]}"
+
             ctx_map[ctx] = ProductContext(
                 context_id=ctx,
                 label=label,
@@ -858,9 +889,11 @@ def build_product_contexts(
                 dosage_forms=forms,
                 strengths=[],
                 mah=mah_val or None,
-                identifiers=[i.value for i in reg.identifiers if i.value] if reg.identifiers else [],
+                identifiers=reg_ids,
                 primary_docs=primary_docs,
                 evidence_refs=list(reg.evidence_refs),
+                context_strength="registration_confirmed",
+                context_origin=origin,
             )
         else:
             existing = ctx_map[ctx]
@@ -887,11 +920,9 @@ def build_product_contexts(
                             ))
                             seen.add(ev.doc_id)
 
-    # ── Phase 2 (Sprint 12 WS2): Evidence-based context enrichment ───────────
-    # Collect signals from evidence that may indicate additional product forms/routes
+    # ── Phase 2: Evidence-based context enrichment ───────────────────────────
     evidence_signals = _collect_evidence_context_signals(evidence_registry, registrations)
 
-    # Check if any signal represents a form/route not already captured
     existing_form_families: set = set()
     existing_route_families: set = set()
     for ctx_obj in ctx_map.values():
@@ -909,14 +940,22 @@ def build_product_contexts(
         form_fam = signal.get("form_family")
         region = signal.get("region", "")
 
-        # Only create a context notice if it's a genuinely new form/route family
+        # Sprint 13 WS2: Fix route/form consistency — if form implies a specific
+        # route (e.g., cream → topical, suppository → rectal), use that instead
+        # of whatever route was detected from the snippet (which could be wrong)
+        if form_fam and form_fam in _FORM_TO_ROUTE:
+            implied_route = _FORM_TO_ROUTE[form_fam]
+            if route_fam and route_fam != implied_route:
+                route_fam = implied_route  # form is more reliable than snippet route
+            elif not route_fam:
+                route_fam = implied_route
+
         is_new_route = route_fam and route_fam not in existing_route_families
         is_new_form = form_fam and form_fam not in existing_form_families
 
         if not (is_new_route or is_new_form):
             continue
 
-        # Create a weak/evidence-based context (not registration-grade)
         form_desc = form_fam or ""
         route_desc = route_fam or ""
         ctx = _context_id(region or "EVIDENCE", route_desc, form_desc, "", "")
@@ -924,12 +963,27 @@ def build_product_contexts(
         if ctx in ctx_map:
             continue
 
+        # Sprint 13 WS2: Determine strength based on evidence source type
+        source_type = signal.get("source_type", "unknown")
+        if source_type in _TIER1_DOC_KINDS:
+            strength = "evidence_supported"
+        else:
+            strength = "weak_signal"
+
+        # Sprint 13 WS2: Build informative label with strength indicator
         label_parts = []
         if region:
             label_parts.append(region)
-        label_parts.append(f"{form_fam or '?'} ({route_fam or '?'})")
-        label_parts.append("[evidence-based, not registration-confirmed]")
+        if form_fam and route_fam:
+            label_parts.append(f"{form_fam} ({route_fam})")
+        elif form_fam:
+            label_parts.append(form_fam)
+        elif route_fam:
+            label_parts.append(f"({route_fam})")
+        label_parts.append(f"[{strength}]")
         label = " - ".join(label_parts)
+
+        origin = f"evidence: {source_type} snippet"
 
         ctx_map[ctx] = ProductContext(
             context_id=ctx,
@@ -942,9 +996,10 @@ def build_product_contexts(
             identifiers=[],
             primary_docs=[],
             evidence_refs=signal.get("evidence_refs", []),
+            context_strength=strength,
+            context_origin=origin,
         )
 
-        # Track discovered families so we don't duplicate
         if route_fam:
             existing_route_families.add(route_fam)
         if form_fam:
@@ -1030,12 +1085,20 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
     else:
         patents_legal = "RED"
 
-    # Context integrity (Sprint 12 WS2: evidence-based contexts tracked separately)
+    # Context integrity (Sprint 13 WS2: use context_strength field)
     ctx_count = len(report.product_contexts)
-    # Count registration-confirmed vs evidence-only contexts
+    # Count by context_strength classification
     reg_confirmed_ctx = sum(
         1 for c in report.product_contexts
-        if "[evidence-based" not in (c.label or "")
+        if getattr(c, "context_strength", None) == "registration_confirmed"
+    )
+    evidence_supported_ctx = sum(
+        1 for c in report.product_contexts
+        if getattr(c, "context_strength", None) == "evidence_supported"
+    )
+    weak_signal_ctx = sum(
+        1 for c in report.product_contexts
+        if getattr(c, "context_strength", None) == "weak_signal"
     )
     evidence_only_ctx = ctx_count - reg_confirmed_ctx
     if ctx_count <= 1:
@@ -1134,12 +1197,16 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
 
     notes: List[str] = []
     if ctx_count > 1:
-        # Sprint 12 WS2: differentiate registration-confirmed vs evidence-based contexts
-        if evidence_only_ctx > 0:
-            notes.append(
-                f"Product contexts: {reg_confirmed_ctx} registration-confirmed, "
-                f"{evidence_only_ctx} evidence-based (not registration-confirmed)"
-            )
+        # Sprint 13 WS2: context strength breakdown
+        strength_parts = []
+        if reg_confirmed_ctx:
+            strength_parts.append(f"{reg_confirmed_ctx} registration_confirmed")
+        if evidence_supported_ctx:
+            strength_parts.append(f"{evidence_supported_ctx} evidence_supported")
+        if weak_signal_ctx:
+            strength_parts.append(f"{weak_signal_ctx} weak_signal")
+        if strength_parts:
+            notes.append(f"Product contexts: {', '.join(strength_parts)}")
         else:
             notes.append(f"Multiple product contexts detected: {ctx_count}")
     if patents_legal_pct < 1.0 and total_families > 0:
