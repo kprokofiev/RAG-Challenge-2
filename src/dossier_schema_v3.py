@@ -762,12 +762,31 @@ _FORM_FAMILIES = {
 }
 
 
+import re as _re_mod
+
+# Short keywords (<=3 chars) need word-boundary matching to avoid false
+# positives like "po" inside "compound", "im" inside "important", etc.
+_SHORT_KW_THRESHOLD = 3
+_SHORT_KW_REGEX_CACHE: dict = {}
+
+
+def _kw_matches(kw: str, text_lower: str) -> bool:
+    """Match keyword in text: word-boundary regex for short keywords, substring for long."""
+    if len(kw) <= _SHORT_KW_THRESHOLD:
+        pat = _SHORT_KW_REGEX_CACHE.get(kw)
+        if pat is None:
+            pat = _re_mod.compile(r"\b" + _re_mod.escape(kw) + r"\b")
+            _SHORT_KW_REGEX_CACHE[kw] = pat
+        return pat.search(text_lower) is not None
+    return kw in text_lower
+
+
 def _normalize_route_family(text: str) -> Optional[str]:
     """Sprint 12 WS2: Map a route description to a normalized family."""
     text_lower = text.lower().strip()
     for family, keywords in _ROUTE_FAMILIES.items():
         for kw in keywords:
-            if kw in text_lower:
+            if _kw_matches(kw, text_lower):
                 return family
     return None
 
@@ -777,7 +796,7 @@ def _normalize_form_family(text: str) -> Optional[str]:
     text_lower = text.lower().strip()
     for family, keywords in _FORM_FAMILIES.items():
         for kw in keywords:
-            if kw in text_lower:
+            if _kw_matches(kw, text_lower):
                 return family
     return None
 

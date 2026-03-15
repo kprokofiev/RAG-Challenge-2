@@ -231,10 +231,47 @@ oral_suppressed = [s for s in suppressed2 if s.get("route_family") == "oral"]
 assert len(oral_suppressed) == 0, f"Oral should not be suppressed: {oral_suppressed}"
 print(f"  PASS: corroborated oral context passes ({len(oral_contexts)} oral ctx)")
 
+# -- Test 9: Word-boundary matching — short keywords don't false-positive --
+print("T9: Word-boundary matching — no false positives for short keywords...")
+from src.dossier_schema_v3 import _normalize_route_family, _normalize_form_family
+
+# "po" inside "compound" should NOT match oral
+assert _normalize_route_family("PubChem Compound CID 3672") is None, \
+    "Compound should not match oral via 'po'"
+# "im" inside "improved" should NOT match injectable
+assert _normalize_route_family("improved patient outcomes") is None, \
+    "improved should not match injectable via 'im'"
+# standalone "po" SHOULD match oral
+assert _normalize_route_family("given po twice daily") == "oral", \
+    "standalone 'po' should match oral"
+# standalone "iv" SHOULD match injectable
+assert _normalize_route_family("given iv daily") == "injectable", \
+    "standalone 'iv' should match injectable"
+# "gel" inside "gelatin" should NOT match cream_ointment
+assert _normalize_form_family("gelatin encapsulation") is None, \
+    "gelatin should not match cream_ointment via 'gel'"
+# standalone "gel" SHOULD match
+assert _normalize_form_family("topical gel 1%") == "cream_ointment", \
+    "standalone 'gel' should match cream_ointment"
+# "tab" inside "table" should NOT match tablet
+assert _normalize_form_family("data table summary") is None, \
+    "table should not match tablet via 'tab'"
+print("  PASS: all word-boundary tests passed")
+
+# -- Test 10: PubChem compound snippet → no false route/form signal --
+print("T10: PubChem compound snippet — no false route signal...")
+pubchem_snippet = ("PubChem Compound: ibuprofen\nCID: 3672\n"
+                   "Molecular Formula: C13H18O2\nMolecular Weight: 206.28")
+assert _normalize_route_family(pubchem_snippet) is None, \
+    f"PubChem snippet should not match any route, got {_normalize_route_family(pubchem_snippet)}"
+assert _normalize_form_family(pubchem_snippet) is None, \
+    f"PubChem snippet should not match any form, got {_normalize_form_family(pubchem_snippet)}"
+print("  PASS: PubChem snippet produces no false signals")
+
 # -- Summary --
 print()
 if errors == 0:
-    print(f"ALL TESTS PASSED (8/8)")
+    print(f"ALL TESTS PASSED (10/10)")
 else:
     print(f"FAILED: {errors} test(s)")
     sys.exit(1)
