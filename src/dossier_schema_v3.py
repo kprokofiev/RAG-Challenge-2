@@ -964,6 +964,26 @@ def build_product_contexts(
             if rfam:
                 existing_route_families.add(rfam)
 
+    # Sprint 14 P0.4: Pre-aggregate evidence signals by route/form family
+    # for corroboration gating. A weak_signal context requires >=2 independent
+    # evidence items (by doc_id) mentioning the same route/form to be created.
+    # Count from raw evidence_registry (not deduped signals) to capture true
+    # corroboration across multiple documents.
+    _WEAK_SIGNAL_DOC_KINDS = {"pubchem", "drug_monograph", "publication",
+                               "scientific_pmc", "scientific_pdf", "preprint"}
+    evidence_corroboration: Dict[str, set] = {}  # key = route_fam|form_fam → set of doc_ids
+    for ev in evidence_registry:
+        snippet_lower = (ev.snippet or "").lower()
+        rf = _normalize_route_family(snippet_lower)
+        ff = _normalize_form_family(snippet_lower)
+        if rf or ff:
+            key = f"{rf or ''}|{ff or ''}"
+            if key not in evidence_corroboration:
+                evidence_corroboration[key] = set()
+            evidence_corroboration[key].add(ev.doc_id or ev.evidence_id)
+
+    suppressed_contexts: List[Dict[str, str]] = []
+
     for signal in evidence_signals:
         route_fam = signal.get("route_family")
         form_fam = signal.get("form_family")
@@ -998,6 +1018,22 @@ def build_product_contexts(
             strength = "evidence_supported"
         else:
             strength = "weak_signal"
+
+        # Sprint 14 P0.4: Corroboration gate for weak_signal contexts.
+        # Single PubChem/publication snippets should NOT create standalone
+        # product contexts — they can mislead operators into thinking the
+        # product has regulatory support for that route/form.
+        if strength == "weak_signal":
+            corr_key = f"{route_fam or ''}|{form_fam or ''}"
+            corr_docs = evidence_corroboration.get(corr_key, set())
+            if len(corr_docs) < 2:
+                suppressed_contexts.append({
+                    "route_family": route_fam or "",
+                    "form_family": form_fam or "",
+                    "source_type": source_type,
+                    "reason": "single_source_weak_signal",
+                })
+                continue  # Do not create context
 
         # Sprint 13 WS2: Build informative label with strength indicator
         label_parts = []
@@ -1034,7 +1070,7 @@ def build_product_contexts(
         if form_fam:
             existing_form_families.add(form_fam)
 
-    return list(ctx_map.values())
+    return list(ctx_map.values()), suppressed_contexts
 
 
 # ── Sprint 7.5: Synthesis kind classifier ────────────────────────────────────

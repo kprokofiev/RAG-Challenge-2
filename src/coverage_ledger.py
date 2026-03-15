@@ -1,6 +1,6 @@
 """
-Coverage Ledger Builder — Sprint 9
-====================================
+Coverage Ledger Builder — Sprint 9 + Sprint 14 Source Verdicts
+================================================================
 Computes a source-universe-aware coverage ledger for a dossier run.
 
 Separates:
@@ -9,6 +9,13 @@ Separates:
 
 Stages tracked per source:
   declared → reachable → attached → fetched → indexed → extracted → evidenced
+
+Source verdicts (Sprint 14):
+  KEEP     — live, contributing real fields
+  CONNECT  — mandatory but not attached / not contributing
+  FIX      — valuable but broken (integration/parser/deployment)
+  DEMOTE   — little/no core fields; enrichment only
+  PARK     — not needed for core dossier quality now
 
 Decision readiness per section:
   ready | partial | insufficient
@@ -71,6 +78,83 @@ _FAILURE_STATUSES = frozenset({
 })
 
 _INDEXED_STATUSES = frozenset({"indexed", "parsed"})
+
+# ── Source verdicts (Sprint 14) ──────────────────────────────────────────────
+# Authoritative classification from source audit matrix.
+# Verdict logic: computed from runtime status + fields contributed + contract.
+
+_VERDICT_KEEP = "KEEP"
+_VERDICT_CONNECT = "CONNECT"
+_VERDICT_FIX = "FIX"
+_VERDICT_DEMOTE = "DEMOTE"
+_VERDICT_PARK = "PARK"
+
+# Static verdicts for sources where the classification is audit-confirmed
+# and unlikely to change at runtime. These override dynamic computation.
+_STATIC_VERDICTS: Dict[str, str] = {
+    # KEEP — live, contributing
+    "openfda": _VERDICT_KEEP,
+    "dailymed": _VERDICT_KEEP,
+    "ctgov": _VERDICT_KEEP,
+    "pubchem": _VERDICT_KEEP,
+    "epo_ops": _VERDICT_KEEP,
+    "patentsview": _VERDICT_KEEP,
+    "fda_label_safety": _VERDICT_KEEP,
+    # FIX — valuable but broken
+    "drugsatfda": _VERDICT_FIX,
+    "grls": _VERDICT_FIX,
+    "eaeu_portal": _VERDICT_FIX,
+    "epo_register": _VERDICT_FIX,
+    "rospatent": _VERDICT_FIX,
+    "ctis": _VERDICT_FIX,
+    # CONNECT — mandatory, not yet attached
+    "ema_smpc": _VERDICT_CONNECT,
+    "ema_pil": _VERDICT_CONNECT,
+    "ema_epar": _VERDICT_CONNECT,
+    "grls_instruction": _VERDICT_CONNECT,
+    "ru_clinical": _VERDICT_CONNECT,
+    # DEMOTE — enrichment only
+    "pubmed": _VERDICT_DEMOTE,
+    "lens_org": _VERDICT_DEMOTE,
+    # PARK — not needed for core dossier
+    "rems": _VERDICT_PARK,
+    "ru_quality_letter": _VERDICT_PARK,
+    "google_patents": _VERDICT_PARK,
+    "eapo": _VERDICT_PARK,
+    "manufacturing_svc": _VERDICT_PARK,
+    "esklp": _VERDICT_PARK,
+    "pharmacompass": _VERDICT_PARK,
+}
+
+
+def _compute_source_verdict(
+    source_id: str,
+    status: str,
+    fields_contributed: int,
+    must_have_fields: List[str],
+    tier: str,
+) -> str:
+    """
+    Compute source verdict dynamically.
+    Static overrides take precedence, then heuristic classification.
+    """
+    if source_id in _STATIC_VERDICTS:
+        return _STATIC_VERDICTS[source_id]
+
+    # Dynamic fallback for sources not in static map
+    if status == "unsupported":
+        return _VERDICT_FIX
+    if status == "ok" and fields_contributed > 0:
+        return _VERDICT_KEEP
+    if status == "ok" and fields_contributed == 0:
+        return _VERDICT_DEMOTE if tier == "tier2" else _VERDICT_CONNECT
+    if status in _FAILURE_STATUSES:
+        return _VERDICT_FIX if must_have_fields else _VERDICT_PARK
+    if status == "not_attached":
+        if must_have_fields and tier == "tier1":
+            return _VERDICT_CONNECT
+        return _VERDICT_PARK
+    return _VERDICT_PARK
 
 
 def _source_status(docs: List[Dict[str, Any]]) -> str:
@@ -187,6 +271,17 @@ class CoverageLedgerBuilder:
         # Overall decision readiness
         overall_readiness = self._compute_overall_readiness(section_coverage)
 
+        # Verdict summary (Sprint 14)
+        verdict_counts: Dict[str, int] = {}
+        seen_source_ids: set = set()
+        for sb in all_source_breakdown:
+            sid = sb.get("source_id", "")
+            if sid in seen_source_ids:
+                continue  # Deduplicate — same source can appear in multiple sections
+            seen_source_ids.add(sid)
+            v = sb.get("verdict", _VERDICT_PARK)
+            verdict_counts[v] = verdict_counts.get(v, 0) + 1
+
         ledger = {
             "basis": f"declared_source_universe_v{self.universe.get('version', '1.0')}",
             "use_case": self.use_case,
@@ -201,9 +296,11 @@ class CoverageLedgerBuilder:
                 "fields_evidenced": total_fields_evidenced,
                 "critical_unknowns": total_critical_unknowns,
                 "decision_readiness": overall_readiness,
+                "verdict_summary": verdict_counts,
             },
             "section_coverage": section_coverage,
             "source_breakdown": all_source_breakdown,
+            "family_health": self._build_family_health(all_source_breakdown),
             "wave2_delta": wave2_delta,
             "limitations": self._build_limitations(section_coverage, all_source_breakdown),
         }
@@ -238,10 +335,15 @@ class CoverageLedgerBuilder:
             # Check if source is unsupported
             unsupported_list = self._get_unsupported(section_cfg, src_id)
             if unsupported_list:
+                verdict = _compute_source_verdict(
+                    src_id, "unsupported", 0,
+                    contract.get("must_have_fields", []), tier,
+                )
                 source_breakdown.append({
                     "source_id": src_id,
                     "tier": tier,
                     "status": "unsupported",
+                    "verdict": verdict,
                     "reason": unsupported_list[0].get("reason", "Not implemented"),
                     "doc_kinds_expected": len(expected_kinds),
                     "doc_kinds_attached": 0,
@@ -277,10 +379,15 @@ class CoverageLedgerBuilder:
                     else:
                         critical_missing_fields.append(fpath)
 
+            verdict = _compute_source_verdict(
+                src_id, status, fields_contributed,
+                contract.get("must_have_fields", []), tier,
+            )
             source_breakdown.append({
                 "source_id": src_id,
                 "tier": tier,
                 "status": status,
+                "verdict": verdict,
                 "doc_kinds_expected": len(expected_kinds),
                 "doc_kinds_attached": len(set(d.get("doc_kind") for d in src_docs)),
                 "docs_attached": src_attached,
@@ -298,7 +405,8 @@ class CoverageLedgerBuilder:
         critical_unknowns = self._count_critical_unknowns(section_id, dossier_report)
 
         decision_readiness = self._section_readiness(
-            indexed_docs, declared_sources, fields_filled, fields_expected, critical_unknowns
+            indexed_docs, declared_sources, fields_filled, fields_expected,
+            critical_unknowns, source_breakdown,
         )
 
         return {
@@ -453,8 +561,13 @@ class CoverageLedgerBuilder:
         fields_filled: int,
         fields_expected: int,
         critical_unknowns: int,
+        source_breakdown: Optional[List[Dict]] = None,
     ) -> str:
-        """Compute decision readiness for a section."""
+        """Compute decision readiness for a section.
+
+        Sprint 14: PARK sources excluded from source_ratio denominator
+        so they don't unfairly penalize readiness.
+        """
         if declared == 0:
             return "ready"  # No sources declared = N/A
 
@@ -463,8 +576,17 @@ class CoverageLedgerBuilder:
         if indexed == 0:
             return "insufficient"
 
+        # Sprint 14: exclude PARK sources from denominator
+        effective_declared = declared
+        if source_breakdown:
+            non_park = sum(
+                1 for sb in source_breakdown
+                if sb.get("verdict", _VERDICT_PARK) != _VERDICT_PARK
+            )
+            effective_declared = max(non_park, 1)
+
         fill_ratio = fields_filled / fields_expected if fields_expected > 0 else 1.0
-        source_ratio = indexed / declared if declared > 0 else 0.0
+        source_ratio = indexed / effective_declared if effective_declared > 0 else 0.0
 
         if fill_ratio >= 0.7 and source_ratio >= 0.5 and critical_unknowns == 0:
             return "ready"
@@ -482,6 +604,73 @@ class CoverageLedgerBuilder:
         if any(s == "insufficient" for s in statuses):
             return "insufficient"
         return "partial"
+
+    # ── Source family health (Sprint 14 P2.2) ──────────────────────────────
+
+    _SOURCE_FAMILIES: Dict[str, str] = {
+        "openfda": "US Regulatory", "dailymed": "US Regulatory",
+        "drugsatfda": "US Regulatory", "rems": "US Regulatory",
+        "fda_label_safety": "US Regulatory",
+        "ema_smpc": "EU Regulatory", "ema_pil": "EU Regulatory",
+        "ema_epar": "EU Regulatory",
+        "grls": "RU Regulatory", "grls_instruction": "RU Regulatory",
+        "ru_quality_letter": "RU Regulatory",
+        "eaeu_portal": "EAEU Regulatory",
+        "ctgov": "US Clinical", "pubmed": "Literature",
+        "ctis": "EU Clinical", "ru_clinical": "RU Clinical",
+        "epo_ops": "EU Patent", "epo_register": "EU Patent",
+        "google_patents": "Patent", "patentsview": "US Patent",
+        "lens_org": "Global Patent", "rospatent": "RU Patent",
+        "eapo": "EAPO Patent",
+        "pubchem": "Chemistry",
+        "manufacturing_svc": "Manufacturing", "esklp": "Manufacturing",
+        "pharmacompass": "Manufacturing",
+    }
+
+    def _build_family_health(self, source_breakdown: List[Dict]) -> Dict[str, Dict]:
+        """Aggregate source verdicts by family for bottleneck analysis."""
+        families: Dict[str, Dict] = {}
+        seen: set = set()
+
+        for sb in source_breakdown:
+            sid = sb.get("source_id", "")
+            if sid in seen:
+                continue
+            seen.add(sid)
+
+            family = self._SOURCE_FAMILIES.get(sid, "Other")
+            if family not in families:
+                families[family] = {
+                    "sources": [],
+                    "total": 0,
+                    "ok": 0,
+                    "fields_contributed": 0,
+                    "verdicts": {},
+                }
+            fam = families[family]
+            fam["sources"].append(sid)
+            fam["total"] += 1
+            if sb.get("status") == "ok":
+                fam["ok"] += 1
+            fam["fields_contributed"] += sb.get("fields_contributed", 0)
+            v = sb.get("verdict", _VERDICT_PARK)
+            fam["verdicts"][v] = fam["verdicts"].get(v, 0) + 1
+
+        # Compute health per family
+        for fam in families.values():
+            ok_ratio = fam["ok"] / fam["total"] if fam["total"] > 0 else 0
+            has_fix = fam["verdicts"].get(_VERDICT_FIX, 0) > 0
+            has_connect = fam["verdicts"].get(_VERDICT_CONNECT, 0) > 0
+            if ok_ratio >= 0.5 and fam["fields_contributed"] > 0:
+                fam["health"] = "GREEN"
+            elif ok_ratio > 0 or fam["fields_contributed"] > 0:
+                fam["health"] = "YELLOW"
+            elif has_fix or has_connect:
+                fam["health"] = "RED"
+            else:
+                fam["health"] = "GREY"  # All PARK
+
+        return families
 
     # ── Wave 2 delta ─────────────────────────────────────────────────────────
 
@@ -556,15 +745,27 @@ class CoverageLedgerBuilder:
         section_coverage: Dict[str, Dict],
         source_breakdown: List[Dict],
     ) -> List[Dict[str, Any]]:
-        """Build human-readable limitations from coverage data."""
+        """Build human-readable limitations from coverage data with verdict-aware severity."""
         limitations = []
 
         for sb in source_breakdown:
+            verdict = sb.get("verdict", _VERDICT_PARK)
+            # PARK sources should not generate high-severity limitations
+            severity_map = {
+                _VERDICT_KEEP: "high",
+                _VERDICT_CONNECT: "high",
+                _VERDICT_FIX: "high",
+                _VERDICT_DEMOTE: "low",
+                _VERDICT_PARK: "info",
+            }
+            base_severity = severity_map.get(verdict, "medium")
+
             if sb.get("status") == "unsupported":
                 limitations.append({
                     "source_id": sb["source_id"],
                     "type": "unsupported",
-                    "severity": "high",
+                    "severity": base_severity,
+                    "verdict": verdict,
                     "message": sb.get("reason", "Source not implemented"),
                     "impact": f"Missing fields: {', '.join(sb.get('critical_missing', []))}",
                 })
@@ -572,18 +773,22 @@ class CoverageLedgerBuilder:
                 limitations.append({
                     "source_id": sb["source_id"],
                     "type": "fetch_failure",
-                    "severity": "medium",
+                    "severity": base_severity,
+                    "verdict": verdict,
                     "message": f"Source fetch failed with status: {sb['status']}",
                     "impact": f"Missing fields: {', '.join(sb.get('critical_missing', []))}",
                 })
             elif sb.get("status") == "not_attached":
-                limitations.append({
-                    "source_id": sb["source_id"],
-                    "type": "not_attached",
-                    "severity": "medium",
-                    "message": "Source was declared but no documents were attached",
-                    "impact": f"Missing fields: {', '.join(sb.get('critical_missing', []))}",
-                })
+                # Only report non-PARK sources as limitations
+                if verdict != _VERDICT_PARK:
+                    limitations.append({
+                        "source_id": sb["source_id"],
+                        "type": "not_attached",
+                        "severity": base_severity,
+                        "verdict": verdict,
+                        "message": "Source was declared but no documents were attached",
+                        "impact": f"Missing fields: {', '.join(sb.get('critical_missing', []))}",
+                    })
 
         for section_id, sc in section_coverage.items():
             if sc["decision_readiness"] == "insufficient":

@@ -193,6 +193,14 @@ INSTRUCTIONS:
 4. If a field cannot be found in the context → set value to null (do NOT guess or hallucinate).
 5. Tier-1 sources take priority: FDA label (doc_kind=label/us_fda) > EMA EPAR/SmPC > GRLS > other.
 
+FIELD-SPECIFIC EXTRACTION GUIDANCE:
+- fda_approval_date: Look for "FDA Approval Date (Drugs@FDA):", "approval date", "first approved",
+  "original approval date", or earliest submission with status "AP" in the FDA label document.
+  Format as YYYY-MM-DD. This field appears in rendered FDA label documents.
+- mechanism_of_action: Look for "mechanism of action", "pharmacodynamics", "MOA",
+  "mode of action" in FDA label or SmPC sections. Common in Section 12 of US labels
+  or Section 5.1 of SmPCs.
+
 EXAMPLE of correct output for one field:
   "fda_approval_date": {"value": "2021-06-04", "evidence_id": "E3"}
   "trade_names": [{"value": "Ozempic", "evidence_id": "E1"}]
@@ -1488,7 +1496,8 @@ class DossierReportGenerator:
             logger.info("run_id was None, generated: %s", run_id)
 
         # Sprint 7.5 TZ-1: build product_contexts + set passport scope
-        product_contexts = build_product_contexts(registrations, evidence_list)
+        # Sprint 14 P0.4: build_product_contexts now returns (contexts, suppressed_weak_signals)
+        product_contexts, suppressed_weak_signals = build_product_contexts(registrations, evidence_list)
         if len(product_contexts) > 1:
             passport.passport_scope = "multi_context_ambiguous"
             passport.passport_notice = (
@@ -1519,6 +1528,9 @@ class DossierReportGenerator:
 
         # Compute legacy quality scores
         report.dossier_quality = compute_dossier_quality(report)
+        # Sprint 14 P0.4: Surface suppressed weak_signal contexts in quality
+        if suppressed_weak_signals:
+            report.dossier_quality["context_suppressed_weak_signals"] = suppressed_weak_signals
 
         # Sprint 7.5 TZ-5: compute quality_v2
         report.dossier_quality_v2 = compute_dossier_quality_v2(report)

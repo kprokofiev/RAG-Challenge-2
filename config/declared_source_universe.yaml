@@ -1,5 +1,5 @@
-# Declared Source Universe v1.0
-# PharmSearch — Sprint 9
+# Declared Source Universe v2.0
+# PharmSearch — Sprint 9 + Sprint 14 Source Audit
 # This config defines which sources the system promises to cover per use case / region / section.
 # Any new source must be explicitly added here before use.
 # Tier definitions:
@@ -7,9 +7,13 @@
 #   tier2: optional, system attempts if available
 #   byo:   bring-your-own, user must supply credentials/data
 #   unsupported: known gap, explicitly documented
+# Source roles (Sprint 14):
+#   primary:       expected to fill core dossier fields
+#   enrichment:    supplementary data, does not fill core fields
+#   supplementary: supporting data, not expected in coverage metrics
 
-version: "1.0"
-updated_at: "2026-03-09"
+version: "2.0"
+updated_at: "2026-03-15"
 
 use_cases:
 
