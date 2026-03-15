@@ -742,6 +742,120 @@ class DossierReportGenerator:
                 continue
         return False
 
+    # ── Deterministic extractors (Sprint 15) ─────────────────────────────────
+
+    # Patterns for FDA approval date, ordered by specificity (most specific first).
+    _FDA_DATE_PATTERNS = [
+        # Exact marker injected by processor.ts fetchDrugsFdaApprovalDate()
+        re.compile(
+            r"FDA Approval Date\s*(?:\(Drugs@FDA\))?\s*:\s*(\d{4})[-/]?(\d{2})[-/]?(\d{2})",
+            re.IGNORECASE,
+        ),
+        # "Original Approval Date: 2000-12-18" or "Approval Date: 20001218"
+        re.compile(
+            r"(?:original\s+)?approval\s+date\s*:\s*(\d{4})[-/]?(\d{2})[-/]?(\d{2})",
+            re.IGNORECASE,
+        ),
+        # "first approved: 2000" (year-only fallback)
+        re.compile(
+            r"first\s+approved\s*:\s*(\d{4})\b",
+            re.IGNORECASE,
+        ),
+    ]
+
+    def _extract_fda_approval_date_deterministic(
+        self,
+    ) -> Optional[EvidencedValue]:
+        """Scan ALL label/us_fda chunks for FDA approval date via regex.
+
+        Bypasses top-K retrieval — reads chunk JSONs directly from documents_dir.
+        Returns EvidencedValue with evidence ref, or None.
+        """
+        target_doc_kinds = {"label", "us_fda"}
+        best_date: Optional[str] = None
+        best_evidence: Optional[DossierEvidence] = None
+
+        for doc_path in self.documents_dir.glob("*.json"):
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text:
+                    continue
+
+                for pattern in self._FDA_DATE_PATTERNS:
+                    m = pattern.search(text)
+                    if not m:
+                        continue
+
+                    groups = m.groups()
+                    if len(groups) == 3:
+                        year, month, day = groups
+                        date_str = f"{year}-{month}-{day}"
+                    elif len(groups) == 1:
+                        # Year-only fallback
+                        date_str = f"{groups[0]}-01-01"
+                    else:
+                        continue
+
+                    # Validate year range
+                    try:
+                        yr = int(date_str[:4])
+                        if yr < 1900 or yr > 2030:
+                            continue
+                    except ValueError:
+                        continue
+
+                    page = chunk.get("page")
+                    ev = _build_evidence(
+                        doc_id, page, text, doc_title,
+                        source_url=metainfo.get("source_url"),
+                        doc_kind=doc_kind,
+                    )
+                    self._evidence_registry[ev.evidence_id] = ev
+
+                    # Prefer the most specific match (3-group > 1-group)
+                    if best_date is None or len(groups) > 1:
+                        best_date = date_str
+                        best_evidence = ev
+
+                    # Found a full date — no need to keep scanning this chunk
+                    if len(groups) == 3:
+                        break
+
+        if best_date and best_evidence:
+            logger.info(
+                "fda_approval_date_deterministic found=%s doc=%s",
+                best_date, best_evidence.doc_id,
+            )
+            return EvidencedValue(
+                value=best_date,
+                evidence_refs=[best_evidence.evidence_id],
+            )
+
+        logger.info("fda_approval_date_deterministic: no match in %d label/us_fda docs",
+                     sum(1 for _ in self.documents_dir.glob("*.json")))
+        return None
+
     # ── Block generators ─────────────────────────────────────────────────────
 
     def _generate_passport(self, unknowns: List[DossierUnknown]) -> DossierPassport:
@@ -803,6 +917,13 @@ class DossierReportGenerator:
             dosage_forms=_ev_list(result.dosage_forms, am),
             key_dosages=_ev_list(result.key_dosages, am),
         )
+
+        # Sprint 15 P0.1: Deterministic fallback for fda_approval_date
+        if not passport.fda_approval_date or not passport.fda_approval_date.value:
+            det_date = self._extract_fda_approval_date_deterministic()
+            if det_date:
+                passport.fda_approval_date = det_date
+                logger.info("passport.fda_approval_date patched by deterministic extractor: %s", det_date.value)
 
         # S7: Validate — ALL mandatory fields without evidence → unknowns
         # Expanded from 4 to cover all 9 scalar fields + trade_names.
