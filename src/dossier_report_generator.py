@@ -897,7 +897,8 @@ class DossierReportGenerator:
         best_expiry: Optional[str] = None
         best_evidence: Optional[DossierEvidence] = None
 
-        for doc_path in self.documents_dir.glob("*.json"):
+        json_files = list(self.documents_dir.glob("*.json"))
+        for doc_path in json_files:
             try:
                 with open(doc_path, "r", encoding="utf-8") as f:
                     doc = json.load(f)
@@ -973,9 +974,10 @@ class DossierReportGenerator:
                 parts.append(f"до {best_expiry}")
             combined = " ".join(parts) if parts else best_status or best_expiry
             logger.info(
-                "ru_reg_status_deterministic found: status=%r expiry=%r doc=%s",
+                "ru_reg_status_deterministic found: status=%r expiry=%r doc=%s combined=%r",
                 best_status, best_expiry,
                 best_evidence.doc_id if best_evidence else "?",
+                combined,
             )
             return combined, best_evidence
         return None
