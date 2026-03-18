@@ -856,6 +856,130 @@ class DossierReportGenerator:
                      sum(1 for _ in self.documents_dir.glob("*.json")))
         return None
 
+    # Patterns for RU registration status from grls_card chunks.
+    # Matches the injected marker "RU Reg Status: <text> | RU Reg Expiry: DD.MM.YYYY"
+    # or native GRLS text "Действует до DD.MM.YYYY" / "Дата окончания действия DD.MM.YYYY".
+    _RU_STATUS_PATTERNS = [
+        # Injected marker: "RU Reg Status: Действует | RU Reg Expiry: 03.12.2030"
+        re.compile(
+            r"RU Reg Status:\s*([^\|]+?)(?:\s*\||\s*$)",
+            re.IGNORECASE,
+        ),
+        # Injected expiry marker: "RU Reg Expiry: DD.MM.YYYY"
+        re.compile(
+            r"RU Reg Expiry:\s*(\d{2}\.\d{2}\.\d{4})",
+            re.IGNORECASE,
+        ),
+        # Native GRLS text: "Дата окончания действия 03.12.2030"
+        re.compile(
+            r"Дата окончания действия\s+(\d{2}\.\d{2}\.\d{4})",
+        ),
+        # Native GRLS text: "Действует до 03.12.2030"
+        re.compile(
+            r"Действует до\s+(\d{2}\.\d{2}\.\d{4})",
+        ),
+        # Table cell format seen in semaglutide: "Дата регистрации 03.12.2025 Дата окончания действия 03.12.2030"
+        re.compile(
+            r"Дата окончания действия\s+(\d{2}\.\d{2}\.\d{4})",
+        ),
+    ]
+
+    def _extract_ru_reg_status_deterministic(self) -> Optional[tuple]:
+        """Scan grls_card chunks for RU registration status and expiry date.
+
+        Returns (status_str, expiry_str, evidence) or None.
+        Checks for:
+          1. Injected marker block added by grls-service /proxy/card
+          2. Native GRLS text patterns (Дата окончания действия, Действует до)
+        """
+        target_doc_kinds = {"grls_card", "grls"}
+        best_status: Optional[str] = None
+        best_expiry: Optional[str] = None
+        best_evidence: Optional[DossierEvidence] = None
+
+        for doc_path in self.documents_dir.glob("*.json"):
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text:
+                    continue
+
+                page = chunk.get("page")
+                ev = None
+
+                # Check injected marker first (highest confidence)
+                m_status = self._RU_STATUS_PATTERNS[0].search(text)
+                m_expiry = self._RU_STATUS_PATTERNS[1].search(text)
+                if m_status or m_expiry:
+                    if ev is None:
+                        ev = _build_evidence(doc_id, page, text, doc_title,
+                                             source_url=metainfo.get("source_url"),
+                                             doc_kind=doc_kind)
+                        self._evidence_registry[ev.evidence_id] = ev
+                    if m_status and not best_status:
+                        best_status = m_status.group(1).strip()
+                        best_evidence = ev
+                    if m_expiry and not best_expiry:
+                        best_expiry = m_expiry.group(1).strip()
+                    continue
+
+                # Check native GRLS text patterns
+                for pat in self._RU_STATUS_PATTERNS[2:]:
+                    m = pat.search(text)
+                    if m:
+                        if ev is None:
+                            ev = _build_evidence(doc_id, page, text, doc_title,
+                                                 source_url=metainfo.get("source_url"),
+                                                 doc_kind=doc_kind)
+                            self._evidence_registry[ev.evidence_id] = ev
+                        val = m.group(1).strip()
+                        # Pattern 2/3 capture expiry date; pattern 4 also expiry
+                        if not best_expiry and re.match(r"\d{2}\.\d{2}\.\d{4}", val):
+                            best_expiry = val
+                            best_evidence = ev
+                        elif not best_status:
+                            best_status = val
+                            best_evidence = ev
+                        break
+
+            if best_status and best_expiry:
+                break  # found both in this doc — stop scanning
+
+        if best_status or best_expiry:
+            parts = []
+            if best_status:
+                parts.append(best_status)
+            if best_expiry:
+                parts.append(f"до {best_expiry}")
+            combined = " ".join(parts) if parts else best_status or best_expiry
+            logger.info(
+                "ru_reg_status_deterministic found: status=%r expiry=%r doc=%s",
+                best_status, best_expiry,
+                best_evidence.doc_id if best_evidence else "?",
+            )
+            return combined, best_evidence
+        return None
+
     # ── Block generators ─────────────────────────────────────────────────────
 
     def _generate_passport(self, unknowns: List[DossierUnknown]) -> DossierPassport:
@@ -1052,6 +1176,31 @@ class DossierReportGenerator:
                     evidence_refs=list(set(ev_refs)),
                 )
                 registrations.append(registration)
+
+        # Sprint 16.2: Deterministic fallback for RU registration status.
+        # If the RU DossierRegistration has no status (LLM failed to extract it from
+        # grls_card chunks — e.g. because the accordion was collapsed), try the
+        # regex-based extractor that scans grls_card chunks directly.
+        det_ru = self._extract_ru_reg_status_deterministic()
+        if det_ru is not None:
+            combined_status, det_ev = det_ru
+            ev_id = det_ev.evidence_id if det_ev else None
+            ru_regs = [r for r in registrations if r.region.upper() == "RU"]
+            if ru_regs:
+                for ru_reg in ru_regs:
+                    if not ru_reg.status or not ru_reg.status.value:
+                        ru_reg.status = EvidencedValue(
+                            value=combined_status,
+                            evidence_refs=[ev_id] if ev_id else [],
+                        )
+                        logger.info(
+                            "ru_reg_status patched by deterministic extractor: %r ev=%s",
+                            combined_status, ev_id,
+                        )
+            else:
+                # No RU registration from LLM at all — create a minimal stub
+                # so the deterministic status isn't silently lost.
+                pass  # Don't create a stub without reg_number — would be misleading
 
         # S6-T6: EAEU typed-unknown — always add because client is a stub.
         # TZ §5.2: if EAEU not implemented → write typed unknown, do NOT create empty row.
