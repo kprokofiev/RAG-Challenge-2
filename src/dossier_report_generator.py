@@ -730,7 +730,7 @@ class DossierReportGenerator:
 
     def _has_patent_corpus(self) -> bool:
         """Check if any patent doc_kinds are present in the downloaded corpus."""
-        patent_kinds = {"patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"}
+        patent_kinds = {"patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"}
         for doc_path in self.documents_dir.glob("*.json"):
             try:
                 with open(doc_path, encoding="utf-8") as f:
@@ -1471,7 +1471,7 @@ class DossierReportGenerator:
             )
             return []
 
-        patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"]
+        patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"]
         question = (
             f"For {self.inn}: identify all patent families. "
             "For each: representative publication number (EP/WO/US), priority date, assignee, "
@@ -1618,7 +1618,7 @@ class DossierReportGenerator:
     def _generate_synthesis_steps(self, unknowns: List[DossierUnknown]) -> List[DossierSynthesisStep]:
         """Generate synthesis steps from patent text, with EPAR/assessment_report fallback."""
         # S7-E1: Primary sources are patents; if no patent corpus, try EPAR as fallback
-        _PATENT_DOC_KINDS = ["patent_pdf", "patent", "drug_monograph"]
+        _PATENT_DOC_KINDS = ["patent_pdf", "ru_patent_pdf", "patent", "drug_monograph"]
         _EPAR_FALLBACK_KINDS = ["epar", "assessment_report"]
 
         use_epar_fallback = False
