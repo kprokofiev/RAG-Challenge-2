@@ -1707,6 +1707,7 @@ class DossierReportGenerator:
         deadline: Optional[float] = None,
         legacy_sections: Optional[List[Dict[str, Any]]] = None,
         completeness: Optional[Dict[str, Any]] = None,
+        source_verdicts: Optional[Dict[str, str]] = None,
     ) -> DossierReport:
         """
         Generate a complete DossierReport v3.0.
@@ -1804,8 +1805,41 @@ class DossierReportGenerator:
         if suppressed_weak_signals:
             report.dossier_quality["context_suppressed_weak_signals"] = suppressed_weak_signals
 
-        # Sprint 7.5 TZ-5: compute quality_v2
-        report.dossier_quality_v2 = compute_dossier_quality_v2(report)
+        # Sprint 7.5 TZ-5: compute quality_v2 (Sprint 17: pass source_verdicts for region awareness)
+        report.dossier_quality_v2 = compute_dossier_quality_v2(report, source_verdicts=source_verdicts)
+
+        # Sprint 17: Build operator actions from quality gates + source verdicts
+        _sv = source_verdicts or {}
+        operator_actions: list[dict[str, str]] = []
+        _grls_v = _sv.get("grls", "")
+        if _grls_v in ("INFRA_UNAVAILABLE", "NOT_CONFIGURED", "SOURCE_TIMEOUT"):
+            operator_actions.append({
+                "code": "GRLS_TUNNEL_DOWN",
+                "severity": "critical",
+                "message": f"GRLS regulatory data missing — grls_verdict={_grls_v}",
+                "fix_hint": "Run: scripts/start_regulatory_stack.sh, then re-trigger dossier:build",
+            })
+        qv2 = report.dossier_quality_v2
+        if qv2 and qv2.decision_readiness.get("registrations") == "RED":
+            operator_actions.append({
+                "code": "REGISTRATIONS_RED",
+                "severity": "critical",
+                "message": "No valid registration data in any region",
+                "fix_hint": "Check source seeding: dossier:build response should show seeded grls_card + label",
+            })
+        if qv2 and qv2.decision_readiness.get("registrations") == "YELLOW":
+            # Check if it's due to missing expected region
+            missing_region_unk = [
+                u for u in (qv2.critical_unknowns or [])
+                if u.get("reason_code") == "MISSING_EXPECTED_REGION"
+            ]
+            if missing_region_unk:
+                operator_actions.append({
+                    "code": "MISSING_EXPECTED_REGION",
+                    "severity": "warning",
+                    "message": "Expected RU registration but none found — registrations downgraded to YELLOW",
+                    "fix_hint": "Verify VPS tunnel is up, re-run dossier:build to seed GRLS sources",
+                })
 
         # Sprint 7.5 TZ-6b: run_manifest
         elapsed = time.time() - start_ts
@@ -1826,6 +1860,9 @@ class DossierReportGenerator:
             docs_attached=0,
             docs_indexed=0,
             docs_failed=0,
+            source_verdicts=_sv,
+            operator_actions=operator_actions,
+            critical_failures=[a["code"] for a in operator_actions if a.get("severity") == "critical"],
         )
 
         logger.info(

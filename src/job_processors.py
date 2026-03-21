@@ -2113,6 +2113,20 @@ class DossierGenerateProcessor:
                 else:
                     logger.info("pubmed_auto_ingest_disabled case=%s (DDKIT_PUBMED_ON_DOSSIER=0)", case_id)
 
+                # ── Read source_verdicts from gateway dossier.json (Sprint 17) ───
+                source_verdicts: dict = {}
+                gateway_dossier_key = f"tenants/{tenant_id}/cases/{case_id}/dossier/dossier.json"
+                local_gw_dossier = temp_path / "gateway_dossier.json"
+                if self.storage_client.download_to_path(gateway_dossier_key, local_gw_dossier):
+                    try:
+                        with open(local_gw_dossier, "r", encoding="utf-8") as _gf:
+                            gw_data = json.load(_gf)
+                        source_verdicts = gw_data.get("source_verdicts", {})
+                        if source_verdicts:
+                            logger.info("source_verdicts loaded from gateway dossier: %s", source_verdicts)
+                    except Exception as sv_exc:
+                        logger.warning("Failed to read source_verdicts from %s: %s", gateway_dossier_key, sv_exc)
+
                 # ── Run DossierReportGenerator ────────────────────────────────────
                 if self.ddkit_db.is_configured():
                     self.ddkit_db.update_report_status(report_id, tenant_id, case_id, "generating")
@@ -2130,6 +2144,7 @@ class DossierGenerateProcessor:
                     deadline=deadline_s,
                     legacy_sections=legacy_sections,
                     completeness=completeness,
+                    source_verdicts=source_verdicts,
                 )
                 elapsed_s = time.perf_counter() - t0
                 logger.info(

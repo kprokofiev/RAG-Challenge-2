@@ -150,6 +150,14 @@ class RunManifest(BaseModel):
     docs_indexed: int = Field(0)
     docs_failed: int = Field(0)
     critical_failures: List[str] = Field(default_factory=list)
+    source_verdicts: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-source verdict codes from gateway preflight (e.g. grls=INFRA_UNAVAILABLE)",
+    )
+    operator_actions: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Actionable steps for the operator when issues are detected",
+    )
 
 
 # ── Sprint 7.5: Quality v2 ──────────────────────────────────────────────────
@@ -1137,9 +1145,13 @@ def classify_synthesis_kind(description_text: str) -> str:
 
 # ── Sprint 7.5: Quality v2 builder ──────────────────────────────────────────
 
-def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
+def compute_dossier_quality_v2(
+    report: DossierReport,
+    source_verdicts: Optional[Dict[str, str]] = None,
+) -> DossierQualityV2:
     """
     Sprint 7.5 TZ-5: Compute quality_v2 with coverage + decision_readiness.
+    source_verdicts: optional dict from gateway dossier.json (e.g. {"grls": "OK", "openfda": "OK"}).
     """
     q = report.dossier_quality or {}
 
@@ -1227,6 +1239,26 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
     else:
         registrations_gate = "RED"
 
+    # Sprint 17: Region-aware registrations gate.
+    # If RU regulatory sources were expected (GRLS was reachable or RU evidence exists)
+    # but no RU registration is present, downgrade from GREEN.
+    actual_regions = {(r.region or "").upper().strip() for r in report.registrations}
+    _sv = source_verdicts or {}
+    grls_verdict = _sv.get("grls", "")
+    # RU was expected if: (a) GRLS was reachable (OK or SOURCE_EMPTY), or
+    # (b) grls_card/ru_instruction evidence already exists in corpus
+    _ru_evidence_kinds = {"grls_card", "grls", "ru_instruction"}
+    has_ru_evidence = any(
+        ev.doc_kind and ev.doc_kind.lower() in _ru_evidence_kinds
+        for ev in report.evidence_registry
+    )
+    ru_expected = grls_verdict in ("OK",) or has_ru_evidence
+    missing_expected_regions: List[str] = []
+    if ru_expected and "RU" not in actual_regions:
+        missing_expected_regions.append("RU")
+    if missing_expected_regions and registrations_gate == "GREEN":
+        registrations_gate = "YELLOW"
+
     # Sprint 13 WS3: Clinical readiness — semantic-aware gate
     # Uses both field coverage AND core-field completeness
     clinical_cov = coverage.get("clinical", 0)
@@ -1300,6 +1332,19 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
             "count": n_studies,
             "impact": f"clinical={clinical_gate}, clinical_coverage={round(clinical_cov*100,1)}%",
         })
+    # Sprint 17: Infra-level critical unknowns from source_verdicts
+    if grls_verdict in ("INFRA_UNAVAILABLE", "NOT_CONFIGURED", "SOURCE_TIMEOUT"):
+        critical_unknowns.append({
+            "reason_code": grls_verdict,
+            "count": 1,
+            "impact": "RU regulatory data absent — not a data gap, infrastructure/tunnel failure",
+        })
+    if missing_expected_regions:
+        critical_unknowns.append({
+            "reason_code": "MISSING_EXPECTED_REGION",
+            "count": len(missing_expected_regions),
+            "impact": f"Expected regions {missing_expected_regions} have no registration data",
+        })
 
     notes: List[str] = []
     if ctx_count > 1:
@@ -1330,6 +1375,17 @@ def compute_dossier_quality_v2(report: DossierReport) -> DossierQualityV2:
         notes.append(
             f"clinical_studies: {n_studies} total, all have study_id (per-NCT assembly), "
             f"{studies_with_core}/{n_studies} with core fields (phase+status+enrollment+countries+conclusion >= 3/5)"
+        )
+    # Sprint 17: Region-aware notes
+    if missing_expected_regions:
+        notes.append(
+            f"registrations: regions_with_data={sorted(actual_regions)}, "
+            f"expected_but_missing={missing_expected_regions}"
+        )
+    if grls_verdict and grls_verdict not in ("OK", "SOURCE_EMPTY", ""):
+        notes.append(
+            f"RU regulatory path unavailable: grls_verdict={grls_verdict}. "
+            "Check: (1) VPS SSH tunnel alive? (2) local grls-service container stopped? (3) port 9095 forwarded?"
         )
 
     return DossierQualityV2(
