@@ -333,6 +333,33 @@ class DossierPatentFamily(BaseModel):
         None,
         description="Classification of what this patent blocks: compound / formulation / method_of_use / synthesis / other"
     )
+    # Sprint 17 WS6: Richer technical focus classification
+    technical_focus: Optional[EvidencedValue] = Field(
+        None,
+        description=(
+            "Sprint 17 WS6: detailed technical focus of this patent family. One of: "
+            "composition | formulation | process_manufacturing | method_of_use | "
+            "combination | salt_polymorph | dosage_form_delivery | intermediate_synthesis | other"
+        )
+    )
+    # Sprint 17 WS7: Process/synthesis relevance classification
+    process_relevance: Optional[EvidencedValue] = Field(
+        None,
+        description=(
+            "Sprint 17 WS7: process/synthesis relevance level. One of: "
+            "none | weak | moderate | strong. "
+            "Based on presence of synthesis examples, manufacturing steps, intermediates in patent text."
+        )
+    )
+    # Sprint 17 WS8: Legal status snapshot at family level
+    legal_status_snapshot: Optional[EvidencedValue] = Field(
+        None,
+        description=(
+            "Sprint 17 WS8: legal status of this patent family. One of: "
+            "granted | pending | expired | revoked | lapsed | unknown. "
+            "Derived from EPO OPS legal status or patent text."
+        )
+    )
     summary: Optional[EvidencedValue] = Field(
         None, description="One-sentence summary from abstract or title"
     )
@@ -591,9 +618,10 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     else:
         clinical_pct = 0.0
 
-    # WS5-P0: Patents coverage — measure per-family field completeness, not just evidence presence.
-    # Key fields: representative_pub, priority_date, assignees, what_blocks, expiry_by_country
-    _PATENT_KEY_FIELDS = 5
+    # Sprint 17 WS8: Patents coverage — measure per-family field completeness including new WS6/WS7 fields.
+    # Key fields: representative_pub, priority_date, assignees, what_blocks,
+    #             technical_focus (WS6), process_relevance (WS7), legal_status_snapshot (WS8), expiry_by_country
+    _PATENT_KEY_FIELDS = 8
     if report.patent_families:
         fam_scores = []
         for pf in report.patent_families:
@@ -605,6 +633,12 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
             if pf.assignees:
                 filled += 1
             if pf.what_blocks and pf.what_blocks.value:
+                filled += 1
+            if pf.technical_focus and pf.technical_focus.value:
+                filled += 1
+            if pf.process_relevance and pf.process_relevance.value:
+                filled += 1
+            if pf.legal_status_snapshot and pf.legal_status_snapshot.value:
                 filled += 1
             if pf.expiry_by_country:
                 filled += 1

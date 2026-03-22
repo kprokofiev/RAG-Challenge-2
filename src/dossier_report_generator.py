@@ -157,6 +157,12 @@ class _PatentFamilyLLM(BaseModel):
     priority_date: Optional[_EvidencedValueLLM] = None
     assignees: List[_EvidencedValueLLM] = Field(default_factory=list)
     what_blocks: Optional[_EvidencedValueLLM] = None
+    # Sprint 17 WS6: richer technical focus
+    technical_focus: Optional[_EvidencedValueLLM] = None
+    # Sprint 17 WS7: process/synthesis relevance
+    process_relevance: Optional[_EvidencedValueLLM] = None
+    # Sprint 17 WS8: legal status snapshot
+    legal_status_snapshot: Optional[_EvidencedValueLLM] = None
     summary: Optional[_EvidencedValueLLM] = None
     country_coverage: List[_EvidencedValueLLM] = Field(default_factory=list)
     expiry_by_country: List[_EvidencedValueLLM] = Field(default_factory=list)
@@ -278,11 +284,37 @@ FOR EACH PATENT FAMILY, extract:
    - "synthesis" = covers a manufacturing/synthesis process
    - "other" = if none of the above clearly applies
    Base classification on the patent title, abstract, and claims. If insufficient text, use "other".
-6. summary: one-sentence description of what the patent covers (from title/abstract)
-7. country_coverage: list of countries where patent publications exist (derive from publication
-   numbers: EP->EP, WO->WO, US->US, JP->JP, CN->CN, RU->RU, etc.)
-8. expiry_by_country: expiry dates per country. ONLY fill if expiry/legal status is EXPLICITLY
-   stated in the context. Do NOT calculate expiry from priority+20 years. If no expiry data, leave empty.
+6. technical_focus: detailed technical focus classification. Use EXACTLY one of:
+   - "composition" = active pharmaceutical ingredient, new chemical entity, salt form
+   - "formulation" = specific pharmaceutical formulation, excipients, dosage form design
+   - "process_manufacturing" = manufacturing/synthesis process, production method, purification
+   - "method_of_use" = therapeutic indication, treatment method, dosing regimen, patient population
+   - "combination" = combination therapy, fixed-dose combination, co-administration
+   - "salt_polymorph" = specific salt, polymorph, crystal form, co-crystal, hydrate, solvate
+   - "dosage_form_delivery" = drug delivery system, sustained release, device, injection system
+   - "intermediate_synthesis" = synthetic intermediate, key building block, reagent
+   - "other" = if none of the above clearly applies
+   Base on title, abstract, claims text. If unclear, use "other".
+7. process_relevance: classify how relevant this patent is for synthesis/process understanding.
+   Use EXACTLY one of:
+   - "strong" = patent contains detailed synthesis routes, manufacturing examples, specific conditions
+   - "moderate" = patent mentions process aspects but not as primary focus (e.g. formulation with brief process)
+   - "weak" = patent references manufacturing generally but no useful process detail
+   - "none" = patent has no synthesis/process content (pure composition, use, or device patent)
+   Base on whether Examples/Preparations/Synthesis sections exist in the text.
+8. legal_status_snapshot: legal status of the representative publication. Use EXACTLY one of:
+   - "granted" = patent has been granted/issued
+   - "pending" = application filed, not yet granted
+   - "expired" = patent term has ended
+   - "revoked" = patent was revoked after grant
+   - "lapsed" = patent lapsed due to non-payment of fees
+   - "unknown" = legal status not determinable from evidence
+   Extract from legal status fields, kind codes (B1/B2=granted, A1/A2=pending), or explicit text.
+9. summary: one-sentence description of what the patent covers (from title/abstract)
+10. country_coverage: list of countries where patent publications exist (derive from publication
+    numbers: EP->EP, WO->WO, US->US, JP->JP, CN->CN, RU->RU, etc.)
+11. expiry_by_country: expiry dates per country. ONLY fill if expiry/legal status is EXPLICITLY
+    stated in the context. Do NOT calculate expiry from priority+20 years. If no expiry data, leave empty.
 
 CRITICAL RULES:
 - Use ONLY evidence aliases (E1, E2, ...) from the candidates list
@@ -296,6 +328,9 @@ CRITICAL RULES:
   Do NOT return an empty list if assignee names appear in the evidence text.
 - For summary: derive from the patent title or abstract text in the evidence. Set null ONLY if
   no title/abstract text exists in any evidence candidate for this family.
+- For technical_focus and process_relevance: classify based on title, abstract, and claims text.
+  If patent text has synthesis Examples with specific reagents/conditions, process_relevance = "strong".
+  If only abstract is available, classify conservatively.
 """.strip()
 
 _SYNTHESIS_INSTRUCTION = """
@@ -572,19 +607,35 @@ class DossierReportGenerator:
         self._evidence_registry: Dict[str, DossierEvidence] = {}
 
     def _retrieve(self, question: str, doc_kinds: List[str], top_k: int = 40) -> List[Dict[str, Any]]:
-        """Retrieve top-K evidence candidates for a question with given doc_kind filter."""
-        try:
-            results = self.retriever.retrieve_by_case(
-                query=f"{question} {self.inn}",
-                doc_kind=doc_kinds if doc_kinds else None,
-                top_n=top_k,
-                tenant_id=self.tenant_id,
-                case_id=self.case_id,
-            )
-            return results or []
-        except Exception as exc:
-            logger.warning("retrieve failed for question=%r: %s", question[:60], exc)
-            return []
+        """Retrieve top-K evidence candidates for a question with given doc_kind filter.
+
+        Retries up to 2 times with backoff on rate-limit (429) errors.
+        """
+        import time
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                results = self.retriever.retrieve_by_case(
+                    query=f"{question} {self.inn}",
+                    doc_kind=doc_kinds if doc_kinds else None,
+                    top_n=top_k,
+                    tenant_id=self.tenant_id,
+                    case_id=self.case_id,
+                )
+                return results or []
+            except Exception as exc:
+                exc_str = str(exc)
+                is_rate_limit = "429" in exc_str or "rate_limit" in exc_str.lower()
+                if is_rate_limit and attempt < max_retries:
+                    wait = 2 ** attempt * 10  # 10s, 20s
+                    logger.warning(
+                        "retrieve 429 rate-limit for question=%r, retry %d/%d in %ds",
+                        question[:60], attempt + 1, max_retries, wait,
+                    )
+                    time.sleep(wait)
+                    continue
+                logger.warning("retrieve failed for question=%r: %s", question[:60], exc)
+                return []
 
     def _candidates_map(self, retrieved: List[Dict[str, Any]]) -> Dict[str, DossierEvidence]:
         """Build evidence_id → DossierEvidence from retrieved chunks, register globally."""
@@ -650,35 +701,50 @@ class DossierReportGenerator:
 
     def _call_llm(self, instruction: str, context: str, question: str,
                    candidates_str: str, schema_class) -> Optional[Any]:
-        """Call LLM with structured output schema; returns parsed Pydantic object or None."""
-        try:
-            import inspect
-            schema_str = str(schema_class.model_json_schema())
-            system_prompt = (
-                f"{instruction}\n\n"
-                f"Your answer MUST be valid JSON matching this schema:\n```\n{schema_str}\n```\n\n"
-                "CRITICAL: Only use evidence aliases (E1, E2, ...) that appear in the Available Evidence Candidates section below."
-            )
-            user_prompt = (
-                f"Context:\n{context}\n\n"
-                f"Question: {question}\n\n"
-                f"Available Evidence Candidates:\n{candidates_str}\n\n"
-                "Generate structured JSON answer."
-            )
-            result_dict = self.api.send_message(
-                model=self.answering_model,
-                system_content=system_prompt,
-                human_content=user_prompt,
-                is_structured=True,
-                response_format=schema_class,
-            )
-            # send_message returns .dict() — re-parse into Pydantic object
-            if isinstance(result_dict, dict):
-                return schema_class.model_validate(result_dict)
-            return result_dict
-        except Exception as exc:
-            logger.warning("LLM call failed for question=%r: %s", question[:60], exc)
-            return None
+        """Call LLM with structured output schema; returns parsed Pydantic object or None.
+
+        Retries up to 3 times with exponential backoff on rate-limit (429) errors.
+        """
+        import time
+        schema_str = str(schema_class.model_json_schema())
+        system_prompt = (
+            f"{instruction}\n\n"
+            f"Your answer MUST be valid JSON matching this schema:\n```\n{schema_str}\n```\n\n"
+            "CRITICAL: Only use evidence aliases (E1, E2, ...) that appear in the Available Evidence Candidates section below."
+        )
+        user_prompt = (
+            f"Context:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            f"Available Evidence Candidates:\n{candidates_str}\n\n"
+            "Generate structured JSON answer."
+        )
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                result_dict = self.api.send_message(
+                    model=self.answering_model,
+                    system_content=system_prompt,
+                    human_content=user_prompt,
+                    is_structured=True,
+                    response_format=schema_class,
+                )
+                # send_message returns .dict() — re-parse into Pydantic object
+                if isinstance(result_dict, dict):
+                    return schema_class.model_validate(result_dict)
+                return result_dict
+            except Exception as exc:
+                exc_str = str(exc)
+                is_rate_limit = "429" in exc_str or "rate_limit" in exc_str.lower()
+                if is_rate_limit and attempt < max_retries:
+                    wait = 2 ** attempt * 10  # 10s, 20s, 40s
+                    logger.warning(
+                        "LLM 429 rate-limit for question=%r, retry %d/%d in %ds",
+                        question[:60], attempt + 1, max_retries, wait,
+                    )
+                    time.sleep(wait)
+                    continue
+                logger.warning("LLM call failed for question=%r: %s", question[:60], exc)
+                return None
 
     def _context_str(self, retrieved: List[Dict[str, Any]]) -> str:
         parts = []
@@ -1472,11 +1538,17 @@ class DossierReportGenerator:
             return []
 
         patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"]
+        # Sprint 17 WS6/WS7/WS8: enriched patent extraction query — technical focus + process relevance + legal status
         question = (
             f"For {self.inn}: identify all patent families. "
             "For each: representative publication number (EP/WO/US), priority date, assignee, "
-            "what it protects (compound/formulation/method_of_use/synthesis), one-sentence summary, "
-            "country coverage, expiry dates per country (only if explicitly stated)."
+            "what it protects (compound/formulation/method_of_use/synthesis), "
+            "detailed technical focus (composition/formulation/process_manufacturing/method_of_use/"
+            "combination/salt_polymorph/dosage_form_delivery/intermediate_synthesis), "
+            "process/synthesis relevance (strong/moderate/weak/none), "
+            "legal status (granted/pending/expired/revoked/lapsed/unknown), "
+            "one-sentence summary, country coverage, "
+            "expiry dates per country (only if explicitly stated)."
         )
         retrieved = self._retrieve(question, patent_doc_kinds, top_k=60)
         if not retrieved:
@@ -1517,6 +1589,18 @@ class DossierReportGenerator:
             what_blocks = _ev_to_evidenced_value(fam_llm.what_blocks, am)
             if what_blocks and what_blocks.evidence_refs:
                 ev_refs.extend(what_blocks.evidence_refs)
+            # Sprint 17 WS6: technical focus extraction
+            technical_focus = _ev_to_evidenced_value(fam_llm.technical_focus, am)
+            if technical_focus and technical_focus.evidence_refs:
+                ev_refs.extend(technical_focus.evidence_refs)
+            # Sprint 17 WS7: process/synthesis relevance
+            process_relevance = _ev_to_evidenced_value(fam_llm.process_relevance, am)
+            if process_relevance and process_relevance.evidence_refs:
+                ev_refs.extend(process_relevance.evidence_refs)
+            # Sprint 17 WS8: legal status snapshot
+            legal_status_snapshot = _ev_to_evidenced_value(fam_llm.legal_status_snapshot, am)
+            if legal_status_snapshot and legal_status_snapshot.evidence_refs:
+                ev_refs.extend(legal_status_snapshot.evidence_refs)
             summary = _ev_to_evidenced_value(fam_llm.summary, am)
             if summary and summary.evidence_refs:
                 ev_refs.extend(summary.evidence_refs)
@@ -1547,6 +1631,9 @@ class DossierReportGenerator:
                 priority_date=priority,
                 assignees=assignees,
                 what_blocks=what_blocks,
+                technical_focus=technical_focus,       # Sprint 17 WS6
+                process_relevance=process_relevance,   # Sprint 17 WS7
+                legal_status_snapshot=legal_status_snapshot,  # Sprint 17 WS8
                 summary=summary,
                 country_coverage=coverage,
                 expiry_by_country=expiry,
