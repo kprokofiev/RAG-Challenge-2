@@ -796,7 +796,7 @@ class DossierReportGenerator:
 
     def _has_patent_corpus(self) -> bool:
         """Check if any patent doc_kinds are present in the downloaded corpus."""
-        patent_kinds = {"patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"}
+        patent_kinds = {"patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary", "patent_legal_events", "patent_expiry_us"}
         for doc_path in self.documents_dir.glob("*.json"):
             try:
                 with open(doc_path, encoding="utf-8") as f:
@@ -958,7 +958,7 @@ class DossierReportGenerator:
           1. Injected marker block added by grls-service /proxy/card
           2. Native GRLS text patterns (Дата окончания действия, Действует до)
         """
-        target_doc_kinds = {"grls_card", "grls"}
+        target_doc_kinds = {"grls_card", "grls", "ru_instruction"}
         best_status: Optional[str] = None
         best_expiry: Optional[str] = None
         best_evidence: Optional[DossierEvidence] = None
@@ -1047,6 +1047,103 @@ class DossierReportGenerator:
             )
             return combined, best_evidence
         return None
+
+    # Sprint 17: Regex patterns for deterministic patent expiry extraction.
+    # patent_legal_events chunks: "Patent N: EP1234567B1 ... Country: EP ... Estimated expiry: 2045-11-28 (method: ...)"
+    _PATENT_LEGAL_EVENT_EXPIRY_RE = re.compile(
+        r"Patent\s+\d+:\s*([A-Z]{2}\d{5,}[A-Z]?\d?)\s*"   # patent number
+        r".*?Country:\s*([A-Z]{2})"                          # country code
+        r".*?Estimated expiry:\s*(\d{4}-\d{2}-\d{2})",      # expiry date
+        re.DOTALL,
+    )
+    # patent_expiry_us chunks (Orange Book table): "US12345678  2038-10-10  U-2628 ..."
+    _PATENT_EXPIRY_US_RE = re.compile(
+        r"(US\d{7,})\s+(\d{4}-\d{2}-\d{2})",
+    )
+
+    def _extract_patent_expiry_deterministic(self) -> Dict[str, Dict[str, str]]:
+        """Scan patent_legal_events and patent_expiry_us chunks for expiry dates.
+
+        Returns dict: patent_number_normalised -> {"country": "XX", "expiry": "YYYY-MM-DD",
+                                                    "evidence": DossierEvidence}
+        Used to patch LLM-extracted patent families that are missing expiry_by_country.
+        """
+        target_doc_kinds = {"patent_legal_events", "patent_expiry_us"}
+        expiry_map: Dict[str, Dict[str, Any]] = {}
+
+        json_files = list(self.documents_dir.glob("*.json"))
+        for doc_path in json_files:
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text:
+                    continue
+                page = chunk.get("page")
+
+                if doc_kind == "patent_legal_events":
+                    # Each chunk may have multiple patent blocks
+                    for m in self._PATENT_LEGAL_EVENT_EXPIRY_RE.finditer(text):
+                        pat_num = m.group(1).strip()
+                        country = m.group(2).strip()
+                        expiry = m.group(3).strip()
+                        norm = self._normalise_patent_number(pat_num)
+                        if norm not in expiry_map:
+                            ev = _build_evidence(doc_id, page, text, doc_title,
+                                                 source_url=metainfo.get("source_url"),
+                                                 doc_kind=doc_kind)
+                            self._evidence_registry[ev.evidence_id] = ev
+                            expiry_map[norm] = {"country": country, "expiry": expiry, "evidence": ev}
+
+                elif doc_kind == "patent_expiry_us":
+                    for m in self._PATENT_EXPIRY_US_RE.finditer(text):
+                        pat_num = m.group(1).strip()
+                        expiry = m.group(2).strip()
+                        norm = self._normalise_patent_number(pat_num)
+                        if norm not in expiry_map:
+                            ev = _build_evidence(doc_id, page, text, doc_title,
+                                                 source_url=metainfo.get("source_url"),
+                                                 doc_kind=doc_kind)
+                            self._evidence_registry[ev.evidence_id] = ev
+                            expiry_map[norm] = {"country": "US", "expiry": expiry, "evidence": ev}
+
+        logger.info(
+            "patent_expiry_deterministic inn=%s extracted=%d patents with expiry dates",
+            self.inn, len(expiry_map),
+        )
+        return expiry_map
+
+    @staticmethod
+    def _normalise_patent_number(raw: str) -> str:
+        """Strip country prefix and trailing kind codes to get base number for matching.
+        EP1234567B1 → 1234567, US12345678 → 12345678, WO2020123456A1 → 2020123456
+        """
+        s = raw.strip().upper()
+        # Remove country prefix (2 letters)
+        if len(s) > 2 and s[:2].isalpha():
+            s = s[2:]
+        # Remove trailing kind code (A1, B1, B2, C1 etc.)
+        s = re.sub(r"[A-Z]\d?$", "", s)
+        return s
 
     # ── Block generators ─────────────────────────────────────────────────────
 
@@ -1537,7 +1634,7 @@ class DossierReportGenerator:
             )
             return []
 
-        patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary"]
+        patent_doc_kinds = ["patent_family", "ops", "patent_pdf", "ru_patent_pdf", "ru_patent_fips", "patent", "patent_family_summary", "patent_legal_events", "patent_expiry_us", "patent_discovery_us"]
         # Sprint 17 WS6/WS7/WS8: enriched patent extraction query — technical focus + process relevance + legal status
         question = (
             f"For {self.inn}: identify all patent families. "
@@ -1698,6 +1795,73 @@ class DossierReportGenerator:
                     f"{filtered_minimal} patent family(ies) lacked minimum viable content "
                     "(no representative_pub/priority_date or no assignees/summary/what_blocks). "
                     "Filtered out to prevent empty shells from appearing as usable IP data.",
+                )
+
+        # ── Sprint 17: Deterministic patent expiry patching ─────────────────
+        # Scan patent_legal_events + patent_expiry_us chunks for explicit expiry
+        # dates, then patch families that LLM left without expiry_by_country.
+        det_expiry = self._extract_patent_expiry_deterministic()
+        if det_expiry and families:
+            patched_count = 0
+            for fam in families:
+                if fam.expiry_by_country:
+                    continue  # LLM already provided expiry — skip
+
+                # Try to match representative_pub against expiry map
+                rep_val = fam.representative_pub.value if fam.representative_pub else None
+                matched_entries: List[tuple] = []  # (country, expiry, evidence)
+
+                if rep_val and isinstance(rep_val, str):
+                    norm_rep = self._normalise_patent_number(rep_val)
+                    for pat_norm, info in det_expiry.items():
+                        if pat_norm == norm_rep or norm_rep in pat_norm or pat_norm in norm_rep:
+                            matched_entries.append((info["country"], info["expiry"], info["evidence"]))
+
+                # Also try matching family_id (might contain patent number)
+                if not matched_entries:
+                    fid_norm = self._normalise_patent_number(fam.family_id)
+                    if fid_norm and len(fid_norm) >= 5:
+                        for pat_norm, info in det_expiry.items():
+                            if pat_norm == fid_norm or fid_norm in pat_norm or pat_norm in fid_norm:
+                                matched_entries.append((info["country"], info["expiry"], info["evidence"]))
+
+                # Also: if country_coverage lists countries that appear in expiry_map
+                if not matched_entries and fam.country_coverage:
+                    coverage_countries = set()
+                    for cv in fam.country_coverage:
+                        if cv.value and isinstance(cv.value, str):
+                            coverage_countries.add(cv.value.upper().strip())
+                    for pat_norm, info in det_expiry.items():
+                        if info["country"] in coverage_countries:
+                            matched_entries.append((info["country"], info["expiry"], info["evidence"]))
+
+                if matched_entries:
+                    # Deduplicate by country
+                    seen_countries: set = set()
+                    for country, expiry_date, ev in matched_entries:
+                        if country in seen_countries:
+                            continue
+                        seen_countries.add(country)
+                        fam.expiry_by_country.append(
+                            EvidencedValue(
+                                value=f"{country}: {expiry_date}",
+                                evidence_refs=[ev.evidence_id],
+                            )
+                        )
+                        fam.evidence_refs.append(ev.evidence_id)
+                    patched_count += 1
+
+                    # Remove the LEGAL_STATUS_NOT_AVAILABLE unknown we added earlier
+                    unknowns[:] = [
+                        u for u in unknowns
+                        if not (u.field == f"patent_families[{fam.family_id}].expiry_by_country"
+                                and u.reason_code == "LEGAL_STATUS_NOT_AVAILABLE")
+                    ]
+
+            if patched_count:
+                logger.info(
+                    "patent_expiry_deterministic_patch inn=%s patched=%d/%d families with expiry data",
+                    self.inn, patched_count, len(families),
                 )
 
         return families

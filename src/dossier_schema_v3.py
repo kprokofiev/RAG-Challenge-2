@@ -820,7 +820,16 @@ def _kw_matches(kw: str, text_lower: str) -> bool:
             pat = _re_mod.compile(r"\b" + _re_mod.escape(kw) + r"\b")
             _SHORT_KW_REGEX_CACHE[kw] = pat
         return pat.search(text_lower) is not None
-    return kw in text_lower
+    if kw not in text_lower:
+        return False
+    # Sprint 17: Reject matches inside parenthetical enumerations like
+    # "(syringe, patch, etc.)" — these are boilerplate device disclaimers,
+    # not actual dosage form / route signals.
+    _PAREN_ENUM_RE = _re_mod.compile(r"\([^)]*,\s*[^)]*\)")
+    for m in _PAREN_ENUM_RE.finditer(text_lower):
+        if m.start() <= text_lower.index(kw) < m.end():
+            return False
+    return True
 
 
 def _normalize_route_family(text: str) -> Optional[str]:
@@ -1078,6 +1087,13 @@ def build_product_contexts(
         if source_type in _TIER1_DOC_KINDS:
             strength = "evidence_supported"
         else:
+            strength = "weak_signal"
+
+        # Sprint 17: Route-contradiction gate — if registrations established
+        # specific routes (e.g., injectable/subcutaneous) and the evidence
+        # signal introduces a contradictory route (e.g., topical from "patch"
+        # keyword in boilerplate), downgrade to weak_signal even for Tier-1.
+        if strength == "evidence_supported" and is_new_route and existing_route_families:
             strength = "weak_signal"
 
         # Sprint 14 P0.4: Corroboration gate for weak_signal contexts.
