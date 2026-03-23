@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import os
 import numpy as np
 from src.reranking import LLMReranker, get_reranker
+from src.settings import settings
 from src.tokenizer import tokenize as _pharma_tokenize
 
 _log = logging.getLogger(__name__)
@@ -357,7 +358,7 @@ class VectorRetriever:
     @staticmethod
     def get_strings_cosine_similarity(str1, str2):
         llm = VectorRetriever.set_up_llm()
-        embeddings = llm.embeddings.create(input=[str1, str2], model="text-embedding-3-large")
+        embeddings = llm.embeddings.create(input=[str1, str2], model=settings.embeddings_model)
         embedding1 = embeddings.data[0].embedding
         embedding2 = embeddings.data[1].embedding
         similarity_score = np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
@@ -389,7 +390,7 @@ class VectorRetriever:
         
         embedding = self.llm.embeddings.create(
             input=query,
-            model="text-embedding-3-large"
+            model=settings.embeddings_model
         )
         embedding = embedding.data[0].embedding
         embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
@@ -439,7 +440,7 @@ class VectorRetriever:
         """
         embedding = self.llm.embeddings.create(
             input=query,
-            model="text-embedding-3-large"
+            model=settings.embeddings_model
         )
         embedding = embedding.data[0].embedding
         embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)

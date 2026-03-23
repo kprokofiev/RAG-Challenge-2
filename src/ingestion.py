@@ -16,7 +16,11 @@ import numpy as np
 from tenacity import retry, wait_fixed, stop_after_attempt
 
 from src.settings import settings
+from src.embedding_utils import write_manifest, read_manifest, validate_manifest_compat, current_manifest
 from src.tokenizer import tokenize as _pharma_tokenize
+
+import logging as _logging
+_ingest_log = _logging.getLogger(__name__)
 
 
 class BM25Ingestor:
@@ -215,6 +219,8 @@ class VectorDBIngestor:
             metrics["doc_name"] = report_path.name
             self.last_report_metrics.append(metrics)
 
+        # Write embedding manifest for index versioning
+        write_manifest(output_dir)
         print(f"Processed {len(all_report_paths)} reports")
 
     def process_single_report(self, report_path: Path, output_dir: Path) -> dict:
@@ -238,6 +244,8 @@ class VectorDBIngestor:
         metrics["faiss_write_ms"] = write_ms
         metrics["doc_name"] = report_path.name
         self.last_report_metrics = [metrics]
+        # Write/update embedding manifest for index versioning
+        write_manifest(output_dir)
         return metrics
 
     @staticmethod
@@ -271,6 +279,20 @@ class VectorDBIngestor:
         if not faiss_files:
             return metrics
 
+        # ── Index version validation ──────────────────────────────────────
+        # Check manifest to detect stale indices from a different model/dim.
+        stored_manifest = read_manifest(vector_dir)
+        cur = current_manifest()
+        expected_dim = cur["embedding_dim"]
+        skipped_dim_mismatch = 0
+
+        if stored_manifest and not validate_manifest_compat(stored_manifest, label="build_case_index"):
+            _ingest_log.warning(
+                "case_index_manifest_mismatch dir=%s stored=%s current=%s — "
+                "stale indices from old model will be skipped during merge",
+                vector_dir, stored_manifest, cur,
+            )
+
         build_start = time.perf_counter()
         merged_index = None
         for faiss_file in faiss_files:
@@ -278,11 +300,20 @@ class VectorDBIngestor:
                 idx = faiss.read_index(str(faiss_file))
             except Exception:
                 continue  # skip corrupt / incompatible shards
+            # Reject indices with wrong dimension (model migration safety)
+            if expected_dim and idx.d != expected_dim:
+                skipped_dim_mismatch += 1
+                _ingest_log.warning(
+                    "case_index_skip_dim file=%s dim=%d expected=%d",
+                    faiss_file.name, idx.d, expected_dim,
+                )
+                continue
             if merged_index is None:
                 dim = idx.d
                 merged_index = faiss.IndexFlatIP(dim)
                 metrics["dimension"] = dim
             if idx.d != merged_index.d:
+                skipped_dim_mismatch += 1
                 continue  # skip shards with mismatched dimension
             # Extract all vectors and add to merged index
             n = idx.ntotal
@@ -295,6 +326,14 @@ class VectorDBIngestor:
             metrics["total_vectors"] += n
 
         metrics["build_ms"] = (time.perf_counter() - build_start) * 1000
+        metrics["skipped_dim_mismatch"] = skipped_dim_mismatch
+
+        if skipped_dim_mismatch:
+            _ingest_log.warning(
+                "case_index_dim_mismatch_summary skipped=%d/%d shards "
+                "(likely from old embedding model, need re-indexing)",
+                skipped_dim_mismatch, len(faiss_files),
+            )
 
         if merged_index is None or merged_index.ntotal == 0:
             return metrics
@@ -304,4 +343,8 @@ class VectorDBIngestor:
         faiss.write_index(merged_index, str(output_path))
         metrics["write_ms"] = (time.perf_counter() - write_start) * 1000
         metrics["output_path"] = str(output_path)
+        # Write manifest alongside case index
+        write_manifest(vector_dir)
+        metrics["embedding_model"] = cur["embedding_model"]
+        metrics["embedding_dim"] = cur["embedding_dim"]
         return metrics

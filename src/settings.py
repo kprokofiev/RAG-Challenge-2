@@ -51,7 +51,7 @@ class WorkerSettings(BaseSettings):
     watchdog_max_reclaims: int = Field(3, env="DDKIT_WATCHDOG_MAX_RECLAIMS")
 
     # Embeddings settings
-    embeddings_model: str = Field("text-embedding-3-large", env="EMBEDDINGS_MODEL")
+    embeddings_model: str = Field("text-embedding-3-small", env="EMBEDDINGS_MODEL")
     embeddings_batch_size: int = Field(128, env="EMBEDDINGS_BATCH_SIZE")
     embeddings_max_concurrency: int = Field(4, env="EMBEDDINGS_MAX_CONCURRENCY")
     embeddings_retry_max: int = Field(3, env="EMBEDDINGS_RETRY_MAX")
