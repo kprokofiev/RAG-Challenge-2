@@ -1854,7 +1854,7 @@ class DossierReportGenerator:
                     # Remove the LEGAL_STATUS_NOT_AVAILABLE unknown we added earlier
                     unknowns[:] = [
                         u for u in unknowns
-                        if not (u.field == f"patent_families[{fam.family_id}].expiry_by_country"
+                        if not (u.field_path == f"patent_families[{fam.family_id}].expiry_by_country"
                                 and u.reason_code == "LEGAL_STATUS_NOT_AVAILABLE")
                     ]
 
