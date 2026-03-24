@@ -16,7 +16,10 @@ import numpy as np
 from tenacity import retry, wait_fixed, stop_after_attempt
 
 from src.settings import settings
-from src.embedding_utils import write_manifest, read_manifest, validate_manifest_compat, current_manifest
+from src.embedding_utils import (
+    write_manifest, read_manifest, validate_manifest_compat, current_manifest,
+    get_embedding_cache, EmbeddingCache,
+)
 from src.tokenizer import tokenize as _pharma_tokenize
 
 import logging as _logging
@@ -65,6 +68,7 @@ class VectorDBIngestor:
         self._metrics_lock = threading.Lock()
         self._reset_embedding_metrics()
         self.last_report_metrics: List[dict] = []
+        self._emb_cache: EmbeddingCache | None = get_embedding_cache()
 
     def _reset_embedding_metrics(self):
         self._batch_timings: List[float] = []
@@ -92,20 +96,45 @@ class VectorDBIngestor:
             if not text:
                 return []
             sanitized = [t if (isinstance(t, str) and t.strip()) else " " for t in text]
-            batch_size = max(1, settings.embeddings_batch_size)
-            batches = [(i, sanitized[i:i + batch_size]) for i in range(0, len(sanitized), batch_size)]
-            results: List[List[float]] = [None] * len(sanitized)  # type: ignore
 
-            with ThreadPoolExecutor(max_workers=max(1, settings.embeddings_max_concurrency)) as executor:
-                future_map = {
-                    executor.submit(self._embed_batch_with_retry, batch, model): start_idx
-                    for start_idx, batch in batches
-                }
-                for future in as_completed(future_map):
-                    start_idx = future_map[future]
-                    batch_embeddings = future.result()
-                    for offset, emb in enumerate(batch_embeddings):
-                        results[start_idx + offset] = emb
+            # ── Embedding cache: resolve hits, embed only misses ──────────
+            results: List[List[float]] = [None] * len(sanitized)  # type: ignore
+            miss_indices: List[int]
+
+            if self._emb_cache:
+                cached, miss_indices = self._emb_cache.get_batch(sanitized, model)
+                for i, vec in enumerate(cached):
+                    if vec is not None:
+                        results[i] = vec
+            else:
+                miss_indices = list(range(len(sanitized)))
+
+            if miss_indices:
+                miss_texts = [sanitized[i] for i in miss_indices]
+                batch_size = max(1, settings.embeddings_batch_size)
+                batches = [(j, miss_texts[j:j + batch_size]) for j in range(0, len(miss_texts), batch_size)]
+                miss_results: List[List[float]] = [None] * len(miss_texts)  # type: ignore
+
+                with ThreadPoolExecutor(max_workers=max(1, settings.embeddings_max_concurrency)) as executor:
+                    future_map = {
+                        executor.submit(self._embed_batch_with_retry, batch, model): start_idx
+                        for start_idx, batch in batches
+                    }
+                    for future in as_completed(future_map):
+                        start_idx = future_map[future]
+                        batch_embeddings = future.result()
+                        for offset, emb in enumerate(batch_embeddings):
+                            miss_results[start_idx + offset] = emb
+
+                # Write fresh embeddings to cache + fill results
+                cache_texts = []
+                cache_vecs = []
+                for mi, orig_idx in enumerate(miss_indices):
+                    results[orig_idx] = miss_results[mi]
+                    cache_texts.append(sanitized[orig_idx])
+                    cache_vecs.append(miss_results[mi])
+                if self._emb_cache and cache_vecs:
+                    self._emb_cache.put_batch(cache_texts, model, cache_vecs)
 
             timings = list(self._batch_timings)
             attempts = list(self._batch_attempts)
@@ -114,17 +143,22 @@ class VectorDBIngestor:
             max_latency_ms = max(timings) * 1000 if timings else 0
             total_time_ms = (time.perf_counter() - start_total) * 1000
             dimensions = len(results[0]) if results and results[0] is not None else 0
+            n_cached = len(sanitized) - len(miss_indices)
+            batch_size_used = max(1, settings.embeddings_batch_size)
+            n_api_batches = len(timings)  # actual API batches sent
             self.last_metrics.update({
                 "embeddings_model": model,
-                "embeddings_batch_size": batch_size,
+                "embeddings_batch_size": batch_size_used,
                 "embeddings_max_concurrency": settings.embeddings_max_concurrency,
-                "embeddings_requests": len(batches),
-                "embeddings_attempts": sum(attempts) if attempts else len(batches),
+                "embeddings_requests": n_api_batches,
+                "embeddings_attempts": sum(attempts) if attempts else n_api_batches,
                 "embeddings_avg_latency_ms": avg_latency_ms,
                 "embeddings_p95_latency_ms": p95_latency_ms,
                 "embeddings_max_latency_ms": max_latency_ms,
                 "embeddings_total_time_ms": total_time_ms,
-                "embedding_dimensions": dimensions
+                "embedding_dimensions": dimensions,
+                "embedding_cache_hits": n_cached,
+                "embedding_cache_misses": len(miss_indices),
             })
             return results  # type: ignore
 
