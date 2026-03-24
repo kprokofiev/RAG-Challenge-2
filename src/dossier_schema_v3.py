@@ -1147,7 +1147,87 @@ def build_product_contexts(
         if form_fam:
             existing_form_families.add(form_fam)
 
-    return list(ctx_map.values()), suppressed_contexts
+    # ── Phase 3: Post-merge — absorb evidence/weak contexts into registration ──
+    # If an evidence_supported or weak_signal context matches a registration_confirmed
+    # context by region AND the evidence route is implied by the registration's
+    # dosage forms, merge them to reduce multi_context_ambiguous noise.
+    contexts = list(ctx_map.values())
+    contexts = _postmerge_evidence_into_registration(contexts)
+
+    return contexts, suppressed_contexts
+
+
+def _postmerge_evidence_into_registration(
+    contexts: List[ProductContext],
+) -> List[ProductContext]:
+    """Absorb evidence_supported/weak_signal contexts into registration_confirmed
+    when region + route/form are compatible. Conservative: merge only when identity
+    is unambiguous. Never merges two registration_confirmed contexts."""
+    reg_ctxs = [c for c in contexts if c.context_strength == "registration_confirmed"]
+    ev_ctxs = [c for c in contexts if c.context_strength in ("evidence_supported", "weak_signal")]
+    if not reg_ctxs or not ev_ctxs:
+        return contexts
+
+    merged_ids: set = set()
+
+    for ev_ctx in ev_ctxs:
+        ev_region = (ev_ctx.region or "").upper()
+        ev_route = _normalize_route_family(ev_ctx.route or "")
+        ev_form = _normalize_form_family(ev_ctx.dosage_forms[0] if ev_ctx.dosage_forms else "")
+
+        best_match: Optional[ProductContext] = None
+        for reg_ctx in reg_ctxs:
+            reg_region = (reg_ctx.region or "").upper()
+
+            # Region must match (or evidence has no region)
+            if ev_region and reg_region and ev_region != reg_region:
+                continue
+
+            # Check if evidence route/form is implied by registration forms
+            reg_route_families: set = set()
+            reg_form_families: set = set()
+            for form in reg_ctx.dosage_forms:
+                ff = _normalize_form_family(form)
+                if ff:
+                    reg_form_families.add(ff)
+                rf = _normalize_route_family(form)
+                if rf:
+                    reg_route_families.add(rf)
+
+            route_compatible = False
+            if not ev_route:
+                route_compatible = True  # No route to check
+            elif ev_route in reg_route_families:
+                route_compatible = True  # Route matches registration forms
+            elif not reg_route_families:
+                route_compatible = True  # Registration has no route info
+
+            form_compatible = False
+            if not ev_form:
+                form_compatible = True
+            elif ev_form in reg_form_families:
+                form_compatible = True
+            elif not reg_form_families:
+                form_compatible = True
+
+            if route_compatible and form_compatible:
+                best_match = reg_ctx
+                break
+
+        if best_match:
+            # Absorb evidence refs into registration context
+            for ref in ev_ctx.evidence_refs:
+                if ref not in best_match.evidence_refs:
+                    best_match.evidence_refs.append(ref)
+            # Add route to registration if missing
+            if ev_ctx.route and not best_match.route:
+                best_match.route = ev_ctx.route
+            merged_ids.add(ev_ctx.context_id)
+
+    if merged_ids:
+        contexts = [c for c in contexts if c.context_id not in merged_ids]
+
+    return contexts
 
 
 # ── Sprint 7.5: Synthesis kind classifier ────────────────────────────────────
