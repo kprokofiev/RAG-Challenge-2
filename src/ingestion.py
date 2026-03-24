@@ -334,14 +334,14 @@ class VectorDBIngestor:
                 idx = faiss.read_index(str(faiss_file))
             except Exception:
                 continue  # skip corrupt / incompatible shards
-            # Reject indices with wrong dimension (model migration safety)
+            # Warn about dimension mismatch (model migration tracking)
+            # but do NOT skip — let first shard set the target dimension.
             if expected_dim and idx.d != expected_dim:
-                skipped_dim_mismatch += 1
-                _ingest_log.warning(
-                    "case_index_skip_dim file=%s dim=%d expected=%d",
+                _ingest_log.info(
+                    "case_index_dim_note file=%s dim=%d settings_expected=%d "
+                    "(will merge by first-shard dimension, not settings)",
                     faiss_file.name, idx.d, expected_dim,
                 )
-                continue
             if merged_index is None:
                 dim = idx.d
                 merged_index = faiss.IndexFlatIP(dim)
