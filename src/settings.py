@@ -59,7 +59,7 @@ class WorkerSettings(BaseSettings):
 
     # Chunking settings
     chunk_size_tokens: int = Field(800, env="CHUNK_SIZE_TOKENS")
-    chunk_overlap_tokens: int = Field(100, env="CHUNK_OVERLAP_TOKENS")
+    chunk_overlap_tokens: int = Field(50, env="CHUNK_OVERLAP_TOKENS")
     chunk_dedup: bool = Field(True, env="CHUNK_DEDUP")
 
     # Docling tuning
