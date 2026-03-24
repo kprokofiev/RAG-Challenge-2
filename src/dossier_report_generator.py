@@ -57,9 +57,9 @@ logger = logging.getLogger(__name__)
 
 FIELD_ALLOWED_SOURCES: Dict[str, List[str]] = {
     # Registration facts — strict Tier-1 only
-    "registered_where":        ["epar", "smpc", "label", "us_fda", "grls_card", "grls", "eaeu_document"],
+    "registered_where":        ["epar", "smpc", "label", "us_fda", "grls_card", "grls", "eaeu_document", "eaeu_registration"],
     "fda_approval_date":       ["label", "us_fda", "approval_letter"],
-    "mah_holders":             ["smpc", "epar", "grls_card", "grls", "ru_instruction", "label"],
+    "mah_holders":             ["smpc", "epar", "grls_card", "grls", "ru_instruction", "label", "eaeu_registration"],
     # Identity / forms — Tier-1 preferred, Tier-2 fallback for moa/class
     "trade_names":             ["label", "smpc", "grls_card", "grls", "ru_instruction", "epar"],
     "dosage_forms":            ["label", "smpc", "grls_card", "ru_instruction"],
@@ -1318,9 +1318,6 @@ class DossierReportGenerator:
 
     def _generate_registrations(self, unknowns: List[DossierUnknown]) -> List[DossierRegistration]:
         """Generate registration records for RU, EU, US."""
-        # S6-T6: EAEU is NOT in the live search list because the EAEU portal client
-        # is a URL-builder stub only (pharm_search/packages/clients/ru/eaeu/eaeu.go).
-        # It gets a forced typed-unknown below instead of being searched.
         regions = [
             ("RU", ["grls_card", "grls", "ru_instruction"],
              "What are the GRLS registration numbers, trade names, MAH, drug forms, and status for this drug in Russia?"),
@@ -1328,6 +1325,8 @@ class DossierReportGenerator:
              "What are the EMA marketing authorization numbers, MAH, authorized forms, and status for this drug in the EU?"),
             ("US", ["label", "us_fda", "approval_letter", "anda_package"],
              "What are the FDA NDA/BLA numbers, applicant names, drug forms, and approval dates for this drug in the US?"),
+            ("EAEU", ["eaeu_registration", "eaeu_document"],
+             "What are the EAEU registration numbers, trade names, MAH, drug forms, validity dates, and status for this drug in EAEU member states?"),
         ]
 
         registrations: List[DossierRegistration] = []
@@ -1421,17 +1420,18 @@ class DossierReportGenerator:
                 # so the deterministic status isn't silently lost.
                 pass  # Don't create a stub without reg_number — would be misleading
 
-        # S6-T6: EAEU typed-unknown — always add because client is a stub.
-        # TZ §5.2: if EAEU not implemented → write typed unknown, do NOT create empty row.
-        self._add_unknown(
-            unknowns, "registrations[EAEU].*", "EAEU_NOT_IMPLEMENTED",
-            f"EAEU drug registry data unavailable for {self.inn}. "
-            "The EAEU portal client (pharm_search/packages/clients/ru/eaeu/eaeu.go) "
-            "is a URL-builder stub that does not query portal.eaeunion.org.",
-            "Implement HTTP client for portal.eaeunion.org public REST API "
-            "(endpoint: /sites/portal/ru-ru/Pages/registry/register-of-drugs.aspx). "
-            "Replace BuildEAEULink stub with real drug registry search.",
-        )
+        # S17-GAP3: EAEU typed-unknown is now conditional.
+        # If EAEU region was populated by the LLM from eaeu_registration docs,
+        # skip the EAEU_NOT_IMPLEMENTED unknown.
+        has_eaeu_reg = any(r.region.upper() == "EAEU" for r in registrations)
+        if not has_eaeu_reg:
+            self._add_unknown(
+                unknowns, "registrations[EAEU].*", "EAEU_NOT_IMPLEMENTED",
+                f"EAEU drug registry data unavailable for {self.inn}. "
+                "No eaeu_registration documents found in corpus. "
+                "Ensure the EAEU SPD connector seeds eaeu_registration docs.",
+                "Verify ru-api EAEU SPD service is reachable and INN resolves.",
+            )
 
         # S5-P0-D + S6: Dedup by region — keep only the richest entry per region.
         # LLM may produce duplicate rows for the same region (e.g. 2 × "RU").
