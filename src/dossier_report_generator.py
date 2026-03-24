@@ -1060,15 +1060,27 @@ class DossierReportGenerator:
     _PATENT_EXPIRY_US_RE = re.compile(
         r"(US\d{7,})\s+(\d{4}-\d{2}-\d{2})",
     )
+    # ru_patent_fips chunks: embedded JSON with "doc_id":"RU2803237C2_20230911"
+    # ... "jurisdiction":"RU" ... "expiry_date":"2039-10-25"
+    # OCR may insert spaces within dates/numbers, and newlines within JSON.
+    _RU_FIPS_DOC_ID_RE = re.compile(
+        r'"doc_id"\s*:\s*"((?:RU|EA)[\dA-Z ]+?)_[\d ]+?"',
+    )
+    _RU_FIPS_EXPIRY_DATE_RE = re.compile(
+        r'"expiry_date"\s*:\s*"([\d\-\s]+?)"',
+    )
+    _RU_FIPS_JURISDICTION_RE = re.compile(
+        r'"jurisdiction"\s*:\s*"([A-Z]{2})"',
+    )
 
     def _extract_patent_expiry_deterministic(self) -> Dict[str, Dict[str, str]]:
-        """Scan patent_legal_events and patent_expiry_us chunks for expiry dates.
+        """Scan patent_legal_events, patent_expiry_us, and ru_patent_fips chunks for expiry dates.
 
         Returns dict: patent_number_normalised -> {"country": "XX", "expiry": "YYYY-MM-DD",
                                                     "evidence": DossierEvidence}
         Used to patch LLM-extracted patent families that are missing expiry_by_country.
         """
-        target_doc_kinds = {"patent_legal_events", "patent_expiry_us"}
+        target_doc_kinds = {"patent_legal_events", "patent_expiry_us", "ru_patent_fips"}
         expiry_map: Dict[str, Dict[str, Any]] = {}
 
         json_files = list(self.documents_dir.glob("*.json"))
@@ -1126,11 +1138,53 @@ class DossierReportGenerator:
                             self._evidence_registry[ev.evidence_id] = ev
                             expiry_map[norm] = {"country": "US", "expiry": expiry, "evidence": ev}
 
+                elif doc_kind == "ru_patent_fips":
+                    # FIPS chunks contain embedded JSON items with doc_id, jurisdiction,
+                    # expiry_date fields. OCR may insert spaces within values.
+                    self._extract_ru_fips_expiry(
+                        text, page, doc_id, doc_title, metainfo, expiry_map
+                    )
+
         logger.info(
             "patent_expiry_deterministic inn=%s extracted=%d patents with expiry dates",
             self.inn, len(expiry_map),
         )
         return expiry_map
+
+    def _extract_ru_fips_expiry(
+        self, text: str, page, doc_id: str, doc_title: str,
+        metainfo: dict, expiry_map: Dict[str, Dict[str, Any]],
+    ) -> None:
+        """Parse RU FIPS registry chunks for patent expiry dates.
+
+        FIPS chunks embed serialized JSON with items like:
+            "doc_id":"RU2803237C2_20230911" ... "jurisdiction":"RU" ... "expiry_date":"2039-10-25"
+        OCR may insert spaces within numbers/dates.
+        """
+        # Find all doc_id positions, then search forwards for expiry_date + jurisdiction.
+        for id_m in self._RU_FIPS_DOC_ID_RE.finditer(text):
+            raw_patent = id_m.group(1).replace(" ", "")  # e.g. RU2803237C2
+            # Search within next 3000 chars for expiry_date
+            window = text[id_m.end():id_m.end() + 3000]
+            exp_m = self._RU_FIPS_EXPIRY_DATE_RE.search(window)
+            if not exp_m:
+                continue
+            expiry_raw = exp_m.group(1).replace(" ", "").replace("\n", "")
+            # Validate date format YYYY-MM-DD
+            if not re.match(r"\d{4}-\d{2}-\d{2}$", expiry_raw):
+                continue
+
+            # Jurisdiction (defaults to RU for FIPS)
+            jur_m = self._RU_FIPS_JURISDICTION_RE.search(window)
+            country = jur_m.group(1) if jur_m else "RU"
+
+            norm = self._normalise_patent_number(raw_patent)
+            if norm not in expiry_map:
+                ev = _build_evidence(doc_id, page, text, doc_title,
+                                     source_url=metainfo.get("source_url"),
+                                     doc_kind="ru_patent_fips")
+                self._evidence_registry[ev.evidence_id] = ev
+                expiry_map[norm] = {"country": country, "expiry": expiry_raw, "evidence": ev}
 
     @staticmethod
     def _normalise_patent_number(raw: str) -> str:
