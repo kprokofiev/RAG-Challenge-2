@@ -297,7 +297,9 @@ class PubMedIngestor:
             if self.db.is_configured():
                 # Store a lightweight "parsed JSON" key for traceability.
                 self.db.update_document_parsed(doc_id, parsed_key, pages_count=1)
-            logger.info("PubMed ingested doc=%s chunks=%s", doc_id, chunks_bundle_key)
+                # PubMed pipeline handles parse+index in one step — mark indexed.
+                self.db.update_document_indexed(doc_id)
+            logger.info("PubMed ingested doc=%s chunks=%s status=indexed", doc_id, chunks_bundle_key)
         except Exception as exc:
             logger.warning("PubMed artifact upload failed for %s: %s", doc_id, exc)
             return False

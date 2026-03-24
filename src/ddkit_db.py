@@ -40,6 +40,12 @@ class DDKitDB:
             (s3_parsed_json_key, pages_count, doc_id)
         )
 
+    def update_document_indexed(self, doc_id: str) -> None:
+        self._exec(
+            "UPDATE documents SET status='indexed', updated_at=NOW() WHERE id=%s",
+            (doc_id,)
+        )
+
     def upsert_document_by_source_url(
         self,
         tenant_id: str,
