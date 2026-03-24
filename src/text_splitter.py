@@ -185,6 +185,54 @@ class TextSplitter():
 
         return {"parents": parents, "children": children}
 
+    # ── Pre-chunking noise cleanup ─────────────────────────────────────────
+    # Patterns that waste embedding tokens without adding retrieval signal.
+    # Conservative: only removes clearly non-content artifacts.
+    _NOISE_PATTERNS = [
+        # HTML tags (residual from PDF→HTML→Markdown conversion)
+        re.compile(r"<(?:script|style|noscript|nav|footer|header)[^>]*>[\s\S]*?</(?:script|style|noscript|nav|footer|header)>", re.IGNORECASE),
+        re.compile(r"<[^>]{1,200}>"),
+        # CSS/JS fragments
+        re.compile(r"\{[^}]*(?:font-family|margin|padding|display|background)[^}]*\}", re.IGNORECASE),
+        # Repeated nav/breadcrumb separators (e.g. "Home > Products > ...")
+        re.compile(r"^(?:\w+\s*[>»›]\s*){3,}.*$", re.MULTILINE),
+        # Long runs of special chars (decorative lines, ASCII art borders)
+        re.compile(r"[=_\-~*#]{20,}"),
+        # Page number artifacts ("Page 12 of 45", "- 12 -")
+        re.compile(r"^\s*(?:Page\s+\d+\s+of\s+\d+|-\s*\d+\s*-)\s*$", re.MULTILINE | re.IGNORECASE),
+        # Cookie/consent banners (common in web-scraped PDFs)
+        re.compile(r"(?:accept|reject)\s+(?:all\s+)?cookies?", re.IGNORECASE),
+        # Blank-line runs (collapse to single)
+        re.compile(r"\n{4,}"),
+    ]
+
+    @classmethod
+    def _clean_page_text(cls, text: str) -> str:
+        """Remove noise artifacts before chunking. Returns cleaned text."""
+        original_len = len(text)
+        for pat in cls._NOISE_PATTERNS:
+            if pat.pattern == r"\n{4,}":
+                text = pat.sub("\n\n", text)
+            else:
+                text = pat.sub(" ", text)
+        # Collapse multi-space runs left by removals
+        text = re.sub(r"[ \t]{3,}", " ", text)
+        text = text.strip()
+        cleaned_len = len(text)
+        if original_len > 0:
+            removed_pct = (original_len - cleaned_len) / original_len * 100
+            if removed_pct > 40:
+                logger.warning(
+                    "noise_cleanup_aggressive: removed %.1f%% of page text (%d→%d chars)",
+                    removed_pct, original_len, cleaned_len,
+                )
+            elif removed_pct > 1:
+                logger.debug(
+                    "noise_cleanup: removed %.1f%% (%d→%d chars)",
+                    removed_pct, original_len, cleaned_len,
+                )
+        return text
+
     # Regex to detect Markdown table blocks (header + separator + rows)
     _TABLE_RE = re.compile(
         r"(\|[^\n]+\|\n\|[-:\s|]+\|\n(?:\|[^\n]+\|\n?)+)",
@@ -232,7 +280,8 @@ class TextSplitter():
         # Large table limit — tables below this are kept as single chunks
         large_table_limit = chunk_size * 3
 
-        blocks = self._structural_presplit(page['text'])
+        cleaned_text = self._clean_page_text(page['text'])
+        blocks = self._structural_presplit(cleaned_text)
         chunks_with_meta = []
         page_num = page['page']
 
