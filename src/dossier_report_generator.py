@@ -20,6 +20,8 @@ import logging
 import os
 import re
 import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -811,6 +813,8 @@ class DossierReportGenerator:
     # ── Deterministic extractors (Sprint 15) ─────────────────────────────────
 
     # Patterns for FDA approval date, ordered by specificity (most specific first).
+    # Group convention: patterns yield (year, month, day), (year, month_word, day),
+    #   (year,) or (month_word, day, year).  The extractor normalises all forms.
     _FDA_DATE_PATTERNS = [
         # Exact marker injected by processor.ts fetchDrugsFdaApprovalDate()
         re.compile(
@@ -822,9 +826,51 @@ class DossierReportGenerator:
             r"(?:original\s+)?approval\s+date\s*:\s*(\d{4})[-/]?(\d{2})[-/]?(\d{2})",
             re.IGNORECASE,
         ),
+        # "Initial U.S. Approval: 2023" (year-only, common in FDA labels)
+        re.compile(
+            r"initial\s+u\.?s\.?\s+approval\s*:\s*(\d{4})\b",
+            re.IGNORECASE,
+        ),
         # "first approved: 2000" (year-only fallback)
         re.compile(
             r"first\s+approved\s*:\s*(\d{4})\b",
+            re.IGNORECASE,
+        ),
+    ]
+
+    _MONTH_MAP = {
+        "january": "01", "february": "02", "march": "03", "april": "04",
+        "may": "05", "june": "06", "july": "07", "august": "08",
+        "september": "09", "october": "10", "november": "11", "december": "12",
+        "jan": "01", "feb": "02", "mar": "03", "apr": "04",
+        "jun": "06", "jul": "07", "aug": "08", "sep": "09",
+        "oct": "10", "nov": "11", "dec": "12",
+    }
+
+    # Word-month patterns — tried AFTER numeric patterns.
+    # "Approved May 19, 2023" / "approved on January 15, 2023"
+    _FDA_DATE_WORD_PATTERNS = [
+        re.compile(
+            r"approv(?:ed|al)\s+(?:on\s+)?(?:in\s+)?"
+            r"(january|february|march|april|may|june|july|august|september|october|november|december|"
+            r"jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)"
+            r"\s+(\d{1,2}),?\s+(\d{4})",
+            re.IGNORECASE,
+        ),
+        # "Approved 19 May 2023"
+        re.compile(
+            r"approv(?:ed|al)\s+(?:on\s+)?(\d{1,2})\s+"
+            r"(january|february|march|april|may|june|july|august|september|october|november|december|"
+            r"jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)"
+            r",?\s+(\d{4})",
+            re.IGNORECASE,
+        ),
+        # "Marketing Authorization Date: May 19, 2023"
+        re.compile(
+            r"(?:marketing\s+)?authorization\s+date\s*:\s*"
+            r"(january|february|march|april|may|june|july|august|september|october|november|december|"
+            r"jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)"
+            r"\s+(\d{1,2}),?\s+(\d{4})",
             re.IGNORECASE,
         ),
     ]
@@ -868,6 +914,7 @@ class DossierReportGenerator:
                 if not text:
                     continue
 
+                # --- Numeric patterns first ---
                 for pattern in self._FDA_DATE_PATTERNS:
                     m = pattern.search(text)
                     if not m:
@@ -907,6 +954,46 @@ class DossierReportGenerator:
                     # Found a full date — no need to keep scanning this chunk
                     if len(groups) == 3:
                         break
+
+                # --- Word-month patterns (e.g. "Approved May 19, 2023") ---
+                if best_date and len(best_date) > 5 and best_date[5:] != "01-01":
+                    # Already have a full date, skip word patterns
+                    continue
+
+                for wp in self._FDA_DATE_WORD_PATTERNS:
+                    wm = wp.search(text)
+                    if not wm:
+                        continue
+                    wgroups = wm.groups()
+                    # Determine order: (month_word, day, year) or (day, month_word, year)
+                    if wgroups[0].isdigit():
+                        # (day, month_word, year)
+                        day_s, month_word, year_s = wgroups
+                    else:
+                        # (month_word, day, year)
+                        month_word, day_s, year_s = wgroups
+                    month_num = self._MONTH_MAP.get(month_word.lower())
+                    if not month_num:
+                        continue
+                    try:
+                        yr = int(year_s)
+                        dy = int(day_s)
+                        if yr < 1900 or yr > 2030 or dy < 1 or dy > 31:
+                            continue
+                    except ValueError:
+                        continue
+                    date_str = f"{year_s}-{month_num}-{int(day_s):02d}"
+
+                    page = chunk.get("page")
+                    ev = _build_evidence(
+                        doc_id, page, text, doc_title,
+                        source_url=metainfo.get("source_url"),
+                        doc_kind=doc_kind,
+                    )
+                    self._evidence_registry[ev.evidence_id] = ev
+                    best_date = date_str
+                    best_evidence = ev
+                    break
 
         if best_date and best_evidence:
             logger.info(
@@ -1305,14 +1392,28 @@ class DossierReportGenerator:
                 "Ensure FDA label or EMA SmPC is indexed (trade_names = brand names).",
             )
 
-        # S6-T4: PubChem chemistry block — if no pubchem doc indexed, add typed unknown
+        # S6-T4: PubChem chemistry block — detect biologics vs small molecules
+        _drug_class_lower = (passport.drug_class.value if passport.drug_class and passport.drug_class.value else "").lower()
+        _biologic_kws = {"antibody", "bispecific", "monoclonal", "biologic", "biosimilar",
+                         "fusion protein", "peptide", "conjugate", "adc", "recombinant",
+                         "immunoglobulin", "nanobody", "fab fragment"}
+        _is_biologic = any(kw in _drug_class_lower for kw in _biologic_kws)
+
         if not any([passport.smiles, passport.inchi_key, passport.chemical_formula]):
-            self._add_unknown(
-                unknowns, "passport.chemistry", "NO_DOCUMENT_IN_CORPUS",
-                f"No chemistry data (SMILES/InChIKey/formula) for {self.inn}. "
-                "PubChem document not in corpus.",
-                "Ensure PubChem compound data (doc_kind=pubchem) is attached to corpus."
-            )
+            if _is_biologic:
+                self._add_unknown(
+                    unknowns, "passport.chemistry", "NOT_APPLICABLE_BIOLOGIC",
+                    f"{self.inn} is a biologic ({passport.drug_class.value if passport.drug_class else 'unknown'}). "
+                    "SMILES/InChIKey/molecular formula are not applicable for large-molecule biologics.",
+                    "No action needed — chemistry fields excluded from passport score for biologics."
+                )
+            else:
+                self._add_unknown(
+                    unknowns, "passport.chemistry", "NO_DOCUMENT_IN_CORPUS",
+                    f"No chemistry data (SMILES/InChIKey/formula) for {self.inn}. "
+                    "PubChem document not in corpus.",
+                    "Ensure PubChem compound data (doc_kind=pubchem) is attached to corpus."
+                )
 
         return passport
 
@@ -1569,6 +1670,109 @@ class DossierReportGenerator:
         )
         return study
 
+    @staticmethod
+    def _fetch_ctgov_study(nct_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch study metadata from ClinicalTrials.gov v2 API.
+
+        Returns parsed JSON or None on failure. Timeout: 10s.
+        """
+        url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}?fields=protocolSection"
+        try:
+            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            logger.debug("ctgov_api_fetch nct=%s error=%s", nct_id, exc)
+            return None
+
+    def _enrich_clinical_from_ctgov_api(
+        self, studies: List[DossierClinicalStudy]
+    ) -> None:
+        """Deterministic post-LLM enrichment: fill null phase/status/enrollment/countries
+        from ClinicalTrials.gov v2 API.
+
+        Only patches fields that are null — never overwrites LLM-extracted values.
+        Evidence ref: synthetic "ctgov_api:{NCT}" entry.
+        """
+        for study in studies:
+            nct_id = study.study_id.value if study.study_id else None
+            if not nct_id or not nct_id.startswith("NCT"):
+                continue
+
+            needs_phase = not (study.phase and study.phase.value)
+            needs_status = not (study.status and study.status.value)
+            needs_enrolled = not (study.n_enrolled and study.n_enrolled.value)
+            needs_countries = not study.countries
+            needs_title = not (study.title and study.title.value)
+
+            if not any([needs_phase, needs_status, needs_enrolled, needs_countries, needs_title]):
+                continue
+
+            data = self._fetch_ctgov_study(nct_id)
+            if not data:
+                continue
+
+            protocol = data.get("protocolSection", {})
+            design = protocol.get("designModule", {})
+            status_mod = protocol.get("statusModule", {})
+            ident = protocol.get("identificationModule", {})
+            contacts = protocol.get("contactsLocationsModule", {})
+
+            ev_id = f"ctgov_api_{nct_id}"
+            if ev_id not in self._evidence_registry:
+                ev = DossierEvidence(
+                    evidence_id=ev_id,
+                    doc_id=f"ctgov_api:{nct_id}",
+                    page=None,
+                    text=f"ClinicalTrials.gov API v2 metadata for {nct_id}",
+                    doc_title=f"CTGov API: {nct_id}",
+                    source_url=f"https://clinicaltrials.gov/study/{nct_id}",
+                    doc_kind="ctgov_api",
+                )
+                self._evidence_registry[ev_id] = ev
+
+            refs = [ev_id]
+
+            if needs_phase:
+                phases = design.get("phases") or []
+                if phases:
+                    phase_str = phases[-1].replace("PHASE", "Phase ").replace("_", " ").strip()
+                    study.phase = EvidencedValue(value=phase_str, evidence_refs=refs)
+
+            if needs_status:
+                overall_status = status_mod.get("overallStatus", "")
+                if overall_status:
+                    study.status = EvidencedValue(value=overall_status, evidence_refs=refs)
+
+            if needs_enrolled:
+                enroll_info = design.get("enrollmentInfo", {})
+                enroll_count = enroll_info.get("count")
+                if enroll_count:
+                    study.n_enrolled = EvidencedValue(value=str(enroll_count), evidence_refs=refs)
+
+            if needs_countries:
+                locations = contacts.get("locations", [])
+                country_set = {loc.get("country", "") for loc in locations if loc.get("country")}
+                if country_set:
+                    study.countries = [
+                        EvidencedValue(value=c, evidence_refs=refs) for c in sorted(country_set)
+                    ]
+
+            if needs_title:
+                title_str = ident.get("officialTitle") or ident.get("briefTitle", "")
+                if title_str:
+                    study.title = EvidencedValue(value=title_str, evidence_refs=refs)
+
+            logger.info(
+                "ctgov_api_enrichment nct=%s patched: phase=%s status=%s enrolled=%s countries=%d title=%s",
+                nct_id,
+                "yes" if needs_phase and study.phase else "no",
+                "yes" if needs_status and study.status else "no",
+                "yes" if needs_enrolled and study.n_enrolled else "no",
+                len(study.countries) if study.countries else 0,
+                "yes" if needs_title and study.title else "no",
+            )
+
     def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
         """Generate structured clinical study cards.
 
@@ -1577,6 +1781,7 @@ class DossierReportGenerator:
         2. For each NCT ID: scoped retrieval → scoped LLM extraction → one card
         3. Dedup by NCT ID
         4. Only cards with study_id pass (enforced by construction)
+        5. CTGov API enrichment: fill null phase/status/enrollment from CTGov v2
 
         This replaces the Sprint 12 approach of one global LLM call + post-hoc filtering.
         Each study gets its own evidence bucket, preventing cross-study contamination.
@@ -1672,6 +1877,10 @@ class DossierReportGenerator:
                 unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
                 f"Found {len(corpus_nct_ids)} NCT IDs but could not assemble any study cards.",
             )
+
+        # Step 4: CTGov API enrichment — fill null phase/status/enrollment/countries
+        if studies:
+            self._enrich_clinical_from_ctgov_api(studies)
 
         return studies
 

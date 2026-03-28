@@ -539,6 +539,17 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     # US-specific fields: excluded from denominator when drug has no US registration
     _US_SPECIFIC_FIELDS = {"fda_approval_date", "fda_indication"}
 
+    # Small-molecule chemistry fields: excluded for biologics (antibodies, proteins, etc.)
+    _SMALL_MOLECULE_FIELDS = {"chemical_formula", "smiles", "inchi_key", "molecular_weight"}
+    _BIOLOGIC_KEYWORDS = {
+        "antibody", "bispecific", "monoclonal", "biologic", "biosimilar",
+        "fusion protein", "peptide", "conjugate", "adc", "recombinant",
+        "immunoglobulin", "nanobody", "fab fragment",
+    }
+    # Detect biologic from drug_class value
+    _drug_class_val = (pp.drug_class.value if pp.drug_class and pp.drug_class.value else "").lower()
+    _is_biologic = any(kw in _drug_class_val for kw in _BIOLOGIC_KEYWORDS)
+
     all_scalar_entries = [
         ("fda_approval_date", pp.fda_approval_date),
         ("fda_indication", pp.fda_indication),
@@ -555,6 +566,9 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     passport_scalar_fields = []
     for field_name, field_obj in all_scalar_entries:
         if field_name in _US_SPECIFIC_FIELDS and not has_us:
+            not_applicable_fields.append(f"passport.{field_name}")
+            continue
+        if field_name in _SMALL_MOLECULE_FIELDS and _is_biologic:
             not_applicable_fields.append(f"passport.{field_name}")
             continue
         passport_scalar_fields.append(field_obj)
