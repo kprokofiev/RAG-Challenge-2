@@ -253,6 +253,10 @@ class DDKitWorker:
                 # ACK: remove from processing list (#1)
                 self.queue_handler.ack_job(job_data)
                 self._send_callback(job_data, True)
+                # Release dedup lock so future runs are allowed
+                self.queue_handler.release_dedup_lock(
+                    job_data.get("job_type", ""), job_data.get("case_id", "")
+                )
                 # Clean up attempt counter on success
                 with self.job_attempts_lock:
                     if job_id in self.job_attempts:
@@ -405,6 +409,10 @@ class DDKitWorker:
             )
         except Exception as exc:
             logger.error("job_dlq_failed job_id=%s: %s", job_data.get("job_id"), exc)
+        # Release dedup lock so future runs can proceed
+        self.queue_handler.release_dedup_lock(
+            job_type, job_data.get("case_id", "")
+        )
 
     def _get_job_id(self, job_data: Dict[str, Any]) -> Optional[str]:
         """Generate a unique job ID for tracking attempts."""

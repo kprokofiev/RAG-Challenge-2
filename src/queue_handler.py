@@ -33,20 +33,44 @@ class JobQueueHandler:
         else:
             raise ValueError(f"Unknown job type: {job_type}")
 
+    # TTL for dossier dedup lock (30 min). If the job doesn't finish by then,
+    # the lock auto-expires so a new run can proceed.
+    _DOSSIER_DEDUP_TTL_S = 1800
+
     def enqueue_job(self, job_data: Dict[str, Any]) -> bool:
         """
         Enqueue a job to the appropriate queue.
+
+        For dossier_generate jobs, acquires a Redis dedup lock first.
+        If the same case_id already has a running/queued dossier job,
+        the new job is silently skipped (returns True to avoid DLQ).
 
         Args:
             job_data: Job data dictionary with 'job_type' key
 
         Returns:
-            bool: True if successfully enqueued
+            bool: True if successfully enqueued (or silently deduped)
         """
         try:
-            queue_name = self._get_queue_name(job_data["job_type"])
-            job_json = json.dumps(job_data, default=str)
+            job_type = job_data["job_type"]
+            queue_name = self._get_queue_name(job_type)
 
+            # ── Dedup lock for dossier_generate ───────────────────────────
+            if job_type == "dossier_generate":
+                case_id = job_data.get("case_id", "unknown")
+                lock_key = f"ddkit:job_lock:dossier_generate:{case_id}"
+                acquired = self.redis_client.set(
+                    lock_key, "running", nx=True, ex=self._DOSSIER_DEDUP_TTL_S
+                )
+                if not acquired:
+                    current = (self.redis_client.get(lock_key) or b"").decode()
+                    logger.warning(
+                        "job_dedup_skipped case=%s lock_state=%s — another dossier_generate is active",
+                        case_id, current,
+                    )
+                    return True  # Silently skip — not an error
+
+            job_json = json.dumps(job_data, default=str)
             self.redis_client.lpush(queue_name, job_json)
             logger.info(f"Enqueued job {job_data.get('job_type')} to queue {queue_name}")
             return True
@@ -54,6 +78,17 @@ class JobQueueHandler:
         except (RedisError, KeyError, json.JSONDecodeError) as e:
             logger.error(f"Failed to enqueue job: {e}")
             return False
+
+    def release_dedup_lock(self, job_type: str, case_id: str) -> None:
+        """Release the dedup lock for a completed/DLQ'd dossier job."""
+        if job_type != "dossier_generate":
+            return
+        lock_key = f"ddkit:job_lock:dossier_generate:{case_id}"
+        try:
+            self.redis_client.delete(lock_key)
+            logger.debug("dedup_lock_released case=%s", case_id)
+        except RedisError as e:
+            logger.warning("dedup_lock_release_failed case=%s: %s", case_id, e)
 
     def dequeue_job(self, job_type: str, timeout: int = 30) -> Optional[Dict[str, Any]]:
         """
