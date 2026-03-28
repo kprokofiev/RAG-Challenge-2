@@ -96,6 +96,8 @@ class WorkerSettings(BaseSettings):
     # Sprint-3: LLM model configuration
     # Reranker model (used in LLMReranker). Default: gpt-4o-mini-2024-07-18
     ddkit_rerank_model: str = Field("gpt-4o-mini-2024-07-18", env="DDKIT_RERANK_MODEL")
+    # Max parallel reranking threads (prevents 429 bursts). Default: 4
+    ddkit_rerank_max_concurrency: int = Field(4, env="DDKIT_RERANK_MAX_CONCURRENCY")
     # Answering model (used in APIProcessor.send_message). Default: gpt-4o-2024-08-06
     ddkit_answer_model: Optional[str] = Field(None, env="DDKIT_ANSWER_MODEL")
 

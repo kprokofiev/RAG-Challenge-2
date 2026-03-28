@@ -5,6 +5,7 @@ from openai import OpenAI
 import requests
 import src.prompts as prompts
 from concurrent.futures import ThreadPoolExecutor
+from src.settings import settings
 
 _log = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ class LLMReranker:
                 return doc_with_score
 
             # Process all documents in parallel using single-block method
-            with ThreadPoolExecutor() as executor:
+            with ThreadPoolExecutor(max_workers=settings.ddkit_rerank_max_concurrency) as executor:
                 all_results = list(executor.map(process_single_doc, documents))
                 
         else:
@@ -158,7 +159,7 @@ class LLMReranker:
                 return results
 
             # Process batches in parallel using threads
-            with ThreadPoolExecutor() as executor:
+            with ThreadPoolExecutor(max_workers=settings.ddkit_rerank_max_concurrency) as executor:
                 batch_results = list(executor.map(process_batch, doc_batches))
             
             # Flatten results
