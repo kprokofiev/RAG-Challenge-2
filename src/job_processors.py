@@ -14,7 +14,7 @@ import redis as redis_lib
 
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
-from src.dossier_report_generator import DossierReportGenerator
+from src.dossier_report_generator import DossierReportGenerator, RateLimitExhausted
 from src.case_view_v2_generator import CaseViewV2Generator
 from src.pubmed_pipeline import PubMedIngestor
 from src.storage_client import StorageClient
@@ -2214,6 +2214,15 @@ class DossierGenerateProcessor:
 
             return True
 
+        except RateLimitExhausted as rle:
+            logger.error(
+                "dossier_generate_rate_limited case=%s: %s — marking deferred",
+                case_id, rle,
+            )
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_failed(job_id, f"rate_limited: {rle}")
+            job_data["status"] = "rate_limited"
+            return False
         except Exception as exc:
             if job_id and self.ddkit_db.is_configured():
                 self.ddkit_db.mark_job_failed(job_id, str(exc))

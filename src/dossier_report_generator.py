@@ -49,7 +49,16 @@ from src.retrieval import HybridRetriever
 
 logger = logging.getLogger(__name__)
 
-# ── Authority-tiering policy (S6-T2) ─────────────────────────────────────────
+
+class RateLimitExhausted(Exception):
+    """Raised when OpenAI 429 retries are exhausted at request level.
+
+    Signals that the job should be parked (deferred), NOT restarted from scratch.
+    """
+    pass
+
+
+# ── Authority-tiering policy (S6-T2) ───────────────��─────────────────────────
 # Maps passport/registration field → allowed Tier-1 doc_kinds.
 # Fields marked Tier-2 are populated only from listed doc_kinds with confidence=medium.
 # Registration status/numbers are FORBIDDEN from Tier-2 sources.
@@ -612,8 +621,8 @@ class DossierReportGenerator:
         """Retrieve top-K evidence candidates for a question with given doc_kind filter.
 
         Retries up to 2 times with backoff on rate-limit (429) errors.
+        Raises RateLimitExhausted after exhausting retries so the job can be deferred.
         """
-        import time
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
@@ -636,6 +645,14 @@ class DossierReportGenerator:
                     )
                     time.sleep(wait)
                     continue
+                if is_rate_limit:
+                    logger.error(
+                        "retrieve 429 rate-limit EXHAUSTED for question=%r after %d retries",
+                        question[:60], max_retries,
+                    )
+                    raise RateLimitExhausted(
+                        f"OpenAI 429 after {max_retries} retries on retrieve: {question[:60]}"
+                    ) from exc
                 logger.warning("retrieve failed for question=%r: %s", question[:60], exc)
                 return []
 
@@ -706,8 +723,8 @@ class DossierReportGenerator:
         """Call LLM with structured output schema; returns parsed Pydantic object or None.
 
         Retries up to 3 times with exponential backoff on rate-limit (429) errors.
+        Raises RateLimitExhausted after exhausting retries so the job can be deferred.
         """
-        import time
         schema_str = str(schema_class.model_json_schema())
         system_prompt = (
             f"{instruction}\n\n"
@@ -745,6 +762,14 @@ class DossierReportGenerator:
                     )
                     time.sleep(wait)
                     continue
+                if is_rate_limit:
+                    logger.error(
+                        "LLM 429 rate-limit EXHAUSTED for question=%r after %d retries",
+                        question[:60], max_retries,
+                    )
+                    raise RateLimitExhausted(
+                        f"OpenAI 429 after {max_retries} retries on LLM call: {question[:60]}"
+                    ) from exc
                 logger.warning("LLM call failed for question=%r: %s", question[:60], exc)
                 return None
 
