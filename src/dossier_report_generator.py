@@ -2382,6 +2382,21 @@ class DossierReportGenerator:
 
         # Sprint 7.5 TZ-6b: run_manifest
         elapsed = time.time() - start_ts
+
+        # Sprint 18 WS1.4: Honest stage status — "empty" when stage produced 0 results
+        _stage_status = lambda count: "ok" if count > 0 else "empty"  # noqa: E731
+        _critical_failures = [a["code"] for a in operator_actions if a.get("severity") == "critical"]
+
+        # Sprint 18 WS1.4: Run-level verdict — single field for screening trust
+        _dr = report.dossier_quality_v2.decision_readiness if report.dossier_quality_v2 else {}
+        _has_red = any(v == "RED" for v in _dr.values())
+        if _critical_failures:
+            _run_verdict = "BLOCKED"
+        elif _has_red:
+            _run_verdict = "DEGRADED"
+        else:
+            _run_verdict = "PASS"
+
         report.run_manifest = RunManifest(
             run_id=run_id,
             report_id=report_id,
@@ -2390,18 +2405,18 @@ class DossierReportGenerator:
             config_digest=None,
             stages=[
                 {"name": "passport", "status": "ok"},
-                {"name": "registrations", "status": "ok", "count": len(registrations)},
-                {"name": "clinical_studies", "status": "ok", "count": len(clinical_studies)},
-                {"name": "patent_families", "status": "ok", "count": len(patent_families)},
-                {"name": "synthesis_steps", "status": "ok", "count": len(synthesis_steps)},
-                {"name": "total", "elapsed_s": round(elapsed, 1)},
+                {"name": "registrations", "status": _stage_status(len(registrations)), "count": len(registrations)},
+                {"name": "clinical_studies", "status": _stage_status(len(clinical_studies)), "count": len(clinical_studies)},
+                {"name": "patent_families", "status": _stage_status(len(patent_families)), "count": len(patent_families)},
+                {"name": "synthesis_steps", "status": _stage_status(len(synthesis_steps)), "count": len(synthesis_steps)},
+                {"name": "total", "elapsed_s": round(elapsed, 1), "run_verdict": _run_verdict},
             ],
             docs_attached=0,
             docs_indexed=0,
             docs_failed=0,
             source_verdicts=_sv,
             operator_actions=operator_actions,
-            critical_failures=[a["code"] for a in operator_actions if a.get("severity") == "critical"],
+            critical_failures=_critical_failures,
         )
 
         logger.info(

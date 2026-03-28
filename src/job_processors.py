@@ -2056,6 +2056,22 @@ class DossierGenerateProcessor:
                 if not ok:
                     raise RuntimeError("Failed to download case artifacts from S3")
 
+                # ── Sprint 18 WS1.4: Zero-evidence corpus guard ──────────────────
+                # If corpus is truly empty (no chunk files at all), set is_partial
+                # and log clearly.  Prevents silently "completed" dossier with 0 evidence.
+                chunks_dir = temp_path / "databases" / "chunked_reports"
+                _chunk_files = list(chunks_dir.glob("**/*.json")) if chunks_dir.exists() else []
+                if not _chunk_files:
+                    logger.warning(
+                        "CORPUS_EMPTY case=%s — 0 chunk files downloaded. "
+                        "Dossier will proceed but output will be skeletal.",
+                        case_id,
+                    )
+                    job_data["is_partial"] = True
+                    if "partial_reasons" not in job_data:
+                        job_data["partial_reasons"] = []
+                    job_data["partial_reasons"].append("corpus_empty:0_chunk_files")
+
                 # ── Optionally download legacy sections plan (for MoA cross-check) ─
                 sections_plan_key = job_data.get("sections_plan_key")
                 sections_plan = None
