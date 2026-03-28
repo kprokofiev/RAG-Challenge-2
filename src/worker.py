@@ -288,6 +288,9 @@ class DDKitWorker:
     # Exponential backoff delays in seconds for retries (#3).
     _RETRY_BACKOFF = [30, 60, 120, 180, 300]
 
+    # Delay for rate-limited jobs: wait 10 minutes then try once more.
+    _RATE_LIMIT_DEFER_S = 600
+
     # Statuses set by processors that are "terminal by design" — no retry makes sense.
     _TERMINAL_STATUSES = {"parsed_empty", "unsupported", "skipped"}
 
@@ -296,8 +299,40 @@ class DDKitWorker:
 
         Jobs whose status is in _TERMINAL_STATUSES (e.g. parsed_empty) are sent straight to
         DLQ on first failure — retrying will always produce the same result.
+
+        Jobs with status="rate_limited" are deferred with a long pause (10 min) and
+        do NOT count against max_job_attempts — 429 is a capacity issue, not a bug.
         """
         job_status = job_data.get("status", "")
+
+        # ── Rate-limited path: defer, don't restart from scratch ──────────
+        if job_status == "rate_limited":
+            rate_limit_retries = int(job_data.get("_rate_limit_retries", 0)) + 1
+            if rate_limit_retries > 2:
+                logger.error(
+                    "job_rate_limited_exhausted job=%s rate_limit_retries=%d — sending to DLQ",
+                    job_id, rate_limit_retries,
+                )
+                self._send_callback(job_data, False, "rate_limit_exhausted")
+                self._enqueue_dlq(job_data, "rate_limit_exhausted_after_defer")
+                with self.job_attempts_lock:
+                    if job_id in self.job_attempts:
+                        del self.job_attempts[job_id]
+                return
+
+            logger.warning(
+                "job_rate_limited_deferred job=%s rate_limit_retries=%d delay=%ds — "
+                "parking job (NOT restarting from scratch)",
+                job_id, rate_limit_retries, self._RATE_LIMIT_DEFER_S,
+            )
+            time.sleep(self._RATE_LIMIT_DEFER_S)
+            job_data["_rate_limit_retries"] = rate_limit_retries
+            # Reset attempt counter so this doesn't eat max_job_attempts
+            job_data.pop("metrics", None)
+            self._requeue_job(job_data)
+            return
+
+        # ── Terminal path: no retry makes sense ───────────────────────────
         is_terminal = (
             job_status in self._TERMINAL_STATUSES
             or (error_msg or "").startswith("terminal:")
