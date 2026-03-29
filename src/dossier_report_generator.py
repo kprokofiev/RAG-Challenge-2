@@ -1160,6 +1160,96 @@ class DossierReportGenerator:
             return combined, best_evidence
         return None
 
+    # Sprint 18: PubChem chemistry deterministic extraction patterns.
+    # Matches OCR-rendered PubChem HTML (with possible spaces inserted by OCR):
+    _PUBCHEM_FORMULA_RE = re.compile(r"Molecular\s+Formula:\s*([A-Za-z0-9]+(?:\s[A-Za-z0-9]+)*)", re.IGNORECASE)
+    _PUBCHEM_MW_RE = re.compile(r"Molecular\s+Weight:\s*([\d\.,]+)", re.IGNORECASE)
+    _PUBCHEM_SMILES_RE = re.compile(r"Canonical\s+SMILES:\s*(\S+)", re.IGNORECASE)
+    _PUBCHEM_INCHIKEY_RE = re.compile(r"InChIKey:\s*([A-Z]{14}(?:\s*[-–]\s*)?[A-Z]{10}(?:\s*[-–]\s*)?[A-Z]{1})", re.IGNORECASE)
+
+    def _extract_pubchem_chemistry_deterministic(self) -> Optional[Dict[str, Any]]:
+        """Scan pubchem doc chunks directly for chemistry fields.
+
+        Bypasses LLM retrieval — the single pubchem chunk is often outcompeted
+        by label/GRLS chunks in top-K retrieval. Returns dict with keys:
+        chemical_formula, molecular_weight, smiles, inchi_key (each EvidencedValue),
+        or None if no pubchem doc found.
+        """
+        json_files = list(self.documents_dir.glob("*.json"))
+        for doc_path in json_files:
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind != "pubchem":
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+            source_url = metainfo.get("source_url", "")
+
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text:
+                    continue
+
+                page = chunk.get("page")
+                results: Dict[str, Any] = {}
+
+                m_formula = self._PUBCHEM_FORMULA_RE.search(text)
+                m_mw = self._PUBCHEM_MW_RE.search(text)
+                m_smiles = self._PUBCHEM_SMILES_RE.search(text)
+                m_inchikey = self._PUBCHEM_INCHIKEY_RE.search(text)
+
+                if not any([m_formula, m_mw, m_smiles, m_inchikey]):
+                    continue
+
+                ev = _build_evidence(doc_id, page, text, doc_title,
+                                     source_url=source_url, doc_kind=doc_kind)
+                self._evidence_registry[ev.evidence_id] = ev
+
+                if m_formula:
+                    # Collapse OCR spaces inside formula: "C18H19 F2N5O4" -> "C18H19F2N5O4"
+                    raw = m_formula.group(1)
+                    formula = re.sub(r"\s+", "", raw)
+                    results["chemical_formula"] = EvidencedValue(value=formula, confidence=0.98,
+                                                                  evidence_refs=[ev.evidence_id])
+                if m_mw:
+                    results["molecular_weight"] = EvidencedValue(value=m_mw.group(1).strip(),
+                                                                  confidence=0.98,
+                                                                  evidence_refs=[ev.evidence_id])
+                if m_smiles:
+                    results["smiles"] = EvidencedValue(value=m_smiles.group(1).strip(),
+                                                       confidence=0.95,
+                                                       evidence_refs=[ev.evidence_id])
+                if m_inchikey:
+                    # Remove OCR-inserted spaces from InChIKey
+                    raw_ik = re.sub(r"\s+", "", m_inchikey.group(1))
+                    # Normalise dashes (OCR may use en-dash)
+                    raw_ik = re.sub(r"[–—]", "-", raw_ik)
+                    results["inchi_key"] = EvidencedValue(value=raw_ik, confidence=0.97,
+                                                          evidence_refs=[ev.evidence_id])
+
+                if results:
+                    logger.info(
+                        "pubchem_chemistry_deterministic found fields=%s doc=%s",
+                        list(results.keys()), doc_id,
+                    )
+                    return results
+
+        return None
+
     # Sprint 17: Regex patterns for deterministic patent expiry extraction.
     # patent_legal_events chunks: "Patent N: EP1234567B1 ... Country: EP ... Estimated expiry: 2045-11-28 (method: ...)"
     _PATENT_LEGAL_EVENT_EXPIRY_RE = re.compile(
@@ -1379,6 +1469,35 @@ class DossierReportGenerator:
             if det_date:
                 passport.fda_approval_date = det_date
                 logger.info("passport.fda_approval_date patched by deterministic extractor: %s", det_date.value)
+
+        # Sprint 18: Deterministic PubChem chemistry patch.
+        # LLM retrieval (top_k=40) often prioritises label/GRLS/CTGov chunks over the
+        # single pubchem chunk, leaving formula/SMILES/InChIKey/MW empty.
+        # This extractor reads pubchem chunks directly and patches any missing fields.
+        needs_chemistry = not any([
+            passport.chemical_formula and passport.chemical_formula.value,
+            passport.smiles and passport.smiles.value,
+            passport.inchi_key and passport.inchi_key.value,
+            passport.molecular_weight and passport.molecular_weight.value,
+        ])
+        if needs_chemistry:
+            chem = self._extract_pubchem_chemistry_deterministic()
+            if chem:
+                patched = []
+                if not (passport.chemical_formula and passport.chemical_formula.value) and "chemical_formula" in chem:
+                    passport.chemical_formula = chem["chemical_formula"]
+                    patched.append("chemical_formula")
+                if not (passport.smiles and passport.smiles.value) and "smiles" in chem:
+                    passport.smiles = chem["smiles"]
+                    patched.append("smiles")
+                if not (passport.inchi_key and passport.inchi_key.value) and "inchi_key" in chem:
+                    passport.inchi_key = chem["inchi_key"]
+                    patched.append("inchi_key")
+                if not (passport.molecular_weight and passport.molecular_weight.value) and "molecular_weight" in chem:
+                    passport.molecular_weight = chem["molecular_weight"]
+                    patched.append("molecular_weight")
+                if patched:
+                    logger.info("passport chemistry patched by pubchem_deterministic: fields=%s", patched)
 
         # S7: Validate — ALL mandatory fields without evidence → unknowns
         # Expanded from 4 to cover all 9 scalar fields + trade_names.
