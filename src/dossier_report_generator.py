@@ -1160,6 +1160,62 @@ class DossierReportGenerator:
             return combined, best_evidence
         return None
 
+    # WSx.4: Regex to detect EAEU mutual-recognition marker in RU reg numbers.
+    # Format: ЛП-№(013035)-(РГ-RU) or ЛП-013035-РГ-RU or variants.
+    # РГ = "Регистрационное Государство" / mutual-recognition route.
+    _RU_EAEU_MARKER_RE = re.compile(
+        r"ЛП-[^\s]*[-\(]РГ-RU[\)\s]?",
+        re.IGNORECASE,
+    )
+
+    def _detect_ru_eaeu_marker(self) -> Optional[DossierEvidence]:
+        """WSx.4: Scan grls_card / grls chunks for РГ-RU mutual-recognition reg number.
+
+        If found, returns the evidence for that chunk so the caller can emit
+        an EAEU_RELATED_RU_MARKER informational unknown.
+
+        Returns DossierEvidence if marker found, else None.
+        """
+        target_doc_kinds = {"grls_card", "grls", "ru_instruction"}
+        json_files = list(self.documents_dir.glob("*.json"))
+        for doc_path in json_files:
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text:
+                    continue
+                m = self._RU_EAEU_MARKER_RE.search(text)
+                if m:
+                    ev = _build_evidence(
+                        doc_id, chunk.get("page"), text, doc_title,
+                        source_url=metainfo.get("source_url"),
+                        doc_kind=doc_kind,
+                    )
+                    self._evidence_registry[ev.evidence_id] = ev
+                    logger.info(
+                        "ru_eaeu_marker detected: reg_no_fragment=%r doc=%s",
+                        m.group(0), doc_id,
+                    )
+                    return ev
+        return None
+
     # Sprint 18: PubChem chemistry deterministic extraction patterns.
     # Matches OCR-rendered PubChem HTML (with possible spaces inserted by OCR).
     # Formula: capture until end-of-line or next label (e.g. "\nMolecular Weight:").
@@ -1417,9 +1473,12 @@ class DossierReportGenerator:
     def _generate_passport(self, unknowns: List[DossierUnknown]) -> DossierPassport:
         """Stage A+B+C+D for passport block. S6: includes PubChem chemistry fields."""
         # S6-T2: Authority-tiering — Tier-1 sources first, pubchem for chemistry
+        # WSx.3: Added eaeu_registration/eaeu_document so EAEU docs contribute to
+        # registered_where even when they are not retrieved in _generate_registrations.
         passport_doc_kinds = [
             "label", "us_fda", "epar", "smpc", "grls_card", "grls",
             "ru_instruction", "pubchem", "drug_monograph",
+            "eaeu_registration", "eaeu_document",
         ]
         question = (
             f"Extract drug passport fields for {self.inn}: "
@@ -1676,17 +1735,46 @@ class DossierReportGenerator:
                 # so the deterministic status isn't silently lost.
                 pass  # Don't create a stub without reg_number — would be misleading
 
-        # S17-GAP3: EAEU typed-unknown is now conditional.
-        # If EAEU region was populated by the LLM from eaeu_registration docs,
-        # skip the EAEU_NOT_IMPLEMENTED unknown.
+        # WSx.3+4: EAEU truth contract.
+        # If EAEU region was populated by the LLM from eaeu_registration docs, skip unknowns.
+        # Otherwise emit a precise state code — not a generic "unavailable" message.
         has_eaeu_reg = any(r.region.upper() == "EAEU" for r in registrations)
         if not has_eaeu_reg:
+            # Check whether we have an EAEU doc in corpus (seeded but LLM found nothing)
+            has_eaeu_doc = any(
+                r.get("doc_kind", "").lower() in ("eaeu_registration", "eaeu_document")
+                for r in (self._all_doc_meta() if hasattr(self, "_all_doc_meta") else [])
+            )
+            if has_eaeu_doc:
+                # EAEU doc was indexed but LLM extracted nothing from it
+                self._add_unknown(
+                    unknowns, "registrations[EAEU].*", "EAEU_NO_EVIDENCE_IN_CORPUS",
+                    f"EAEU registration document was indexed for {self.inn} but "
+                    "no registration records could be extracted from it.",
+                    "Review eaeu_registration document content; INN may not match.",
+                )
+            else:
+                # No EAEU doc in corpus at all — SPD returned 0 or portal was down
+                self._add_unknown(
+                    unknowns, "registrations[EAEU].*", "EAEU_NOT_FOUND_AFTER_LOOKUP",
+                    f"No EAEU registration records found for {self.inn}. "
+                    "Either the drug is not registered in EAEU member states, "
+                    "or the SPD portal was unavailable during document seeding.",
+                    "Verify EAEU SPD portal status; re-run sources:attach if portal was down.",
+                )
+
+        # WSx.4: Detect РГ-RU mutual-recognition marker in GRLS reg number.
+        # This is NOT a direct EAEU registration — it is an EAEU-format framing on the
+        # RU registration. Emit as informational unknown, not as EAEU confirmation.
+        eaeu_marker_ev = self._detect_ru_eaeu_marker()
+        if eaeu_marker_ev and not has_eaeu_reg:
             self._add_unknown(
-                unknowns, "registrations[EAEU].*", "EAEU_NOT_IMPLEMENTED",
-                f"EAEU drug registry data unavailable for {self.inn}. "
-                "No eaeu_registration documents found in corpus. "
-                "Ensure the EAEU SPD connector seeds eaeu_registration docs.",
-                "Verify ru-api EAEU SPD service is reachable and INN resolves.",
+                unknowns, "registrations[EAEU].mutual_recognition", "EAEU_RELATED_RU_MARKER",
+                f"RU registration for {self.inn} contains an EAEU mutual-recognition marker "
+                "(ЛП-...-(РГ-RU)). This indicates the RU registration was processed via "
+                "the EAEU mutual-recognition route, but does NOT confirm a standalone "
+                "direct EAEU union-register entry.",
+                "Check GRLS reg number suffix; verify EAEU SPD for direct registration separately.",
             )
 
         # S5-P0-D + S6: Dedup by region — keep only the richest entry per region.
