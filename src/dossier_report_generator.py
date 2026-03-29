@@ -1161,11 +1161,22 @@ class DossierReportGenerator:
         return None
 
     # Sprint 18: PubChem chemistry deterministic extraction patterns.
-    # Matches OCR-rendered PubChem HTML (with possible spaces inserted by OCR):
-    _PUBCHEM_FORMULA_RE = re.compile(r"Molecular\s+Formula:\s*([A-Za-z0-9]+(?:\s[A-Za-z0-9]+)*)", re.IGNORECASE)
+    # Matches OCR-rendered PubChem HTML (with possible spaces inserted by OCR).
+    # Formula: capture until end-of-line or next label (e.g. "\nMolecular Weight:").
+    # The alternation stops at newline or at a capital-word boundary that looks like
+    # another label, keeping the formula isolated (e.g. "C18H19F2N5O4").
+    _PUBCHEM_FORMULA_RE = re.compile(
+        r"Molecular\s+Formula:\s*([A-Za-z0-9]+(?:\s+[A-Za-z0-9]+)*?)(?=\s*\n|\s+[A-Z][a-z]|\Z)",
+        re.IGNORECASE,
+    )
     _PUBCHEM_MW_RE = re.compile(r"Molecular\s+Weight:\s*([\d\.,]+)", re.IGNORECASE)
     _PUBCHEM_SMILES_RE = re.compile(r"Canonical\s+SMILES:\s*(\S+)", re.IGNORECASE)
-    _PUBCHEM_INCHIKEY_RE = re.compile(r"InChIKey:\s*([A-Z]{14}(?:\s*[-–]\s*)?[A-Z]{10}(?:\s*[-–]\s*)?[A-Z]{1})", re.IGNORECASE)
+    # InChIKey has format XXXXXXXXXXXXXX-XXXXXXXXXX-X (14-10-1 uppercase letters+digits).
+    # OCR may insert a space anywhere within a segment. We allow [\s]? inside each segment.
+    _PUBCHEM_INCHIKEY_RE = re.compile(
+        r"InChIKey:\s*([A-Z0-9]{2,14}\s?[A-Z0-9]{0,12}[-–][A-Z0-9]{2,10}\s?[A-Z0-9]{0,8}[-–][A-Z0-9])",
+        re.IGNORECASE,
+    )
 
     def _extract_pubchem_chemistry_deterministic(self) -> Optional[Dict[str, Any]]:
         """Scan pubchem doc chunks directly for chemistry fields.
