@@ -1740,11 +1740,23 @@ class DossierReportGenerator:
         # Otherwise emit a precise state code — not a generic "unavailable" message.
         has_eaeu_reg = any(r.region.upper() == "EAEU" for r in registrations)
         if not has_eaeu_reg:
-            # Check whether we have an EAEU doc in corpus (seeded but LLM found nothing)
-            has_eaeu_doc = any(
-                r.get("doc_kind", "").lower() in ("eaeu_registration", "eaeu_document")
-                for r in (self._all_doc_meta() if hasattr(self, "_all_doc_meta") else [])
-            )
+            # Check whether we have an EAEU doc in corpus (seeded but LLM found nothing).
+            # Scan documents_dir for any indexed doc with eaeu_registration/eaeu_document kind.
+            eaeu_doc_kinds = {"eaeu_registration", "eaeu_document"}
+            has_eaeu_doc = False
+            if hasattr(self, "documents_dir") and self.documents_dir is not None:
+                for doc_path in self.documents_dir.glob("*.json"):
+                    try:
+                        import json as _json
+                        with open(doc_path) as _f:
+                            _meta = _json.load(_f)
+                        _kind = (_meta.get("metainfo", {}) or {}).get("doc_kind", "").lower()
+                        if _kind in eaeu_doc_kinds:
+                            has_eaeu_doc = True
+                            break
+                    except Exception:
+                        pass
+
             if has_eaeu_doc:
                 # EAEU doc was indexed but LLM extracted nothing from it
                 self._add_unknown(
@@ -1754,13 +1766,15 @@ class DossierReportGenerator:
                     "Review eaeu_registration document content; INN may not match.",
                 )
             else:
-                # No EAEU doc in corpus at all — SPD returned 0 or portal was down
+                # No EAEU doc in corpus — SPD returned 0 results (drug not registered in EAEU).
+                # NOTE: If SPD portal was down during seeding, use EAEU_PORTAL_UNAVAILABLE instead.
+                # This code fires only when SPD lookup completed successfully with 0 results.
                 self._add_unknown(
                     unknowns, "registrations[EAEU].*", "EAEU_NOT_FOUND_AFTER_LOOKUP",
                     f"No EAEU registration records found for {self.inn}. "
-                    "Either the drug is not registered in EAEU member states, "
-                    "or the SPD portal was unavailable during document seeding.",
-                    "Verify EAEU SPD portal status; re-run sources:attach if portal was down.",
+                    "SPD lookup completed but returned 0 results — "
+                    "the drug is likely not directly registered in the EAEU union register.",
+                    "Cross-check EAEU SPD manually; if portal was down during seeding, re-seed.",
                 )
 
         # WSx.4: Detect РГ-RU mutual-recognition marker in GRLS reg number.
