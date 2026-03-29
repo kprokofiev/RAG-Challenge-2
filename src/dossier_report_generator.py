@@ -1749,8 +1749,8 @@ class DossierReportGenerator:
                     evidence_id=ev_id,
                     doc_id=f"ctgov_api:{nct_id}",
                     page=None,
-                    text=f"ClinicalTrials.gov API v2 metadata for {nct_id}",
-                    doc_title=f"CTGov API: {nct_id}",
+                    snippet=f"ClinicalTrials.gov API v2 metadata for {nct_id}",
+                    title=f"CTGov API: {nct_id}",
                     source_url=f"https://clinicaltrials.gov/study/{nct_id}",
                     doc_kind="ctgov_api",
                 )
