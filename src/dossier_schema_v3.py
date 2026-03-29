@@ -1168,6 +1168,16 @@ def build_product_contexts(
     contexts = list(ctx_map.values())
     contexts = _postmerge_evidence_into_registration(contexts)
 
+    # ── WSx.6: Phase 4 — Contradiction filter for weak_signal contexts ──────────
+    # A weak_signal context whose route DIRECTLY contradicts the registration-
+    # confirmed route(s) for the same region must be suppressed.
+    # This catches e.g. "US - (topical)" from warning text when the US registration
+    # is oral — a single FDA label snippet with the word "topical" should not survive
+    # as a standalone product context when there is already a confirmed oral registration.
+    contexts, route_contradiction_suppressed = _suppress_contradicting_weak_signals(contexts)
+    for entry in route_contradiction_suppressed:
+        suppressed_contexts.append(entry)
+
     return contexts, suppressed_contexts
 
 
@@ -1242,6 +1252,66 @@ def _postmerge_evidence_into_registration(
         contexts = [c for c in contexts if c.context_id not in merged_ids]
 
     return contexts
+
+
+def _suppress_contradicting_weak_signals(
+    contexts: List[ProductContext],
+) -> tuple:
+    """WSx.6: Remove weak_signal contexts whose route contradicts confirmed registrations.
+
+    A weak_signal context for region R with route X is suppressed if:
+    1. There is at least one registration_confirmed context for the same region
+    2. That confirmed context has an established route family
+    3. The weak signal's route family differs from all confirmed routes for that region
+
+    This prevents spurious "US - (topical)" contexts from surviving when
+    the confirmed US context is "oral" — they are route-contradiction artifacts
+    from warning text in FDA labels, not real secondary formulations.
+
+    Returns: (filtered_contexts, suppressed_list)
+    """
+    reg_routes_by_region: Dict[str, set] = {}
+    for ctx in contexts:
+        if ctx.context_strength == "registration_confirmed":
+            region_key = (ctx.region or "").upper()
+            if region_key not in reg_routes_by_region:
+                reg_routes_by_region[region_key] = set()
+            if ctx.route:
+                rf = _normalize_route_family(ctx.route)
+                if rf:
+                    reg_routes_by_region[region_key].add(rf)
+
+    kept: List[ProductContext] = []
+    suppressed: List[Dict[str, str]] = []
+
+    for ctx in contexts:
+        if ctx.context_strength != "weak_signal":
+            kept.append(ctx)
+            continue
+
+        region_key = (ctx.region or "").upper()
+        confirmed_routes = reg_routes_by_region.get(region_key, set())
+
+        if not confirmed_routes:
+            # No confirmed route info for this region — keep the weak signal
+            kept.append(ctx)
+            continue
+
+        ctx_route = _normalize_route_family(ctx.route or "")
+        if ctx_route and ctx_route not in confirmed_routes:
+            # Route contradiction — suppress
+            suppressed.append({
+                "context_id": ctx.context_id,
+                "label": ctx.label,
+                "route_family": ctx_route,
+                "reason": f"route_contradiction: weak_signal route={ctx_route} "
+                          f"contradicts confirmed routes={sorted(confirmed_routes)} "
+                          f"for region={region_key}",
+            })
+        else:
+            kept.append(ctx)
+
+    return kept, suppressed
 
 
 # ── Sprint 7.5: Synthesis kind classifier ────────────────────────────────────
