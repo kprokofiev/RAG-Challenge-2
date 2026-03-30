@@ -304,6 +304,19 @@ class DossierClinicalStudy(BaseModel):
     status: Optional[EvidencedValue] = Field(
         None, description="Completed / ongoing / terminated"
     )
+    # WS3.7 screening signal flags — set deterministically from CTGov API, not LLM
+    is_ongoing: Optional[bool] = Field(
+        None, description="True if study is actively recruiting or running (not completed/terminated)"
+    )
+    is_post_reg: Optional[bool] = Field(
+        None, description="True if study is Phase 4 / post-marketing / observational after approval"
+    )
+    is_combination_therapy: Optional[bool] = Field(
+        None, description="True if study investigates this drug in combination with another drug"
+    )
+    has_ru_presence: Optional[bool] = Field(
+        None, description="True if Russia is listed as a study country"
+    )
     evidence_refs: List[str] = Field(
         default_factory=list,
         description="All evidence_ids for this study card"
@@ -609,8 +622,9 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
 
     # WS5-P0: Clinical coverage — measure per-study field completeness, not just evidence presence.
     # A study card with evidence but null status/countries/conclusion should NOT be 100%.
-    # 6 key meta-fields per study: study_id, phase, status, n_enrolled, countries, conclusion
-    _CLINICAL_META_FIELDS = 6
+    # WS3.6: expanded to 8 key meta-fields: study_id, phase, status, n_enrolled, countries,
+    #         conclusion, comparator, regimen_dosing
+    _CLINICAL_META_FIELDS = 8
     if report.clinical_studies:
         study_scores = []
         for cs in report.clinical_studies:
@@ -626,6 +640,10 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
             if cs.countries:
                 filled += 1
             if cs.conclusion and cs.conclusion.value:
+                filled += 1
+            if cs.comparator and cs.comparator.value:
+                filled += 1
+            if cs.regimen_dosing and cs.regimen_dosing.value:
                 filled += 1
             study_scores.append(filled / _CLINICAL_META_FIELDS)
         clinical_pct = round(sum(study_scores) / len(study_scores) * 100, 1)

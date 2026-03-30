@@ -261,15 +261,29 @@ FOR EACH STUDY, extract:
 4. study_type: interventional, observational, etc.
 5. enrollment: number of participants (integer)
 6. countries: list of unique country names from locations data (e.g., ["United States", "Germany", "Japan"])
-7. comparator: comparator arm description (placebo, active control, etc.)
-8. dosing_regimen: dosing details from the intervention description
+7. comparator: comparator arm — EXTRACT THIS CAREFULLY:
+   - If placebo-controlled: "placebo"
+   - If active comparator: name the specific drug (e.g., "rituximab", "standard chemotherapy")
+   - If single-arm / no comparator: "none (single-arm)"
+   - Look for arm labels, armGroups, interventions with type=ACTIVE_COMPARATOR or PLACEBO_COMPARATOR
+   - Do NOT leave null if arm data is present in context
+8. regimen_dosing: dosing details — EXTRACT THIS CAREFULLY:
+   - Include dose (mg), frequency (daily/weekly/BID/etc.), route (oral/IV/SC), and cycle length if stated
+   - Example: "30 mg orally twice weekly" or "1000 mg/m² IV on Day 1 of 21-day cycles"
+   - Look in arm descriptions, intervention descriptions, eligibility criteria
+   - Do NOT leave null if dosing text is present
 9. primary_endpoint: primary outcome measure description
 10. primary_result: primary endpoint result value with units
 11. p_value: p-value for primary endpoint (as string, e.g., "0.001", "<0.0001")
 12. confidence_interval: confidence interval (e.g., "95% CI: 0.65-0.82")
 13. status: extract from OverallStatus field (e.g., "Completed", "Recruiting", "Terminated", "Active, not recruiting")
-14. conclusion: if an explicit conclusion is stated, use it verbatim. If NOT, synthesize 1-2 sentences
-    from primary outcome numeric results (effect size, p-value, CI). If no results data exists, set null.
+14. conclusion: EXTRACT THIS CAREFULLY — this is the most important field for screening:
+    - If an explicit author/sponsor conclusion is stated in results or publications, use it verbatim (1-3 sentences max)
+    - If primary endpoint numeric results exist (ORR, PFS, OS, p-value), synthesize a 1-2 sentence conclusion
+      (e.g., "The study met its primary endpoint with ORR of 68% (p<0.001), demonstrating efficacy in...")
+    - If only abstract or title-level information: synthesize from the study objective and phase
+      (e.g., "Phase 2 study evaluating X in Y population; results not yet reported")
+    - Set null ONLY if truly no clinical content is present beyond the NCT ID itself
 
 CRITICAL RULES FOR EVIDENCE ALIASES:
 - Every non-null field value MUST include at least one evidence alias from the candidates list (E1, E2, E3, ...).
@@ -1872,8 +1886,21 @@ class DossierReportGenerator:
             f"- Extract fields ONLY from evidence that relates to this specific study.\n"
             f"- Do NOT mix data from other studies into this card.\n"
             f"- If a field cannot be found for this study specifically, set it to null.\n\n"
-            f"Extract: title, study_id, phase, study_type, n_enrolled, countries, "
-            f"comparator, regimen_dosing, efficacy_keypoints, conclusion, status.\n\n"
+            f"Extract these fields:\n"
+            f"- title: official or brief study title\n"
+            f"- study_id: must be \"{nct_id}\"\n"
+            f"- phase: Phase 1/2/3/4\n"
+            f"- study_type: interventional/observational\n"
+            f"- n_enrolled: number of participants\n"
+            f"- countries: list of countries from locations\n"
+            f"- comparator: REQUIRED if present — placebo, specific drug name, or 'none (single-arm)'. "
+            f"Look for arm labels and intervention types (ACTIVE_COMPARATOR, PLACEBO_COMPARATOR).\n"
+            f"- regimen_dosing: REQUIRED if present — dose (mg), frequency, route. "
+            f"Look in arm/intervention descriptions.\n"
+            f"- efficacy_keypoints: primary endpoint results, ORR, PFS, OS, p-value, CI\n"
+            f"- conclusion: REQUIRED if any results exist — verbatim conclusion or synthesized 1-2 sentence "
+            f"summary from numeric results. Set null only if truly no clinical content beyond the NCT ID.\n"
+            f"- status: Completed/Recruiting/Terminated/etc.\n\n"
             f"CRITICAL: Use ONLY evidence aliases (E1, E2, ...) from the candidates list.\n"
             f"Every non-null field MUST include at least one evidence alias."
         )
@@ -1961,8 +1988,12 @@ class DossierReportGenerator:
             needs_enrolled = not (study.n_enrolled and study.n_enrolled.value)
             needs_countries = not study.countries
             needs_title = not (study.title and study.title.value)
+            needs_study_type = not (study.study_type and study.study_type.value)
+            # Flags are always (re)computed from API regardless of prior value
+            needs_flags = True
 
-            if not any([needs_phase, needs_status, needs_enrolled, needs_countries, needs_title]):
+            if not any([needs_phase, needs_status, needs_enrolled, needs_countries,
+                        needs_title, needs_study_type, needs_flags]):
                 continue
 
             data = self._fetch_ctgov_study(nct_id)
@@ -1974,6 +2005,7 @@ class DossierReportGenerator:
             status_mod = protocol.get("statusModule", {})
             ident = protocol.get("identificationModule", {})
             contacts = protocol.get("contactsLocationsModule", {})
+            arms_mod = protocol.get("armsInterventionsModule", {})
 
             ev_id = f"ctgov_api_{nct_id}"
             if ev_id not in self._evidence_registry:
@@ -2020,14 +2052,72 @@ class DossierReportGenerator:
                 if title_str:
                     study.title = EvidencedValue(value=title_str, evidence_refs=refs)
 
+            # WS3.2: study_type from CTGov designModule.studyType
+            if needs_study_type:
+                raw_type = design.get("studyType", "")
+                if raw_type:
+                    # Normalize: INTERVENTIONAL → Interventional, OBSERVATIONAL → Observational
+                    type_str = raw_type.capitalize()
+                    # Add allocation detail if available
+                    alloc = design.get("designInfo", {}).get("allocation", "")
+                    if alloc and alloc not in ("NA", "N_A"):
+                        type_str = f"{type_str} ({alloc.replace('_', ' ').title()})"
+                    study.study_type = EvidencedValue(value=type_str, evidence_refs=refs)
+
+            # WS3.7: Deterministic screening signal flags from CTGov API
+            # is_ongoing: actively recruiting or not yet completed
+            overall_status = status_mod.get("overallStatus", "")
+            _ongoing_statuses = {"RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATION",
+                                  "NOT_YET_RECRUITING", "AVAILABLE"}
+            _completed_statuses = {"COMPLETED", "TERMINATED", "WITHDRAWN", "SUSPENDED"}
+            if overall_status:
+                study.is_ongoing = overall_status.upper() in _ongoing_statuses
+
+            # is_post_reg: Phase 4 or EXPANDED_ACCESS or observational post-approval
+            phases = design.get("phases") or []
+            study_type_raw = design.get("studyType", "")
+            primary_purpose = design.get("designInfo", {}).get("primaryPurpose", "")
+            study.is_post_reg = (
+                "PHASE4" in [p.upper().replace(" ", "").replace("_", "") for p in phases]
+                or study_type_raw.upper() == "EXPANDED_ACCESS"
+                or primary_purpose.upper() in ("POST_MARKETING", "PREVENTION")
+            )
+
+            # is_combination_therapy: any arm group label / intervention name mentions ≥2 drugs
+            arm_groups = arms_mod.get("armGroups", [])
+            interventions = arms_mod.get("interventions", [])
+            combo_keywords = [" and ", " combined with ", " plus ", " + ", " with ", " in combination"]
+            inn_lower = self.inn.lower()
+            combo_signals = []
+            for arm in arm_groups:
+                label = (arm.get("label", "") + " " + arm.get("description", "")).lower()
+                combo_signals.append(any(kw in label for kw in combo_keywords) and inn_lower in label)
+            for itv in interventions:
+                names = " ".join(itv.get("otherNames", [])).lower()
+                itv_name = itv.get("name", "").lower()
+                combo_signals.append(
+                    any(kw in (itv_name + " " + names) for kw in combo_keywords)
+                )
+            study.is_combination_therapy = any(combo_signals) if combo_signals else None
+
+            # has_ru_presence: Russia listed in locations
+            locations = contacts.get("locations", [])
+            ru_countries = {"Russia", "Russian Federation"}
+            study.has_ru_presence = any(
+                loc.get("country", "") in ru_countries for loc in locations
+            ) if locations else None
+
             logger.info(
-                "ctgov_api_enrichment nct=%s patched: phase=%s status=%s enrolled=%s countries=%d title=%s",
+                "ctgov_api_enrichment nct=%s patched: phase=%s status=%s enrolled=%s "
+                "countries=%d title=%s study_type=%s ongoing=%s post_reg=%s combo=%s ru=%s",
                 nct_id,
                 "yes" if needs_phase and study.phase else "no",
                 "yes" if needs_status and study.status else "no",
                 "yes" if needs_enrolled and study.n_enrolled else "no",
                 len(study.countries) if study.countries else 0,
                 "yes" if needs_title and study.title else "no",
+                "yes" if needs_study_type and study.study_type else "no",
+                study.is_ongoing, study.is_post_reg, study.is_combination_therapy, study.has_ru_presence,
             )
 
     def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
