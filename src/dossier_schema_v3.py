@@ -867,6 +867,9 @@ def _kw_matches(kw: str, text_lower: str) -> bool:
 def _normalize_route_family(text: str) -> Optional[str]:
     """Sprint 12 WS2: Map a route description to a normalized family."""
     text_lower = text.lower().strip()
+    # Check if the text IS already a family name (e.g. "injectable", "oral")
+    if text_lower in _ROUTE_FAMILIES:
+        return text_lower
     for family, keywords in _ROUTE_FAMILIES.items():
         for kw in keywords:
             if _kw_matches(kw, text_lower):
@@ -877,6 +880,8 @@ def _normalize_route_family(text: str) -> Optional[str]:
 def _normalize_form_family(text: str) -> Optional[str]:
     """Sprint 12 WS2: Map a dosage form description to a normalized family."""
     text_lower = text.lower().strip()
+    if text_lower in _FORM_FAMILIES:
+        return text_lower
     for family, keywords in _FORM_FAMILIES.items():
         for kw in keywords:
             if _kw_matches(kw, text_lower):
