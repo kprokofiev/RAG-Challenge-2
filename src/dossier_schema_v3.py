@@ -1261,9 +1261,28 @@ def _postmerge_evidence_into_registration(
             for ref in ev_ctx.evidence_refs:
                 if ref not in best_match.evidence_refs:
                     best_match.evidence_refs.append(ref)
-            # Add route to registration if missing
+            # Add route to registration if missing — but ONLY if consistent with forms.
+            # Do NOT propagate "injectable" from a boilerplate mention if dosage forms
+            # are clearly oral (tablet/capsule) — this was the source of the EU/RU
+            # product_context showing route=injectable for film-coated tablets.
             if ev_ctx.route and not best_match.route:
-                best_match.route = ev_ctx.route
+                ev_route_fam = _normalize_route_family(ev_ctx.route)
+                # Check if any registration form implies a DIFFERENT route family
+                forms_imply_different = False
+                for form in best_match.dosage_forms:
+                    form_lower = form.lower()
+                    # Oral dosage forms
+                    if any(kw in form_lower for kw in ("tablet", "capsule", "oral", "film-coated", "enteric")):
+                        if ev_route_fam and ev_route_fam != "oral":
+                            forms_imply_different = True
+                            break
+                    # Topical forms
+                    elif any(kw in form_lower for kw in ("cream", "ointment", "gel", "patch")):
+                        if ev_route_fam and ev_route_fam not in ("topical",):
+                            forms_imply_different = True
+                            break
+                if not forms_imply_different:
+                    best_match.route = ev_ctx.route
             merged_ids.add(ev_ctx.context_id)
 
     if merged_ids:

@@ -214,6 +214,10 @@ FIELD-SPECIFIC EXTRACTION GUIDANCE:
 - fda_approval_date: Look for "FDA Approval Date (Drugs@FDA):", "approval date", "first approved",
   "original approval date", or earliest submission with status "AP" in the FDA label document.
   Format as YYYY-MM-DD. This field appears in rendered FDA label documents.
+- fda_indication: Look for "INDICATIONS AND USAGE" section (Section 1 in US labels) or
+  "is indicated for", "indicated as", "indicated in the treatment of" phrases.
+  Also check EU SmPC Section 4.1 "Therapeutic indications". Extract the first full indication
+  sentence (the main approved use). Do NOT leave null if INDICATIONS text is present.
 - mechanism_of_action: Look for "mechanism of action", "pharmacodynamics", "MOA",
   "mode of action" in FDA label or SmPC sections. Common in Section 12 of US labels
   or Section 5.1 of SmPCs.
@@ -597,6 +601,44 @@ def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
         return False
 
     return True
+
+
+def _patent_family_mentions_inn(family: "DossierPatentFamily", inn: str) -> bool:
+    """Sprint 19: Check if a patent family's text fields mention the INN.
+
+    Checks summary, what_blocks, technical_focus, and family_id.
+    Returns True if any field mentions the INN (case-insensitive partial match).
+    Returns True (pass-through) if NONE of those fields have text — avoids
+    filtering incomplete but potentially valid families.
+
+    This prevents false positives like KAT6A inhibitor patents appearing in
+    an inavolisib dossier just because they share an assignee (Roche).
+    """
+    inn_lower = inn.lower().strip()
+    if not inn_lower:
+        return True  # Can't filter without INN
+
+    text_fields = []
+    if family.summary and family.summary.value:
+        text_fields.append(str(family.summary.value).lower())
+    if family.what_blocks and family.what_blocks.value:
+        text_fields.append(str(family.what_blocks.value).lower())
+    if family.technical_focus and family.technical_focus.value:
+        text_fields.append(str(family.technical_focus.value).lower())
+    if family.family_id:
+        text_fields.append(family.family_id.lower())
+
+    if not text_fields:
+        return True  # No text to check — pass through
+
+    # INN partial match: allow "inavolisib" to match "inavolisib" or "GDC-0077"
+    # Also try first 6 chars (stem) to handle minor spelling variants
+    inn_stem = inn_lower[:6] if len(inn_lower) >= 6 else inn_lower
+    for text in text_fields:
+        if inn_lower in text or inn_stem in text:
+            return True
+
+    return False
 
 
 # ── DossierReportGenerator ────────────────────────────────────────────────────
@@ -1046,6 +1088,117 @@ class DossierReportGenerator:
 
         logger.info("fda_approval_date_deterministic: no match in %d label/us_fda docs",
                      sum(1 for _ in self.documents_dir.glob("*.json")))
+        return None
+
+    # Sprint 19: Patterns for FDA indication extraction from label chunks.
+    # Look for the "INDICATIONS AND USAGE" section header followed by indication text,
+    # or "is indicated for" / "indicated as" phrases common in US labeling.
+    _FDA_INDICATION_PATTERNS = [
+        # Section header followed by indication text (US label format)
+        re.compile(
+            r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
+            r"[:\s\n]+([^\n]{30,400})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        # "is indicated for" phrase
+        re.compile(
+            r"(?:is\s+indicated\s+for|indicated\s+as\s+(?:an?\s+)?(?:adjunct\s+)?(?:treatment|therapy)|"
+            r"indicated\s+(?:for|in)\s+(?:the\s+)?(?:treatment|management))"
+            r"[^\n.]{10,300}",
+            re.IGNORECASE,
+        ),
+        # EU SmPC section 4.1 "Therapeutic indications"
+        re.compile(
+            r"(?:4\.1\s+Therapeutic\s+indications?|Therapeutic\s+indications?)[:\s\n]+([^\n]{30,400})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+    ]
+
+    def _extract_fda_indication_deterministic(self) -> Optional["EvidencedValue"]:
+        """Sprint 19: Scan label/us_fda/smpc chunks for FDA/regulatory indication text.
+
+        Returns EvidencedValue with the first extracted indication sentence, or None.
+        Preferred sources: FDA label (label/us_fda) > EU SmPC (smpc/epar).
+        """
+        target_doc_kinds = {"label", "us_fda", "smpc", "epar"}
+        # Priority order: FDA label first, then EU SmPC
+        priority_order = ["label", "us_fda", "smpc", "epar"]
+
+        best_by_kind: dict = {}
+
+        json_files = list(self.documents_dir.glob("*.json"))
+        for doc_path in json_files:
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text or len(text) < 50:
+                    continue
+
+                # Try each pattern; use first match
+                for pat in self._FDA_INDICATION_PATTERNS:
+                    m = pat.search(text)
+                    if not m:
+                        continue
+                    # Extract matched text — group(1) if available else group(0)
+                    try:
+                        raw = m.group(1).strip()
+                    except IndexError:
+                        raw = m.group(0).strip()
+
+                    # Truncate to first sentence / reasonable length
+                    # Stop at double-newline, section header, or 300 chars
+                    raw = re.sub(r"\n{2,}.*", "", raw, flags=re.DOTALL)
+                    raw = raw.split("\n")[0].strip()
+                    if len(raw) < 20:
+                        continue
+                    if len(raw) > 350:
+                        raw = raw[:347] + "..."
+
+                    page = chunk.get("page")
+                    ev = _build_evidence(
+                        doc_id, page, text, doc_title,
+                        source_url=metainfo.get("source_url"),
+                        doc_kind=doc_kind,
+                    )
+                    self._evidence_registry[ev.evidence_id] = ev
+
+                    if doc_kind not in best_by_kind:
+                        best_by_kind[doc_kind] = EvidencedValue(
+                            value=raw, evidence_refs=[ev.evidence_id]
+                        )
+                    break  # one match per chunk is enough
+
+            if "label" in best_by_kind or "us_fda" in best_by_kind:
+                break  # FDA label found — stop scanning
+
+        # Return best result by priority
+        for kind in priority_order:
+            if kind in best_by_kind:
+                logger.info(
+                    "fda_indication_deterministic found via doc_kind=%s: %s",
+                    kind, best_by_kind[kind].value[:80],
+                )
+                return best_by_kind[kind]
         return None
 
     # Patterns for RU registration status from grls_card chunks.
@@ -1554,6 +1707,15 @@ class DossierReportGenerator:
                 passport.fda_approval_date = det_date
                 logger.info("passport.fda_approval_date patched by deterministic extractor: %s", det_date.value)
 
+        # Sprint 19: Deterministic fallback for fda_indication.
+        # LLM often misses this when the INDICATIONS AND USAGE section is beyond top-K window.
+        # Scan label/us_fda chunks directly for the section header + first indication sentence.
+        if not passport.fda_indication or not passport.fda_indication.value:
+            det_ind = self._extract_fda_indication_deterministic()
+            if det_ind:
+                passport.fda_indication = det_ind
+                logger.info("passport.fda_indication patched by deterministic extractor: %s", det_ind.value[:80])
+
         # Sprint 18: Deterministic PubChem chemistry patch.
         # LLM retrieval (top_k=40) often prioritises label/GRLS/CTGov chunks over the
         # single pubchem chunk, leaving formula/SMILES/InChIKey/MW empty.
@@ -1793,17 +1955,35 @@ class DossierReportGenerator:
 
         # WSx.4: Detect РГ-RU mutual-recognition marker in GRLS reg number.
         # This is NOT a direct EAEU registration — it is an EAEU-format framing on the
-        # RU registration. Emit as informational unknown, not as EAEU confirmation.
+        # RU registration. Sprint 19: Instead of emitting a 3rd separate EAEU unknown,
+        # enrich the existing EAEU_NOT_FOUND or EAEU_NO_EVIDENCE_IN_CORPUS unknown
+        # with a note about the РГ-RU marker. This prevents 3 overlapping EAEU unknowns.
         eaeu_marker_ev = self._detect_ru_eaeu_marker()
         if eaeu_marker_ev and not has_eaeu_reg:
-            self._add_unknown(
-                unknowns, "registrations[EAEU].mutual_recognition", "EAEU_RELATED_RU_MARKER",
-                f"RU registration for {self.inn} contains an EAEU mutual-recognition marker "
-                "(ЛП-...-(РГ-RU)). This indicates the RU registration was processed via "
-                "the EAEU mutual-recognition route, but does NOT confirm a standalone "
-                "direct EAEU union-register entry.",
-                "Check GRLS reg number suffix; verify EAEU SPD for direct registration separately.",
+            marker_note = (
+                f" Note: RU registration for {self.inn} carries an EAEU mutual-recognition "
+                "marker (ЛП-...-(РГ-RU)) — processed via EAEU route but not a standalone "
+                "EAEU union-register entry. Verify EAEU SPD separately."
             )
+            # Enrich the last-added EAEU unknown rather than adding a new one
+            eaeu_unknowns = [u for u in unknowns if "EAEU" in (u.reason_code or "")]
+            if eaeu_unknowns:
+                last_eaeu = eaeu_unknowns[-1]
+                last_eaeu.message = last_eaeu.message + marker_note
+                last_eaeu.suggested_next_action = (
+                    "Check GRLS reg number suffix (РГ-RU = mutual-recognition route); "
+                    "verify EAEU SPD for direct registration."
+                )
+            else:
+                # No prior EAEU unknown — emit standalone informational marker
+                self._add_unknown(
+                    unknowns, "registrations[EAEU].mutual_recognition", "EAEU_RELATED_RU_MARKER",
+                    f"RU registration for {self.inn} contains an EAEU mutual-recognition marker "
+                    "(ЛП-...-(РГ-RU)). This indicates the RU registration was processed via "
+                    "the EAEU mutual-recognition route, but does NOT confirm a standalone "
+                    "direct EAEU union-register entry.",
+                    "Check GRLS reg number suffix; verify EAEU SPD for direct registration separately.",
+                )
 
         # S5-P0-D + S6: Dedup by region — keep only the richest entry per region.
         # LLM may produce duplicate rows for the same region (e.g. 2 × "RU").
@@ -2363,6 +2543,20 @@ class DossierReportGenerator:
                 logger.info(
                     "patent_family_filtered_minimal inn=%s family_id=%s — lacks minimum viable content "
                     "(needs representative_pub/priority_date + assignees/summary/what_blocks)",
+                    self.inn, family_id[:60],
+                )
+                continue
+
+            # Sprint 19: INN relevance check.
+            # If a family has a summary or what_blocks that does NOT mention the INN
+            # (case-insensitive, partial match), it may be a false positive from the
+            # patent retrieval (e.g., KAT6A inhibitor patent when querying inavolisib).
+            # Only filter when summary/what_blocks exists — empty fields pass through.
+            if not _patent_family_mentions_inn(fam, self.inn):
+                filtered_minimal += 1
+                logger.info(
+                    "patent_family_filtered_inn_mismatch inn=%s family_id=%s — "
+                    "summary/what_blocks does not mention INN; likely false positive",
                     self.inn, family_id[:60],
                 )
                 continue
