@@ -1116,26 +1116,30 @@ class DossierReportGenerator:
     # Look for the "INDICATIONS AND USAGE" section header followed by indication text,
     # or "is indicated for" / "indicated as" phrases common in US labeling.
     _FDA_INDICATION_PATTERNS = [
-        # Priority 1: "is indicated for" / "indicated for the treatment of" — most precise
+        # Priority 1: "is indicated [for/in/as]" — most precise
         re.compile(
-            r"(\w[\w\s\-®™()]{2,40}\s+is\s+indicated\s+for\s+[^\n.]{10,350}\.?)",
+            r"(\w[\w\s\-®™()]{2,40}\s+is\s+(?:\w+\s+)?indicated\s+"
+            r"(?:for|in|as)\s+[^\n]{10,350})",
             re.IGNORECASE,
         ),
+        # Priority 1b: "indicated for the treatment/management/reduction/prevention"
         re.compile(
-            r"(indicated\s+(?:for|in)\s+(?:the\s+)?(?:treatment|management|reduction|prevention)\s+[^\n.]{10,300}\.?)",
+            r"(indicated\s+(?:for|in)\s+(?:the\s+)?(?:treatment|management|reduction|prevention|combination)\s+"
+            r"[^\n]{10,300})",
             re.IGNORECASE,
         ),
+        # Priority 1c: "indicated as an adjunct to"
         re.compile(
-            r"(indicated\s+as\s+(?:an?\s+)?(?:adjunct\s+)?(?:to|treatment|therapy)\s+[^\n.]{10,300}\.?)",
+            r"(indicated\s+as\s+(?:an?\s+)?(?:adjunct|add-on|monotherapy)\s+[^\n]{10,300})",
             re.IGNORECASE,
         ),
         # Priority 2: Section header + look for indication sentence inside
         re.compile(
             r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
-            r"[\s\S]{0,500}?((?:is\s+indicated|indicated\s+for|for\s+the\s+treatment)\s+[^\n.]{10,300}\.?)",
+            r"[\s\S]{0,600}?((?:indicated\s+(?:for|in|as))\s+[^\n]{10,300})",
             re.IGNORECASE | re.DOTALL,
         ),
-        # Priority 3: Fallback — section header + first substantial line (may be drug description)
+        # Priority 3: Fallback — section header + first substantial line
         re.compile(
             r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
             r"[:\s\n]+([^\n]{30,400})",

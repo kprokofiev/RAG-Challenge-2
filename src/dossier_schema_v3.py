@@ -1273,7 +1273,18 @@ def build_product_contexts(
             c_region = (c.region or "").upper()
             reg_ctx = reg_by_region.get(c_region)
             if reg_ctx is None:
-                # No registration for this region — keep as-is
+                # No registration for this specific region.
+                # Sprint 19: If context has no region AND its route contradicts
+                # ALL registered routes, suppress it (regionless ghost context).
+                if not c_region and c.route:
+                    all_reg_routes = {rc.route for rc in reg_by_region.values() if rc.route}
+                    if all_reg_routes and c.route not in all_reg_routes:
+                        suppressed_contexts.append({
+                            "context_id": c.context_id,
+                            "reason": f"phase5_regionless_route_contradiction: {c.route} vs all_reg {all_reg_routes}",
+                            "strength": c.context_strength,
+                        })
+                        continue
                 keep.append(c)
                 continue
             # Check route contradiction
