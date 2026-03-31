@@ -964,6 +964,9 @@ def build_product_contexts(
 
     # Sprint 13 WS2: Form families that imply specific routes (for consistency)
     _FORM_TO_ROUTE = {
+        "tablet": "oral",
+        "capsule": "oral",
+        "solution": "oral",
         "cream_ointment": "topical",
         "patch": "topical",
         "suppository": "rectal",
@@ -1017,11 +1020,19 @@ def build_product_contexts(
             if reg_ids:
                 origin += f" {reg_ids[0]}"
 
+            # Sprint 19: Infer route from dosage_forms for registration contexts
+            inferred_route = None
+            for _form_text in forms:
+                _ffam = _normalize_form_family(_form_text)
+                if _ffam and _ffam in _FORM_TO_ROUTE:
+                    inferred_route = _FORM_TO_ROUTE[_ffam]
+                    break
+
             ctx_map[ctx] = ProductContext(
                 context_id=ctx,
                 label=label,
                 region=region,
-                route=None,
+                route=inferred_route,
                 dosage_forms=forms,
                 strengths=[],
                 mah=mah_val or None,
@@ -1200,6 +1211,51 @@ def build_product_contexts(
     contexts, route_contradiction_suppressed = _suppress_contradicting_weak_signals(contexts)
     for entry in route_contradiction_suppressed:
         suppressed_contexts.append(entry)
+
+    # ── Sprint 19: Phase 5 — Final consistency check ─────────────────────────
+    # Remove evidence_supported / weak_signal contexts that contradict
+    # registration_confirmed contexts for the SAME region (route or form mismatch).
+    reg_by_region: Dict[str, ProductContext] = {}
+    for c in contexts:
+        if c.context_strength == "registration_confirmed" and c.region:
+            reg_by_region[c.region.upper()] = c
+
+    if reg_by_region:
+        keep: List[ProductContext] = []
+        for c in contexts:
+            if c.context_strength == "registration_confirmed":
+                keep.append(c)
+                continue
+            c_region = (c.region or "").upper()
+            reg_ctx = reg_by_region.get(c_region)
+            if reg_ctx is None:
+                # No registration for this region — keep as-is
+                keep.append(c)
+                continue
+            # Check route contradiction
+            if c.route and reg_ctx.route and c.route != reg_ctx.route:
+                suppressed_contexts.append({
+                    "context_id": c.context_id,
+                    "reason": f"phase5_route_contradiction: {c.route} vs reg {reg_ctx.route}",
+                    "strength": c.context_strength,
+                })
+                continue
+            # Check form contradiction — if registration has forms and evidence
+            # has dosage_forms with a DIFFERENT form family, suppress
+            if c.dosage_forms and reg_ctx.dosage_forms:
+                ev_forms = {_normalize_form_family(f) for f in c.dosage_forms if f}
+                reg_forms = {_normalize_form_family(f) for f in reg_ctx.dosage_forms if f}
+                ev_forms.discard(None)
+                reg_forms.discard(None)
+                if ev_forms and reg_forms and not ev_forms.intersection(reg_forms):
+                    suppressed_contexts.append({
+                        "context_id": c.context_id,
+                        "reason": f"phase5_form_contradiction: {ev_forms} vs reg {reg_forms}",
+                        "strength": c.context_strength,
+                    })
+                    continue
+            keep.append(c)
+        contexts = keep
 
     return contexts, suppressed_contexts
 

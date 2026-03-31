@@ -604,19 +604,20 @@ def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
 
 
 def _patent_family_mentions_inn(family: "DossierPatentFamily", inn: str) -> bool:
-    """Sprint 19: Check if a patent family's text fields mention the INN.
+    """Sprint 19 (relaxed): Check if a patent family is relevant to the INN.
 
-    Checks summary, what_blocks, technical_focus, and family_id.
-    Returns True if any field mentions the INN (case-insensitive partial match).
-    Returns True (pass-through) if NONE of those fields have text — avoids
-    filtering incomplete but potentially valid families.
+    Strategy (relaxed — fewer false negatives):
+    1. If text mentions the INN or its 6-char stem → True (positive match)
+    2. If text mentions a DIFFERENT INN-like compound name → False (explicit mismatch)
+    3. If text describes mechanism/target without naming any INN → True (keep it)
+    4. If no text at all → True (pass-through)
 
-    This prevents false positives like KAT6A inhibitor patents appearing in
-    an inavolisib dossier just because they share an assignee (Roche).
+    Previously this was "reject unless INN found" which dropped mechanism-only
+    patents (e.g., "ROS1 inhibitor" for taletrectinib, "PI3K inhibitor" for inavolisib).
     """
     inn_lower = inn.lower().strip()
     if not inn_lower:
-        return True  # Can't filter without INN
+        return True
 
     text_fields = []
     if family.summary and family.summary.value:
@@ -631,14 +632,35 @@ def _patent_family_mentions_inn(family: "DossierPatentFamily", inn: str) -> bool
     if not text_fields:
         return True  # No text to check — pass through
 
-    # INN partial match: allow "inavolisib" to match "inavolisib" or "GDC-0077"
-    # Also try first 6 chars (stem) to handle minor spelling variants
-    inn_stem = inn_lower[:6] if len(inn_lower) >= 6 else inn_lower
-    for text in text_fields:
-        if inn_lower in text or inn_stem in text:
-            return True
+    combined = " ".join(text_fields)
 
-    return False
+    # Positive match: INN or 6-char stem found
+    inn_stem = inn_lower[:6] if len(inn_lower) >= 6 else inn_lower
+    if inn_lower in combined or inn_stem in combined:
+        return True
+
+    # Negative match: check if text explicitly names a DIFFERENT INN.
+    # INN suffixes per WHO naming conventions (most common stems).
+    import re as _re
+    _INN_PATTERN = _re.compile(
+        r'\b[a-z]{3,}(?:mab|nib|lib|sib|tinib|rafenib|lisib|ciclib|'
+        r'tide|glutide|reotide|parib|zomib|stat|pril|sartan|olol|'
+        r'lukast|vastatin|dipine|caine|cillin|mycin|cycline|'
+        r'vir|navir|buvir|asvir|gliptin|canagliflozin|'
+        r'platin|taxel|rubicin|amide|fenac|profen|'
+        r'lumab|zumab|ximab|mumab|tuzumab|lizumab|'
+        r'ertinib|osertib|matinib)\b'
+    )
+    found_inns = set(_INN_PATTERN.findall(combined))
+    # Remove matches that are substrings of our target INN
+    other_inns = {m for m in found_inns if m not in inn_lower and inn_lower not in m}
+
+    if other_inns:
+        # Text names different compound(s) but NOT our INN → likely false positive
+        return False
+
+    # No explicit INN found at all — text describes mechanism/target → keep
+    return True
 
 
 # ── DossierReportGenerator ────────────────────────────────────────────────────
@@ -1201,6 +1223,137 @@ class DossierReportGenerator:
                 return best_by_kind[kind]
         return None
 
+    # ── Sprint 19: MoA / drug_class deterministic extraction ─────────────────
+    # FDA label Section 12 (CLINICAL PHARMACOLOGY / Mechanism of Action)
+    # and EU SmPC Section 5.1 (Pharmacodynamic properties).
+    _MOA_PATTERNS = [
+        # US label Section 12.1: "12.1 Mechanism of Action\n<text>"
+        re.compile(
+            r"(?:12\.1\s+)?Mechanism\s+of\s+Action[:\s\n]+([^\n]{20,500})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        # "<INN> is a <class> that <mechanism>"
+        re.compile(
+            r"(?:is\s+a[n]?\s+)([^.]{10,250}(?:inhibitor|antagonist|agonist|blocker|modulator|activator|antibody)[^.]{0,200}\.)",
+            re.IGNORECASE,
+        ),
+    ]
+
+    _DRUG_CLASS_PATTERNS = [
+        # "Pharmacotherapeutic group: <class>, ATC code"
+        re.compile(
+            r"Pharmacotherapeutic\s+group[:\s]+([^,\n]{10,200})",
+            re.IGNORECASE,
+        ),
+        # "<INN> is a <class> <type>"  e.g., "Inavolisib is a phosphoinositide 3-kinase (PI3K) inhibitor"
+        re.compile(
+            r"\b\w+\s+is\s+a[n]?\s+([^.]{5,150}(?:inhibitor|antagonist|agonist|blocker|modulator|antibody))",
+            re.IGNORECASE,
+        ),
+    ]
+
+    def _extract_moa_drug_class_deterministic(self) -> dict:
+        """Sprint 19: Scan label/smpc chunks for Mechanism of Action and drug class.
+
+        Returns dict with optional keys 'mechanism_of_action' and 'drug_class',
+        each an EvidencedValue. Empty dict if nothing found.
+        """
+        target_doc_kinds = {"label", "us_fda", "smpc", "epar"}
+        priority_order = ["label", "us_fda", "smpc", "epar"]
+
+        moa_by_kind: dict = {}
+        class_by_kind: dict = {}
+
+        json_files = list(self.documents_dir.glob("*.json"))
+        for doc_path in json_files:
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+
+            content = doc.get("content", {})
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = chunk.get("text", "")
+                if not text or len(text) < 30:
+                    continue
+                page = chunk.get("page")
+
+                # MoA extraction
+                if doc_kind not in moa_by_kind:
+                    for pat in self._MOA_PATTERNS:
+                        m = pat.search(text)
+                        if not m:
+                            continue
+                        try:
+                            raw = m.group(1).strip()
+                        except IndexError:
+                            raw = m.group(0).strip()
+                        raw = re.sub(r"\n{2,}.*", "", raw, flags=re.DOTALL)
+                        raw = raw.split("\n")[0].strip()
+                        if len(raw) < 15:
+                            continue
+                        if len(raw) > 400:
+                            raw = raw[:397] + "..."
+                        ev = _build_evidence(
+                            doc_id, page, text, doc_title,
+                            source_url=metainfo.get("source_url"),
+                            doc_kind=doc_kind,
+                        )
+                        self._evidence_registry[ev.evidence_id] = ev
+                        moa_by_kind[doc_kind] = EvidencedValue(
+                            value=raw, evidence_refs=[ev.evidence_id]
+                        )
+                        break
+
+                # Drug class extraction
+                if doc_kind not in class_by_kind:
+                    for pat in self._DRUG_CLASS_PATTERNS:
+                        m = pat.search(text)
+                        if not m:
+                            continue
+                        try:
+                            raw = m.group(1).strip()
+                        except IndexError:
+                            raw = m.group(0).strip()
+                        raw = raw.split("\n")[0].strip()
+                        if len(raw) < 5:
+                            continue
+                        if len(raw) > 200:
+                            raw = raw[:197] + "..."
+                        ev = _build_evidence(
+                            doc_id, page, text, doc_title,
+                            source_url=metainfo.get("source_url"),
+                            doc_kind=doc_kind,
+                        )
+                        self._evidence_registry[ev.evidence_id] = ev
+                        class_by_kind[doc_kind] = EvidencedValue(
+                            value=raw, evidence_refs=[ev.evidence_id]
+                        )
+                        break
+
+        result = {}
+        for kind in priority_order:
+            if kind in moa_by_kind and "mechanism_of_action" not in result:
+                result["mechanism_of_action"] = moa_by_kind[kind]
+            if kind in class_by_kind and "drug_class" not in result:
+                result["drug_class"] = class_by_kind[kind]
+        return result
+
     # Patterns for RU registration status from grls_card chunks.
     # Matches the injected marker "RU Reg Status: <text> | RU Reg Expiry: DD.MM.YYYY"
     # or native GRLS text "Действует до DD.MM.YYYY" / "Дата окончания действия DD.MM.YYYY".
@@ -1716,34 +1869,42 @@ class DossierReportGenerator:
                 passport.fda_indication = det_ind
                 logger.info("passport.fda_indication patched by deterministic extractor: %s", det_ind.value[:80])
 
-        # Sprint 18: Deterministic PubChem chemistry patch.
+        # Sprint 19: Deterministic MoA / drug_class patch.
+        # LLM often misses these when Section 12 text is beyond top-K window.
+        moa_class = self._extract_moa_drug_class_deterministic()
+        if moa_class:
+            patched_mc = []
+            if not (passport.mechanism_of_action and passport.mechanism_of_action.value) and "mechanism_of_action" in moa_class:
+                passport.mechanism_of_action = moa_class["mechanism_of_action"]
+                patched_mc.append("mechanism_of_action")
+            if not (passport.drug_class and passport.drug_class.value) and "drug_class" in moa_class:
+                passport.drug_class = moa_class["drug_class"]
+                patched_mc.append("drug_class")
+            if patched_mc:
+                logger.info("passport moa/class patched by deterministic extractor: fields=%s", patched_mc)
+
+        # Sprint 19: Deterministic PubChem chemistry patch — ALWAYS run.
         # LLM retrieval (top_k=40) often prioritises label/GRLS/CTGov chunks over the
         # single pubchem chunk, leaving formula/SMILES/InChIKey/MW empty.
-        # This extractor reads pubchem chunks directly and patches any missing fields.
-        needs_chemistry = not any([
-            passport.chemical_formula and passport.chemical_formula.value,
-            passport.smiles and passport.smiles.value,
-            passport.inchi_key and passport.inchi_key.value,
-            passport.molecular_weight and passport.molecular_weight.value,
-        ])
-        if needs_chemistry:
-            chem = self._extract_pubchem_chemistry_deterministic()
-            if chem:
-                patched = []
-                if not (passport.chemical_formula and passport.chemical_formula.value) and "chemical_formula" in chem:
-                    passport.chemical_formula = chem["chemical_formula"]
-                    patched.append("chemical_formula")
-                if not (passport.smiles and passport.smiles.value) and "smiles" in chem:
-                    passport.smiles = chem["smiles"]
-                    patched.append("smiles")
-                if not (passport.inchi_key and passport.inchi_key.value) and "inchi_key" in chem:
-                    passport.inchi_key = chem["inchi_key"]
-                    patched.append("inchi_key")
-                if not (passport.molecular_weight and passport.molecular_weight.value) and "molecular_weight" in chem:
-                    passport.molecular_weight = chem["molecular_weight"]
-                    patched.append("molecular_weight")
-                if patched:
-                    logger.info("passport chemistry patched by pubchem_deterministic: fields=%s", patched)
+        # Previously conditional (only if ALL fields null) — now unconditional to
+        # patch any individual missing fields even when LLM extracted some.
+        chem = self._extract_pubchem_chemistry_deterministic()
+        if chem:
+            patched = []
+            if not (passport.chemical_formula and passport.chemical_formula.value) and "chemical_formula" in chem:
+                passport.chemical_formula = chem["chemical_formula"]
+                patched.append("chemical_formula")
+            if not (passport.smiles and passport.smiles.value) and "smiles" in chem:
+                passport.smiles = chem["smiles"]
+                patched.append("smiles")
+            if not (passport.inchi_key and passport.inchi_key.value) and "inchi_key" in chem:
+                passport.inchi_key = chem["inchi_key"]
+                patched.append("inchi_key")
+            if not (passport.molecular_weight and passport.molecular_weight.value) and "molecular_weight" in chem:
+                passport.molecular_weight = chem["molecular_weight"]
+                patched.append("molecular_weight")
+            if patched:
+                logger.info("passport chemistry patched by pubchem_deterministic: fields=%s", patched)
 
         # S7: Validate — ALL mandatory fields without evidence → unknowns
         # Expanded from 4 to cover all 9 scalar fields + trade_names.

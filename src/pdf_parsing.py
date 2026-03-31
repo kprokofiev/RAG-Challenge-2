@@ -3,6 +3,7 @@ import time
 import logging
 import re
 import json
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from tabulate import tabulate
 from pathlib import Path
 from typing import Iterable, List, Optional, Dict
@@ -126,9 +127,67 @@ class PDFParser:
         
         return DocumentConverter(format_options=format_options)
 
+    # Sprint 19: Per-document timeout to prevent docling hangs on complex PDFs.
+    # Default 120s per document; configurable via DDKIT_DOCLING_TIMEOUT_S env var.
+    DOCLING_TIMEOUT_S = int(os.getenv("DDKIT_DOCLING_TIMEOUT_S", "120"))
+
     def convert_documents(self, input_doc_paths: List[Path]) -> Iterable[ConversionResult]:
-        conv_results = self.doc_converter.convert_all(source=input_doc_paths)
-        return conv_results
+        """Convert PDFs via docling with per-document timeout protection.
+
+        If a single document takes longer than DOCLING_TIMEOUT_S, it is skipped
+        and a FAILURE ConversionResult is yielded so callers can handle it.
+        """
+        timeout = self.DOCLING_TIMEOUT_S
+
+        def _convert_one(path: Path):
+            results = list(self.doc_converter.convert_all(source=[path]))
+            return results[0] if results else None
+
+        for doc_path in input_doc_paths:
+            try:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_convert_one, doc_path)
+                    result = future.result(timeout=timeout)
+                    if result is not None:
+                        yield result
+                    else:
+                        _log.warning(
+                            "docling returned no result for %s — skipping", doc_path.name
+                        )
+            except FuturesTimeoutError:
+                _log.error(
+                    "docling TIMEOUT (%ds) for %s — skipping document",
+                    timeout, doc_path.name,
+                )
+                yield self._make_failure_result(doc_path)
+            except Exception as exc:
+                _log.error(
+                    "docling error for %s: %s — skipping", doc_path.name, exc,
+                )
+                yield self._make_failure_result(doc_path)
+
+    def _make_failure_result(self, doc_path: Path) -> ConversionResult:
+        """Create a synthetic FAILURE ConversionResult for a skipped document."""
+        _inp = self._make_input_document(doc_path)
+        _fail = ConversionResult(input=_inp)
+        _fail.status = ConversionStatus.FAILURE
+        return _fail
+
+    def _make_input_document(self, doc_path: Path):
+        """Create an InputDocument for synthetic failure results."""
+        from docling.datamodel.base_models import InputFormat
+        try:
+            from docling.datamodel.document import InputDocument
+            return InputDocument(
+                path_or_stream=doc_path,
+                format=InputFormat.PDF,
+                backend=self.pdf_backend,
+            )
+        except Exception:
+            # Fallback: minimal mock with just .file attribute
+            class _MinimalInput:
+                file = doc_path
+            return _MinimalInput()
     
     def process_documents(self, conv_results: Iterable[ConversionResult]):
         if self.output_dir is not None:
