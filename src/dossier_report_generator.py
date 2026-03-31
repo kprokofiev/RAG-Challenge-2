@@ -1116,39 +1116,39 @@ class DossierReportGenerator:
     # Look for the "INDICATIONS AND USAGE" section header followed by indication text,
     # or "is indicated for" / "indicated as" phrases common in US labeling.
     _FDA_INDICATION_PATTERNS = [
-        # Priority 1: "is indicated [for/in/as]" — most precise
+        # Priority 1: "is indicated [for/in/as]" — most precise, multiline
         re.compile(
             r"(\w[\w\s\-®™()]{2,40}\s+is\s+(?:\w+\s+)?indicated\s+"
-            r"(?:for|in|as)\s+[^\n]{10,350})",
+            r"(?:for|in|as)\s+[\s\S]{10,500})",
             re.IGNORECASE,
         ),
-        # Priority 1b: "indicated for the treatment/management/reduction/prevention"
+        # Priority 1b: "indicated for/in the treatment/management/combination"
         re.compile(
             r"(indicated\s+(?:for|in)\s+(?:the\s+)?(?:treatment|management|reduction|prevention|combination)\s+"
-            r"[^\n]{10,300})",
+            r"[\s\S]{10,500})",
             re.IGNORECASE,
         ),
-        # Priority 1c: "indicated as an adjunct to"
+        # Priority 1c: "indicated as an adjunct/add-on/monotherapy"
         re.compile(
-            r"(indicated\s+as\s+(?:an?\s+)?(?:adjunct|add-on|monotherapy)\s+[^\n]{10,300})",
+            r"(indicated\s+as\s+(?:an?\s+)?(?:adjunct|add-on|monotherapy)\s+[\s\S]{10,500})",
             re.IGNORECASE,
         ),
-        # Priority 2: Section header + look for indication sentence inside
+        # Priority 2: Section header + look for indication sentence inside (multiline)
         re.compile(
             r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
-            r"[\s\S]{0,600}?((?:indicated\s+(?:for|in|as))\s+[^\n]{10,300})",
-            re.IGNORECASE | re.DOTALL,
+            r"[\s\S]{0,600}?(indicated\s+(?:for|in|as)\s+[\s\S]{10,500})",
+            re.IGNORECASE,
         ),
         # Priority 3: Fallback — section header + first substantial line
         re.compile(
             r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
-            r"[:\s\n]+([^\n]{30,400})",
-            re.IGNORECASE | re.DOTALL,
+            r"[:\s\n]+([\s\S]{30,500})",
+            re.IGNORECASE,
         ),
         # EU SmPC section 4.1 "Therapeutic indications"
         re.compile(
-            r"(?:4\.1\s+Therapeutic\s+indications?|Therapeutic\s+indications?)[:\s\n]+([^\n]{30,400})",
-            re.IGNORECASE | re.DOTALL,
+            r"(?:4\.1\s+Therapeutic\s+indications?|Therapeutic\s+indications?)[:\s\n]+([\s\S]{30,500})",
+            re.IGNORECASE,
         ),
     ]
 
@@ -1203,14 +1203,24 @@ class DossierReportGenerator:
                     except IndexError:
                         raw = m.group(0).strip()
 
-                    # Truncate to first sentence / reasonable length
-                    # Stop at double-newline, section header, or 300 chars
+                    # Truncate to reasonable length — join newlines, stop at
+                    # section boundary or "Limitations of Use"
                     raw = re.sub(r"\n{2,}.*", "", raw, flags=re.DOTALL)
-                    raw = raw.split("\n")[0].strip()
+                    # Join single newlines into spaces (indications span multiple lines)
+                    raw = re.sub(r"\n", " ", raw).strip()
+                    # Stop at "Limitations of Use" or similar boundary
+                    for boundary in ["Limitations of Use", "DOSAGE AND", "CONTRAINDICATIONS",
+                                     "WARNINGS AND", "See full prescribing"]:
+                        bnd_idx = raw.find(boundary)
+                        if bnd_idx > 30:
+                            raw = raw[:bnd_idx].strip()
+                            break
+                    # Remove trailing reference markers like "(1)" or "(1, 2)"
+                    raw = re.sub(r"\s*\(\s*\d[\d,\s]*\)\s*$", "", raw).strip()
                     if len(raw) < 20:
                         continue
-                    if len(raw) > 350:
-                        raw = raw[:347] + "..."
+                    if len(raw) > 500:
+                        raw = raw[:497] + "..."
 
                     page = chunk.get("page")
                     ev = _build_evidence(
@@ -2799,6 +2809,36 @@ class DossierReportGenerator:
                     "(no representative_pub/priority_date or no assignees/summary/what_blocks). "
                     "Filtered out to prevent empty shells from appearing as usable IP data.",
                 )
+
+        # ── Sprint 19: Deduplicate patent families by representative_pub ────
+        # The LLM sometimes emits the same patent twice (e.g. once from page 1
+        # and once from page 20 with a Google Patents family_id suffix).
+        # Keep the entry with more evidence_refs; merge refs from the dupe.
+        if len(families) > 1:
+            seen_pubs: Dict[str, int] = {}  # normalised pub → index in deduped
+            deduped_fams: List[DossierPatentFamily] = []
+            for fam in families:
+                rep_val = fam.representative_pub.value if fam.representative_pub else None
+                norm_key = self._normalise_patent_number(rep_val) if rep_val else None
+                if norm_key and norm_key in seen_pubs:
+                    # Merge into existing — add evidence_refs, keep richer entry
+                    kept = deduped_fams[seen_pubs[norm_key]]
+                    kept.evidence_refs = list(set(kept.evidence_refs + fam.evidence_refs))
+                    kept.key_docs = list(set(kept.key_docs + fam.key_docs))
+                    logger.info(
+                        "patent_family_dedup inn=%s merged %s into %s",
+                        self.inn, fam.family_id, kept.family_id,
+                    )
+                else:
+                    if norm_key:
+                        seen_pubs[norm_key] = len(deduped_fams)
+                    deduped_fams.append(fam)
+            if len(deduped_fams) < len(families):
+                logger.info(
+                    "patent_family_dedup inn=%s before=%d after=%d",
+                    self.inn, len(families), len(deduped_fams),
+                )
+            families = deduped_fams
 
         # ── Sprint 17: Deterministic patent expiry patching ─────────────────
         # Scan patent_legal_events + patent_expiry_us chunks for explicit expiry

@@ -1285,6 +1285,15 @@ def build_product_contexts(
                             "strength": c.context_strength,
                         })
                         continue
+                # Sprint 19 fix: weak_signal with no region AND no route is pure
+                # noise when registration contexts exist — no actionable info.
+                if not c_region and not c.route and c.context_strength == "weak_signal":
+                    suppressed_contexts.append({
+                        "context_id": c.context_id,
+                        "reason": "phase5_regionless_routeless_weak_signal",
+                        "strength": c.context_strength,
+                    })
+                    continue
                 keep.append(c)
                 continue
             # Check route contradiction
