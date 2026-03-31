@@ -829,8 +829,15 @@ class DocParseIndexProcessor:
             "patent", "patent_pdf", "epar", "smpc",
             "ru_instruction", "grls_card",
         }
+        # Sprint 19: Patent PDFs get a shorter timeout — they're smaller than
+        # SmPC/EPAR but docling hangs on them due to complex layouts.
+        _PATENT_KINDS = {"patent", "patent_pdf"}
+        _PATENT_TIMEOUT_S = int(os.environ.get("DDKIT_PATENT_TIMEOUT_S", "180"))
+
         _dk_lower = (doc_kind or "").lower()
-        if _dk_lower in _HEAVY_KINDS:
+        if _dk_lower in _PATENT_KINDS:
+            timeout_seconds = _PATENT_TIMEOUT_S
+        elif _dk_lower in _HEAVY_KINDS:
             timeout_seconds = max(1, settings.job_timeout_seconds_heavy)
         else:
             timeout_seconds = max(1, settings.job_timeout_seconds)
