@@ -809,30 +809,66 @@ def _context_id(region: str, route: str, form: str, strength: str, mah: str) -> 
 
 # Sprint 12 WS2: Route family normalization for context candidates
 _ROUTE_FAMILIES = {
-    "oral": {"oral", "po", "per os", "by mouth", "sublingual", "buccal"},
+    "oral": {"oral", "po", "per os", "by mouth", "sublingual", "buccal",
+             # RU
+             "внутрь", "перорально", "пероральный", "сублингвальный"},
     "injectable": {"iv", "intravenous", "im", "intramuscular", "sc", "subcutaneous",
-                   "injection", "infusion", "parenteral"},
-    "topical": {"topical", "cutaneous", "dermal", "transdermal", "patch"},
-    "inhalation": {"inhalation", "inhaled", "nasal", "intranasal", "pulmonary"},
-    "ophthalmic": {"ophthalmic", "eye", "ocular"},
-    "rectal": {"rectal", "suppository"},
+                   "injection", "infusion", "parenteral",
+                   # RU
+                   "подкожно", "подкожное введение", "внутривенно", "внутримышечно",
+                   "инъекция", "инфузия", "парентерально"},
+    "topical": {"topical", "cutaneous", "dermal", "transdermal", "patch",
+                # RU
+                "наружно", "наружное применение", "накожно", "трансдермально"},
+    "inhalation": {"inhalation", "inhaled", "nasal", "intranasal", "pulmonary",
+                   # RU
+                   "ингаляционно", "ингаляционный", "назально", "интраназально"},
+    "ophthalmic": {"ophthalmic", "eye", "ocular",
+                   # RU
+                   "глазные", "офтальмологический"},
+    "rectal": {"rectal", "suppository",
+               # RU
+               "ректально", "ректальный"},
 }
 
 # Sprint 12 WS2: Dosage form family normalization
 _FORM_FAMILIES = {
     "tablet": {"tablet", "tab", "film-coated tablet", "enteric-coated tablet",
                "chewable tablet", "dispersible tablet", "effervescent tablet",
-               "modified-release tablet", "extended-release tablet"},
+               "modified-release tablet", "extended-release tablet",
+               # RU
+               "таблетка", "таблетки", "таблетки покрытые", "таблетки покрытые пленочной оболочкой",
+               "таблетки жевательные", "таблетки диспергируемые", "таблетки шипучие"},
     "capsule": {"capsule", "cap", "softgel", "soft capsule", "hard capsule",
-                "liquid filled capsule", "modified-release capsule"},
+                "liquid filled capsule", "modified-release capsule",
+                # RU
+                "капсула", "капсулы", "капсулы твердые", "капсулы мягкие"},
     "solution": {"solution", "oral solution", "syrup", "elixir", "drops",
-                 "oral suspension", "suspension"},
+                 "oral suspension", "suspension",
+                 # RU (oral only — injectable handled in "injection")
+                 "раствор для приема внутрь", "сироп", "капли", "суспензия для приема внутрь"},
     "injection": {"injection", "solution for injection", "powder for injection",
-                  "infusion", "concentrate for infusion"},
-    "cream_ointment": {"cream", "ointment", "gel", "paste", "emulsion"},
-    "suppository": {"suppository", "rectal"},
-    "patch": {"patch", "transdermal patch", "transdermal system"},
-    "inhaler": {"inhaler", "nebuliser", "nebulizer", "metered dose"},
+                  "infusion", "concentrate for infusion",
+                  # RU
+                  "раствор для инъекций", "раствор для подкожного введения",
+                  "раствор для внутривенного введения", "раствор для внутримышечного введения",
+                  "раствор для инфузий", "лиофилизат", "лиофилизат для приготовления",
+                  "порошок для приготовления раствора для инъекций",
+                  "концентрат для приготовления раствора для инфузий",
+                  "шприц-ручка", "предварительно заполненный шприц"},
+    "cream_ointment": {"cream", "ointment", "gel", "paste", "emulsion",
+                       # RU
+                       "крем", "мазь", "гель", "паста", "эмульсия"},
+    "suppository": {"suppository", "rectal",
+                    # RU
+                    "суппозиторий", "суппозитории", "свечи"},
+    "patch": {"patch", "transdermal patch", "transdermal system",
+              # RU
+              "пластырь", "трансдермальный пластырь", "трансдермальная терапевтическая система"},
+    "inhaler": {"inhaler", "nebuliser", "nebulizer", "metered dose",
+                # RU
+                "ингалятор", "аэрозоль", "порошок для ингаляций", "раствор для ингаляций",
+                "суспензия для ингаляций"},
 }
 
 

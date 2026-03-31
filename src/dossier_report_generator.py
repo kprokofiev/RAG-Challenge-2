@@ -1116,18 +1116,30 @@ class DossierReportGenerator:
     # Look for the "INDICATIONS AND USAGE" section header followed by indication text,
     # or "is indicated for" / "indicated as" phrases common in US labeling.
     _FDA_INDICATION_PATTERNS = [
-        # Section header followed by indication text (US label format)
+        # Priority 1: "is indicated for" / "indicated for the treatment of" — most precise
+        re.compile(
+            r"(\w[\w\s\-®™()]{2,40}\s+is\s+indicated\s+for\s+[^\n.]{10,350}\.?)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(indicated\s+(?:for|in)\s+(?:the\s+)?(?:treatment|management|reduction|prevention)\s+[^\n.]{10,300}\.?)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(indicated\s+as\s+(?:an?\s+)?(?:adjunct\s+)?(?:to|treatment|therapy)\s+[^\n.]{10,300}\.?)",
+            re.IGNORECASE,
+        ),
+        # Priority 2: Section header + look for indication sentence inside
+        re.compile(
+            r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
+            r"[\s\S]{0,500}?((?:is\s+indicated|indicated\s+for|for\s+the\s+treatment)\s+[^\n.]{10,300}\.?)",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        # Priority 3: Fallback — section header + first substantial line (may be drug description)
         re.compile(
             r"(?:INDICATIONS?\s+AND\s+USAGE|1\s+INDICATIONS?\s+AND\s+USAGE)"
             r"[:\s\n]+([^\n]{30,400})",
             re.IGNORECASE | re.DOTALL,
-        ),
-        # "is indicated for" phrase
-        re.compile(
-            r"(?:is\s+indicated\s+for|indicated\s+as\s+(?:an?\s+)?(?:adjunct\s+)?(?:treatment|therapy)|"
-            r"indicated\s+(?:for|in)\s+(?:the\s+)?(?:treatment|management))"
-            r"[^\n.]{10,300}",
-            re.IGNORECASE,
         ),
         # EU SmPC section 4.1 "Therapeutic indications"
         re.compile(
@@ -1934,6 +1946,28 @@ class DossierReportGenerator:
                     unknowns, field_path, "NO_EVIDENCE_IN_CORPUS",
                     f"Field {field_path} could not be extracted with evidence from available documents.",
                     next_action,
+                )
+
+        # Sprint 19: InChIKey NOT_APPLICABLE for peptides/large molecules.
+        # InChI algorithm doesn't support polymeric/peptide structures (MW > ~1000 Da).
+        # Detect by: MW > 1000, or INN suffix -tide/-mab/-cept.
+        if not (passport.inchi_key and passport.inchi_key.value):
+            _mw_str = passport.molecular_weight.value if passport.molecular_weight and passport.molecular_weight.value else ""
+            _mw_num = 0.0
+            try:
+                _mw_num = float(re.sub(r"[^\d.]", "", str(_mw_str)))
+            except (ValueError, TypeError):
+                pass
+            _peptide_suffixes = ("tide", "mab", "cept", "bart", "tug", "ase")
+            _is_peptide = _mw_num > 1000 or self.inn_lower.endswith(_peptide_suffixes)
+            if _is_peptide:
+                # Replace the NO_EVIDENCE unknown with NOT_APPLICABLE
+                unknowns[:] = [u for u in unknowns if u.field_path != "passport.inchi_key"]
+                self._add_unknown(
+                    unknowns, "passport.inchi_key", "NOT_APPLICABLE_PEPTIDE",
+                    f"InChIKey not available for {self.inn} (MW={_mw_str}). "
+                    "InChI algorithm does not support peptide/protein structures above ~1000 Da.",
+                    "No action needed — InChIKey excluded from passport score for peptides/biologics."
                 )
 
         if not passport.trade_names:
@@ -2988,12 +3022,26 @@ class DossierReportGenerator:
         # Sprint 14 P0.4: build_product_contexts now returns (contexts, suppressed_weak_signals)
         product_contexts, suppressed_weak_signals = build_product_contexts(registrations, evidence_list)
         if len(product_contexts) > 1:
-            passport.passport_scope = "multi_context_ambiguous"
-            passport.passport_notice = (
-                f"This passport contains molecule-level fields only. "
-                f"{len(product_contexts)} product contexts detected — "
-                "product-specific data (route, dosage, indications) may vary by context."
-            )
+            # Sprint 19: Check if all contexts converge to the same route.
+            # If so, it's not truly ambiguous — just multiple regional registrations
+            # of the same product form. Don't mark as ambiguous.
+            ctx_routes = {c.route for c in product_contexts if c.route}
+            if len(ctx_routes) <= 1:
+                # All contexts share the same route (or have no route) → not ambiguous
+                passport.passport_scope = "single_context"
+                if ctx_routes:
+                    passport.passport_notice = (
+                        f"{len(product_contexts)} regional contexts detected, "
+                        f"all converging to route={next(iter(ctx_routes))}."
+                    )
+            else:
+                passport.passport_scope = "multi_context_ambiguous"
+                passport.passport_notice = (
+                    f"This passport contains molecule-level fields only. "
+                    f"{len(product_contexts)} product contexts detected with "
+                    f"distinct routes ({', '.join(sorted(ctx_routes))}) — "
+                    "product-specific data (route, dosage, indications) may vary by context."
+                )
         else:
             passport.passport_scope = "single_context"
 
