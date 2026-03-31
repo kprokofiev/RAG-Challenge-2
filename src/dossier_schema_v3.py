@@ -878,15 +878,23 @@ def _normalize_route_family(text: str) -> Optional[str]:
 
 
 def _normalize_form_family(text: str) -> Optional[str]:
-    """Sprint 12 WS2: Map a dosage form description to a normalized family."""
+    """Sprint 12 WS2: Map a dosage form description to a normalized family.
+
+    Prefers longer keyword matches (more specific) to avoid "solution for injection"
+    matching the 'solution' family instead of 'injection'.
+    """
     text_lower = text.lower().strip()
     if text_lower in _FORM_FAMILIES:
         return text_lower
+    # Collect all matches, pick the one with the longest keyword
+    best_family = None
+    best_kw_len = -1
     for family, keywords in _FORM_FAMILIES.items():
         for kw in keywords:
-            if _kw_matches(kw, text_lower):
-                return family
-    return None
+            if _kw_matches(kw, text_lower) and len(kw) > best_kw_len:
+                best_family = family
+                best_kw_len = len(kw)
+    return best_family
 
 
 def _collect_evidence_context_signals(
@@ -966,12 +974,12 @@ def build_product_contexts(
     _FORM_TO_ROUTE = {
         "tablet": "oral",
         "capsule": "oral",
-        "solution": "oral",
         "cream_ointment": "topical",
         "patch": "topical",
         "suppository": "rectal",
         "injection": "injectable",
         "inhaler": "inhalation",
+        # NOTE: "solution" omitted — ambiguous (oral solution vs solution for injection)
     }
 
     ctx_map: Dict[str, ProductContext] = {}
