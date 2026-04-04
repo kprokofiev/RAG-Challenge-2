@@ -81,7 +81,7 @@ class DossierUnknown(BaseModel):
 
 class EvidencedValue(BaseModel):
     """A single scalar value with mandatory evidence_ids linkage."""
-    value: Union[str, int, float, List[str], None] = Field(
+    value: Union[str, int, float, bool, List[str], None] = Field(
         description="The extracted value (str/num/list)"
     )
     evidence_refs: List[str] = Field(
@@ -305,17 +305,17 @@ class DossierClinicalStudy(BaseModel):
         None, description="Completed / ongoing / terminated"
     )
     # WS3.7 screening signal flags — set deterministically from CTGov API, not LLM
-    is_ongoing: Optional[bool] = Field(
-        None, description="True if study is actively recruiting or running (not completed/terminated)"
+    is_ongoing: Optional[EvidencedValue] = Field(
+        None, description="Evidence-wrapped boolean: True if study is actively recruiting or running"
     )
-    is_post_reg: Optional[bool] = Field(
-        None, description="True if study is Phase 4 / post-marketing / observational after approval"
+    is_post_reg: Optional[EvidencedValue] = Field(
+        None, description="Evidence-wrapped boolean: True if study is Phase 4 / post-marketing / observational"
     )
-    is_combination_therapy: Optional[bool] = Field(
-        None, description="True if study investigates this drug in combination with another drug"
+    is_combination_therapy: Optional[EvidencedValue] = Field(
+        None, description="Evidence-wrapped boolean: True if study investigates combination therapy"
     )
-    has_ru_presence: Optional[bool] = Field(
-        None, description="True if Russia is listed as a study country"
+    has_ru_presence: Optional[EvidencedValue] = Field(
+        None, description="Evidence-wrapped boolean: True if Russia is listed as a study country"
     )
     evidence_refs: List[str] = Field(
         default_factory=list,

@@ -2986,19 +2986,25 @@ class DossierReportGenerator:
             overall_status = status_mod.get("overallStatus", "")
             _ongoing_statuses = {"RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATION",
                                   "NOT_YET_RECRUITING", "AVAILABLE"}
-            _completed_statuses = {"COMPLETED", "TERMINATED", "WITHDRAWN", "SUSPENDED"}
             if overall_status:
-                study.is_ongoing = overall_status.upper() in _ongoing_statuses
+                study.is_ongoing = EvidencedValue(
+                    value=overall_status.upper() in _ongoing_statuses,
+                    evidence_refs=refs,
+                )
 
             # is_post_reg: Phase 4 or EXPANDED_ACCESS or observational post-approval
             phases = design.get("phases") or []
             study_type_raw = design.get("studyType", "")
             primary_purpose = design.get("designInfo", {}).get("primaryPurpose", "")
-            study.is_post_reg = (
-                "PHASE4" in [p.upper().replace(" ", "").replace("_", "") for p in phases]
-                or study_type_raw.upper() == "EXPANDED_ACCESS"
-                or primary_purpose.upper() in ("POST_MARKETING", "PREVENTION")
-            )
+            if phases or study_type_raw or primary_purpose:
+                study.is_post_reg = EvidencedValue(
+                    value=(
+                        "PHASE4" in [p.upper().replace(" ", "").replace("_", "") for p in phases]
+                        or study_type_raw.upper() == "EXPANDED_ACCESS"
+                        or primary_purpose.upper() in ("POST_MARKETING", "PREVENTION")
+                    ),
+                    evidence_refs=refs,
+                )
 
             # is_combination_therapy: any arm group label / intervention name mentions ≥2 drugs
             arm_groups = arms_mod.get("armGroups", [])
@@ -3015,14 +3021,20 @@ class DossierReportGenerator:
                 combo_signals.append(
                     any(kw in (itv_name + " " + names) for kw in combo_keywords)
                 )
-            study.is_combination_therapy = any(combo_signals) if combo_signals else None
+            if combo_signals:
+                study.is_combination_therapy = EvidencedValue(
+                    value=any(combo_signals),
+                    evidence_refs=refs,
+                )
 
             # has_ru_presence: Russia listed in locations
             locations = contacts.get("locations", [])
             ru_countries = {"Russia", "Russian Federation"}
-            study.has_ru_presence = any(
-                loc.get("country", "") in ru_countries for loc in locations
-            ) if locations else None
+            if locations:
+                study.has_ru_presence = EvidencedValue(
+                    value=any(loc.get("country", "") in ru_countries for loc in locations),
+                    evidence_refs=refs,
+                )
 
             logger.info(
                 "ctgov_api_enrichment nct=%s patched: phase=%s status=%s enrolled=%s "
@@ -3034,7 +3046,10 @@ class DossierReportGenerator:
                 len(study.countries) if study.countries else 0,
                 "yes" if needs_title and study.title else "no",
                 "yes" if needs_study_type and study.study_type else "no",
-                study.is_ongoing, study.is_post_reg, study.is_combination_therapy, study.has_ru_presence,
+                study.is_ongoing.value if study.is_ongoing else None,
+                study.is_post_reg.value if study.is_post_reg else None,
+                study.is_combination_therapy.value if study.is_combination_therapy else None,
+                study.has_ru_presence.value if study.has_ru_presence else None,
             )
 
     def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
@@ -3145,6 +3160,32 @@ class DossierReportGenerator:
         # Step 4: CTGov API enrichment — fill null phase/status/enrollment/countries
         if studies:
             self._enrich_clinical_from_ctgov_api(studies)
+            clinical_flag_specs = {
+                "is_ongoing": "overall CTGov status metadata",
+                "is_post_reg": "phase / study-type / primary-purpose metadata",
+                "is_combination_therapy": "arm/intervention metadata",
+                "has_ru_presence": "location country metadata",
+            }
+            for field_name, evidence_hint in clinical_flag_specs.items():
+                missing_for_field = []
+                for study in studies:
+                    if getattr(study, field_name, None) is None:
+                        study_id = (
+                            study.study_id.value
+                            if study.study_id and study.study_id.value
+                            else "unknown_study"
+                        )
+                        missing_for_field.append(str(study_id))
+                if missing_for_field:
+                    self._add_unknown(
+                        unknowns,
+                        f"clinical_studies[*].{field_name}",
+                        "NO_EVIDENCE_IN_CORPUS",
+                        f"{len(missing_for_field)} clinical study card(s) still lack an evidence-wrapped "
+                        f"value for {field_name}: {', '.join(missing_for_field[:5])}"
+                        f"{'...' if len(missing_for_field) > 5 else ''}.",
+                        f"Ensure CTGov {evidence_hint} is attached and preserved in the indexed study payload.",
+                    )
 
         return studies
 
@@ -3550,6 +3591,69 @@ class DossierReportGenerator:
 
         return steps
 
+    def _build_fallback_sections_manifest(self, report: DossierReport) -> List[Dict[str, Any]]:
+        """Honest non-null fallback when legacy DD sections[] payload is unavailable."""
+        section_specs = [
+            ("passport", "Passport", 1 if report.passport else 0),
+            ("registrations", "Registrations", len(report.registrations)),
+            ("clinical_studies", "Clinical Studies", len(report.clinical_studies)),
+            ("patent_families", "Patent Families", len(report.patent_families)),
+            ("synthesis_steps", "Synthesis Steps", len(report.synthesis_steps)),
+        ]
+        manifest: List[Dict[str, Any]] = []
+        for section_id, title, item_count in section_specs:
+            unknown_count = sum(
+                1
+                for u in report.unknowns
+                if (u.field_path or "").startswith(section_id)
+                or (section_id == "passport" and (u.field_path or "").startswith("passport."))
+            )
+            manifest.append(
+                {
+                    "section_id": section_id,
+                    "title": title,
+                    "claims": [],
+                    "numbers": [],
+                    "risks": [],
+                    "unknowns": [],
+                    "evidence": [],
+                    "fallback_summary": {
+                        "source": "dossier_v3_fallback",
+                        "status": "present" if item_count else "empty",
+                        "item_count": item_count,
+                        "unknown_count": unknown_count,
+                        "note": "Legacy DD report sections[] payload was unavailable; generated from dossier_v3 top-level blocks.",
+                    },
+                }
+            )
+        return manifest
+
+    def _build_fallback_completeness_manifest(self, report: DossierReport) -> Dict[str, Any]:
+        section_counts = {
+            "passport": 1 if report.passport else 0,
+            "registrations": 1 if report.registrations else 0,
+            "clinical_studies": 1 if report.clinical_studies else 0,
+            "patent_families": 1 if report.patent_families else 0,
+            "synthesis_steps": 1 if report.synthesis_steps else 0,
+        }
+        expected_by_kind = {key: 1 for key in section_counts}
+        included_total = sum(section_counts.values())
+        missing_by_kind = {key: 1 - value for key, value in section_counts.items() if value == 0}
+        missing_total = sum(missing_by_kind.values())
+        ratio = included_total / max(len(section_counts), 1)
+        return {
+            "is_partial": missing_total > 0,
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "expected": {"total": len(section_counts), "by_kind": expected_by_kind},
+            "included": {"total": included_total, "by_kind": section_counts},
+            "missing": {"total": missing_total, "by_kind": missing_by_kind},
+            "completeness_ratio": round(ratio, 4),
+            "over_included": 0,
+            "reasons": ["legacy_report_missing"],
+            "source": "dossier_v3_fallback",
+            "note": "Fallback completeness manifest built from dossier_v3 top-level section presence because legacy DD report payload was unavailable.",
+        }
+
     # ── Main entry point ──────────────────────────────────────────────────────
 
     def generate(
@@ -3664,6 +3768,11 @@ class DossierReportGenerator:
             sections=legacy_sections,
             completeness=completeness,
         )
+
+        if not report.sections:
+            report.sections = self._build_fallback_sections_manifest(report)
+        if not report.completeness:
+            report.completeness = self._build_fallback_completeness_manifest(report)
 
         # Compute legacy quality scores
         report.dossier_quality = compute_dossier_quality(report)
