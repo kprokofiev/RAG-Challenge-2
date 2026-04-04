@@ -866,9 +866,22 @@ _FORM_FAMILIES = {
               # RU
               "пластырь", "трансдермальный пластырь", "трансдермальная терапевтическая система"},
     "inhaler": {"inhaler", "nebuliser", "nebulizer", "metered dose",
+                "inhalation suspension", "for oral inhalation use", "for inhalation use",
+                "powder for inhalation", "solution for inhalation",
                 # RU
                 "ингалятор", "аэрозоль", "порошок для ингаляций", "раствор для ингаляций",
                 "суспензия для ингаляций"},
+}
+
+_FORM_TO_ROUTE = {
+    "tablet": "oral",
+    "capsule": "oral",
+    "cream_ointment": "topical",
+    "patch": "topical",
+    "suppository": "rectal",
+    "injection": "injectable",
+    "inhaler": "inhalation",
+    # NOTE: "solution" omitted — ambiguous (oral solution vs solution for injection)
 }
 
 
@@ -933,6 +946,84 @@ def _normalize_form_family(text: str) -> Optional[str]:
     return best_family
 
 
+_STRENGTH_RE = _re_mod.compile(
+    r"\b\d+(?:[.,]\d+)?\s*"
+    r"(?:mg|mcg|μg|ug|g|kg|IU|U|units?|mL|ml|L|%)\b"
+    r"(?:\s*/\s*\d+(?:[.,]\d+)?\s*(?:mg|mcg|μg|ug|g|kg|mL|ml|L))?"
+    r"(?:\s*\([^)]+\))?",
+    _re_mod.IGNORECASE,
+)
+
+
+def _canonical_form_label(form_family: str, raw_text: str) -> str:
+    labels = {
+        "tablet": "tablet",
+        "capsule": "capsule",
+        "solution": "solution",
+        "injection": "injection",
+        "cream_ointment": "cream/ointment",
+        "suppository": "suppository",
+        "patch": "patch",
+        "inhaler": "inhaler",
+    }
+    return labels.get(form_family, raw_text.strip())
+
+
+def _split_form_strength_text(text: str) -> tuple[List[str], List[str]]:
+    """Split raw registration text into cleaner dosage_forms and strengths."""
+    raw = (text or "").strip()
+    if not raw:
+        return [], []
+
+    strengths: List[str] = []
+    seen_strengths: set[str] = set()
+    for m in _STRENGTH_RE.finditer(raw):
+        val = m.group(0).strip(" ,;")
+        norm = val.lower()
+        if norm not in seen_strengths:
+            seen_strengths.add(norm)
+            strengths.append(val)
+
+    form_part = raw.split(";", 1)[0].strip()
+    form_part = _re_mod.sub(r",?\s*for oral inhalation use\b", "", form_part, flags=_re_mod.IGNORECASE)
+    form_part = _re_mod.sub(r",?\s*for inhalation use\b", "", form_part, flags=_re_mod.IGNORECASE)
+    form_part = _re_mod.sub(r",?\s*for oral use\b", "", form_part, flags=_re_mod.IGNORECASE)
+    form_part = _re_mod.sub(r"\bcontaining\b.*$", "", form_part, flags=_re_mod.IGNORECASE)
+    form_part = _STRENGTH_RE.sub("", form_part)
+    form_part = _re_mod.sub(r"\([^)]*(equivalent to|strength)[^)]*\)", "", form_part, flags=_re_mod.IGNORECASE)
+    form_part = _re_mod.sub(r"\s+", " ", form_part).strip(" ,;:-")
+
+    form_family = _normalize_form_family(form_part) or _normalize_form_family(raw)
+    if form_family:
+        return [_canonical_form_label(form_family, form_part or raw)], strengths
+    if form_part:
+        return [form_part], strengths
+    return [], strengths
+
+
+def _infer_route_from_form_text(raw_text: str, dosage_forms: List[str]) -> Optional[str]:
+    text_lower = (raw_text or "").lower()
+    if any(
+        token in text_lower
+        for token in ("oral inhalation", "for inhalation", "inhalation", "inhaled", "pulmonary")
+    ):
+        return "inhalation"
+
+    for form in dosage_forms:
+        ff = _normalize_form_family(form)
+        if ff and ff in _FORM_TO_ROUTE:
+            return _FORM_TO_ROUTE[ff]
+
+    ff_raw = _normalize_form_family(raw_text)
+    if ff_raw and ff_raw in _FORM_TO_ROUTE:
+        return _FORM_TO_ROUTE[ff_raw]
+
+    route_family = _normalize_route_family(raw_text)
+    if route_family:
+        return route_family
+    return None
+
+
 def _collect_evidence_context_signals(
     evidence_registry: List[DossierEvidence],
     registrations: List[DossierRegistration],
@@ -993,7 +1084,7 @@ def _collect_evidence_context_signals(
 def build_product_contexts(
     registrations: List[DossierRegistration],
     evidence_registry: List[DossierEvidence],
-) -> List[ProductContext]:
+) -> tuple[List[ProductContext], List[Dict[str, str]]]:
     """
     Sprint 7.5 TZ-1 + Sprint 12 WS2 + Sprint 13 WS2:
     Build product_contexts from registrations + evidence signals.
@@ -1006,39 +1097,45 @@ def build_product_contexts(
     _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
                         "us_fda", "approval_letter", "pil", "assessment_report"}
 
-    # Sprint 13 WS2: Form families that imply specific routes (for consistency)
-    _FORM_TO_ROUTE = {
-        "tablet": "oral",
-        "capsule": "oral",
-        "cream_ointment": "topical",
-        "patch": "topical",
-        "suppository": "rectal",
-        "injection": "injectable",
-        "inhaler": "inhalation",
-        # NOTE: "solution" omitted — ambiguous (oral solution vs solution for injection)
-    }
-
     ctx_map: Dict[str, ProductContext] = {}
 
     # ── Phase 1: Registration-driven contexts ────────────────────────────────
     for reg in registrations:
         region = (reg.region or "").strip().upper()
-        forms = []
+        forms: List[str] = []
+        strengths: List[str] = []
+        seen_forms: set[str] = set()
+        seen_strengths: set[str] = set()
+        raw_form_texts: List[str] = []
         for fs in reg.forms_strengths:
             if fs.value:
                 val = fs.value if isinstance(fs.value, str) else str(fs.value)
-                forms.append(val)
+                raw_form_texts.append(val)
+                split_forms, split_strengths = _split_form_strength_text(val)
+                for split_form in split_forms:
+                    norm_form = split_form.lower().strip()
+                    if norm_form and norm_form not in seen_forms:
+                        seen_forms.add(norm_form)
+                        forms.append(split_form)
+                for split_strength in split_strengths:
+                    norm_strength = split_strength.lower().strip()
+                    if norm_strength and norm_strength not in seen_strengths:
+                        seen_strengths.add(norm_strength)
+                        strengths.append(split_strength)
         mah_val = ""
         if reg.mah and reg.mah.value:
             mah_val = str(reg.mah.value)
 
         form_str = "; ".join(sorted(forms)) if forms else ""
-        ctx = _context_id(region, "", form_str, "", mah_val)
+        strength_str = "; ".join(sorted(strengths)) if strengths else ""
+        ctx = _context_id(region, "", form_str, strength_str, mah_val)
 
         if ctx not in ctx_map:
             label_parts = [region]
             if forms:
                 label_parts.append(form_str[:60])
+            if strengths:
+                label_parts.append(strength_str[:40])
             if mah_val:
                 label_parts.append(mah_val[:40])
             label = " - ".join(label_parts)
@@ -1064,12 +1161,11 @@ def build_product_contexts(
             if reg_ids:
                 origin += f" {reg_ids[0]}"
 
-            # Sprint 19: Infer route from dosage_forms for registration contexts
+            # Sprint 21: Infer route from cleaned dosage_forms / raw registration text.
             inferred_route = None
-            for _form_text in forms:
-                _ffam = _normalize_form_family(_form_text)
-                if _ffam and _ffam in _FORM_TO_ROUTE:
-                    inferred_route = _FORM_TO_ROUTE[_ffam]
+            for _form_text in raw_form_texts or forms:
+                inferred_route = _infer_route_from_form_text(_form_text, forms)
+                if inferred_route:
                     break
 
             ctx_map[ctx] = ProductContext(
@@ -1078,7 +1174,7 @@ def build_product_contexts(
                 region=region,
                 route=inferred_route,
                 dosage_forms=forms,
-                strengths=[],
+                strengths=strengths,
                 mah=mah_val or None,
                 identifiers=reg_ids,
                 primary_docs=primary_docs,
