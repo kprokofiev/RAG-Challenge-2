@@ -78,10 +78,10 @@ FIELD_ALLOWED_SOURCES: Dict[str, List[str]] = {
     # MoA / class — Tier-2 allowed with medium confidence
     "drug_class":              ["label", "smpc", "drug_monograph", "moa_overview"],
     "mechanism_of_action":     ["label", "smpc", "drug_monograph", "moa_overview"],
-    # Chemistry — PubChem only
-    "chemical_formula":        ["pubchem", "drug_monograph"],
-    "smiles":                  ["pubchem"],
-    "inchi_key":               ["pubchem"],
+    # Chemistry — structured chemistry sources first
+    "chemical_formula":        ["pubchem", "chembl", "drug_monograph"],
+    "smiles":                  ["pubchem", "chembl"],
+    "inchi_key":               ["pubchem", "chembl"],
 }
 
 # Tier-2 doc_kinds: populates with confidence=medium, forbidden for regulatory identifiers
@@ -398,7 +398,11 @@ def _ev_id(doc_id: str, page: Optional[int], text: str) -> str:
 
 
 # doc_kinds whose original artifact is JSON (not PDF)
-_JSON_DOC_KINDS = {"pubchem", "label", "us_fda", "ctgov", "ctgov_results", "ctgov_protocol"}
+_JSON_DOC_KINDS = {
+    "pubchem", "chembl", "label", "us_fda", "ctgov", "ctgov_results", "ctgov_protocol",
+    "patent_family_summary", "patent_legal_events", "patent_expiry_us", "patent_discovery_us",
+    "ru_patent_fips", "eaeu_document", "eaeu_registration",
+}
 
 
 def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
@@ -684,6 +688,7 @@ class DossierReportGenerator:
     ):
         self.vector_db_dir = vector_db_dir
         self.documents_dir = documents_dir
+        self.original_documents_dir = documents_dir.parent / "original_documents"
         self.inn = inn.strip() if inn else ""
         self.inn_lower = self.inn.lower()
         self.tenant_id = tenant_id
@@ -694,6 +699,54 @@ class DossierReportGenerator:
         self.evidence_builder = EvidenceCandidatesBuilder()
         # Evidence registry: evidence_id → DossierEvidence
         self._evidence_registry: Dict[str, DossierEvidence] = {}
+        self._doc_metainfo_index_cache: Optional[Dict[str, Dict[str, Any]]] = None
+
+    def _doc_metainfo_index(self) -> Dict[str, Dict[str, Any]]:
+        if self._doc_metainfo_index_cache is not None:
+            return self._doc_metainfo_index_cache
+
+        index: Dict[str, Dict[str, Any]] = {}
+        for doc_path in self.documents_dir.glob("*.json"):
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+            meta = doc.get("metainfo", {}) or {}
+            doc_id = meta.get("doc_id", doc_path.stem)
+            index[doc_id] = meta
+        self._doc_metainfo_index_cache = index
+        return index
+
+    def _iter_original_json_docs(self, allowed_doc_kinds: Optional[set[str]] = None):
+        if not self.original_documents_dir.exists():
+            return
+        meta_index = self._doc_metainfo_index()
+        for original_path in self.original_documents_dir.glob("*.json"):
+            name = original_path.name
+            if "__" not in name:
+                continue
+            doc_id, _filename = name.split("__", 1)
+            meta = meta_index.get(doc_id, {})
+            doc_kind = (meta.get("doc_kind") or "").lower()
+            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+                continue
+            if self.tenant_id and meta.get("tenant_id") not in (None, self.tenant_id):
+                continue
+            if self.case_id and meta.get("case_id") not in (None, self.case_id):
+                continue
+            try:
+                raw_bytes = original_path.read_bytes()
+                data = json.loads(raw_bytes.decode("utf-8"))
+            except Exception:
+                continue
+            yield {
+                "doc_id": doc_id,
+                "doc_kind": doc_kind,
+                "meta": meta,
+                "data": data,
+                "content_hash": hashlib.sha256(raw_bytes).hexdigest(),
+            }
 
     def _retrieve(self, question: str, doc_kinds: List[str], top_k: int = 40) -> List[Dict[str, Any]]:
         """Retrieve top-K evidence candidates for a question with given doc_kind filter.
@@ -1580,14 +1633,208 @@ class DossierReportGenerator:
         re.IGNORECASE,
     )
 
-    def _extract_pubchem_chemistry_deterministic(self) -> Optional[Dict[str, Any]]:
-        """Scan pubchem doc chunks directly for chemistry fields.
+    def _build_structured_json_value(
+        self,
+        *,
+        doc_id: str,
+        doc_title: str,
+        source_url: str,
+        doc_kind: str,
+        content_hash: str,
+        locator: str,
+        field_name: str,
+        value: Any,
+        confidence: float = 0.99,
+    ) -> EvidencedValue:
+        snippet = f"{field_name}: {value}"
+        ev = _build_evidence(
+            doc_id,
+            None,
+            snippet,
+            doc_title,
+            source_url,
+            doc_kind=doc_kind,
+            content_hash=content_hash,
+            locator=locator,
+        )
+        self._evidence_registry[ev.evidence_id] = ev
+        return EvidencedValue(value=value, confidence=confidence, evidence_refs=[ev.evidence_id])
 
-        Bypasses LLM retrieval — the single pubchem chunk is often outcompeted
-        by label/GRLS chunks in top-K retrieval. Returns dict with keys:
-        chemical_formula, molecular_weight, smiles, inchi_key (each EvidencedValue),
-        or None if no pubchem doc found.
-        """
+    def _extract_pubchem_chemistry_from_original_json(self) -> Dict[str, EvidencedValue]:
+        for item in self._iter_original_json_docs({"pubchem"}) or []:
+            data = item["data"] or {}
+            compounds = data.get("PC_Compounds") or []
+            if not compounds:
+                continue
+            compound = compounds[0] or {}
+            props = compound.get("props") or []
+            indexed_props: Dict[str, Dict[str, Any]] = {}
+            for idx, prop in enumerate(props):
+                urn = prop.get("urn") or {}
+                label = urn.get("label") or ""
+                name = urn.get("name") or ""
+                value_obj = prop.get("value") or {}
+                value = value_obj.get("sval")
+                if value in (None, ""):
+                    value = value_obj.get("fval")
+                if value in (None, ""):
+                    value = value_obj.get("ival")
+                if label and value not in (None, ""):
+                    indexed_props[label] = {"value": value, "locator": f"/PC_Compounds/0/props/{idx}"}
+                    if name:
+                        indexed_props[f"{label}:{name}"] = {"value": value, "locator": f"/PC_Compounds/0/props/{idx}"}
+
+            def _pick(*keys: str) -> Optional[Dict[str, Any]]:
+                for key in keys:
+                    if key in indexed_props:
+                        return indexed_props[key]
+                return None
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+            results: Dict[str, EvidencedValue] = {}
+
+            formula = _pick("Molecular Formula")
+            if formula:
+                results["chemical_formula"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="pubchem",
+                    content_hash=content_hash,
+                    locator=formula["locator"],
+                    field_name="Molecular Formula",
+                    value=re.sub(r"\s+", "", str(formula["value"])),
+                )
+            mw = _pick("Molecular Weight")
+            if mw:
+                results["molecular_weight"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="pubchem",
+                    content_hash=content_hash,
+                    locator=mw["locator"],
+                    field_name="Molecular Weight",
+                    value=str(mw["value"]).strip(),
+                )
+            smiles = _pick("Canonical SMILES", "SMILES:Canonical", "Isomeric SMILES", "SMILES:Absolute", "SMILES")
+            if smiles:
+                results["smiles"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="pubchem",
+                    content_hash=content_hash,
+                    locator=smiles["locator"],
+                    field_name="Canonical SMILES",
+                    value=str(smiles["value"]).strip(),
+                    confidence=0.97,
+                )
+            inchi_key = _pick("InChIKey", "InChIKey:Standard")
+            if inchi_key:
+                results["inchi_key"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="pubchem",
+                    content_hash=content_hash,
+                    locator=inchi_key["locator"],
+                    field_name="InChIKey",
+                    value=re.sub(r"[–—]", "-", re.sub(r"\s+", "", str(inchi_key["value"]))),
+                    confidence=0.97,
+                )
+            if results:
+                logger.info(
+                    "pubchem_structured_chemistry found fields=%s doc=%s",
+                    list(results.keys()),
+                    doc_id,
+                )
+                return results
+        return {}
+
+    def _extract_chembl_chemistry_from_original_json(self) -> Dict[str, EvidencedValue]:
+        for item in self._iter_original_json_docs({"chembl"}) or []:
+            data = item["data"] or {}
+            molecule = data.get("molecule") or {}
+            props = molecule.get("molecule_properties") or {}
+            structures = molecule.get("molecule_structures") or {}
+            if not props and not structures:
+                continue
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+            results: Dict[str, EvidencedValue] = {}
+
+            formula = props.get("full_molformula")
+            if formula:
+                results["chemical_formula"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="chembl",
+                    content_hash=content_hash,
+                    locator="/molecule/molecule_properties/full_molformula",
+                    field_name="ChEMBL full_molformula",
+                    value=str(formula).strip(),
+                )
+            mw = props.get("full_mwt") or props.get("mw_freebase")
+            if mw:
+                mw_locator = "/molecule/molecule_properties/full_mwt" if props.get("full_mwt") else "/molecule/molecule_properties/mw_freebase"
+                results["molecular_weight"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="chembl",
+                    content_hash=content_hash,
+                    locator=mw_locator,
+                    field_name="ChEMBL molecular weight",
+                    value=str(mw).strip(),
+                )
+            smiles = structures.get("canonical_smiles")
+            if smiles:
+                results["smiles"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="chembl",
+                    content_hash=content_hash,
+                    locator="/molecule/molecule_structures/canonical_smiles",
+                    field_name="ChEMBL canonical_smiles",
+                    value=str(smiles).strip(),
+                    confidence=0.96,
+                )
+            inchi_key = structures.get("standard_inchi_key")
+            if inchi_key:
+                results["inchi_key"] = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="chembl",
+                    content_hash=content_hash,
+                    locator="/molecule/molecule_structures/standard_inchi_key",
+                    field_name="ChEMBL standard_inchi_key",
+                    value=str(inchi_key).strip(),
+                    confidence=0.96,
+                )
+            if results:
+                logger.info(
+                    "chembl_structured_chemistry found fields=%s doc=%s",
+                    list(results.keys()),
+                    doc_id,
+                )
+                return results
+        return {}
+
+    def _extract_rendered_chemistry_deterministic(self, allowed_doc_kinds: set[str]) -> Dict[str, EvidencedValue]:
+        """Fallback extractor from rendered corpus text when original JSON is unavailable."""
+        results: Dict[str, EvidencedValue] = {}
         json_files = list(self.documents_dir.glob("*.json"))
         for doc_path in json_files:
             try:
@@ -1598,7 +1845,7 @@ class DossierReportGenerator:
 
             metainfo = doc.get("metainfo", {})
             doc_kind = (metainfo.get("doc_kind") or "").lower()
-            if doc_kind != "pubchem":
+            if doc_kind not in allowed_doc_kinds:
                 continue
             if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
                 continue
@@ -1618,8 +1865,6 @@ class DossierReportGenerator:
                     continue
 
                 page = chunk.get("page")
-                results: Dict[str, Any] = {}
-
                 m_formula = self._PUBCHEM_FORMULA_RE.search(text)
                 m_mw = self._PUBCHEM_MW_RE.search(text)
                 m_smiles = self._PUBCHEM_SMILES_RE.search(text)
@@ -1628,40 +1873,80 @@ class DossierReportGenerator:
                 if not any([m_formula, m_mw, m_smiles, m_inchikey]):
                     continue
 
-                ev = _build_evidence(doc_id, page, text, doc_title,
-                                     source_url=source_url, doc_kind=doc_kind)
+                ev = _build_evidence(doc_id, page, text, doc_title, source_url=source_url, doc_kind=doc_kind)
                 self._evidence_registry[ev.evidence_id] = ev
 
-                if m_formula:
-                    # Collapse OCR spaces inside formula: "C18H19 F2N5O4" -> "C18H19F2N5O4"
-                    raw = m_formula.group(1)
-                    formula = re.sub(r"\s+", "", raw)
-                    results["chemical_formula"] = EvidencedValue(value=formula, confidence=0.98,
-                                                                  evidence_refs=[ev.evidence_id])
-                if m_mw:
-                    results["molecular_weight"] = EvidencedValue(value=m_mw.group(1).strip(),
-                                                                  confidence=0.98,
-                                                                  evidence_refs=[ev.evidence_id])
-                if m_smiles:
-                    results["smiles"] = EvidencedValue(value=m_smiles.group(1).strip(),
-                                                       confidence=0.95,
-                                                       evidence_refs=[ev.evidence_id])
-                if m_inchikey:
-                    # Remove OCR-inserted spaces from InChIKey
-                    raw_ik = re.sub(r"\s+", "", m_inchikey.group(1))
-                    # Normalise dashes (OCR may use en-dash)
-                    raw_ik = re.sub(r"[–—]", "-", raw_ik)
-                    results["inchi_key"] = EvidencedValue(value=raw_ik, confidence=0.97,
-                                                          evidence_refs=[ev.evidence_id])
-
-                if results:
-                    logger.info(
-                        "pubchem_chemistry_deterministic found fields=%s doc=%s",
-                        list(results.keys()), doc_id,
+                if m_formula and "chemical_formula" not in results:
+                    results["chemical_formula"] = EvidencedValue(
+                        value=re.sub(r"\s+", "", m_formula.group(1)),
+                        confidence=0.95,
+                        evidence_refs=[ev.evidence_id],
                     )
-                    return results
+                if m_mw and "molecular_weight" not in results:
+                    results["molecular_weight"] = EvidencedValue(
+                        value=m_mw.group(1).strip(),
+                        confidence=0.95,
+                        evidence_refs=[ev.evidence_id],
+                    )
+                if m_smiles and "smiles" not in results:
+                    results["smiles"] = EvidencedValue(
+                        value=m_smiles.group(1).strip(),
+                        confidence=0.93,
+                        evidence_refs=[ev.evidence_id],
+                    )
+                if m_inchikey and "inchi_key" not in results:
+                    results["inchi_key"] = EvidencedValue(
+                        value=re.sub(r"[–—]", "-", re.sub(r"\s+", "", m_inchikey.group(1))),
+                        confidence=0.94,
+                        evidence_refs=[ev.evidence_id],
+                    )
 
-        return None
+        if results:
+            logger.info(
+                "rendered_chemistry_deterministic sources=%s fields=%s",
+                sorted(allowed_doc_kinds),
+                list(results.keys()),
+            )
+        return results
+
+    def _extract_structured_chemistry_deterministic(self) -> Dict[str, Any]:
+        merged: Dict[str, EvidencedValue] = {}
+        field_sources: Dict[str, str] = {}
+        available_sources: List[str] = []
+        source_results = [
+            ("pubchem", self._extract_pubchem_chemistry_from_original_json()),
+            ("chembl", self._extract_chembl_chemistry_from_original_json()),
+            ("rendered", self._extract_rendered_chemistry_deterministic({"pubchem", "chembl"})),
+        ]
+        for source_name, fields in source_results:
+            if fields:
+                available_sources.append(source_name)
+            for field_name, ev_val in fields.items():
+                if field_name not in merged:
+                    merged[field_name] = ev_val
+                    field_sources[field_name] = source_name
+        return {
+            "fields": merged,
+            "field_sources": field_sources,
+            "available_sources": available_sources,
+        }
+
+    def _chemistry_doc_kinds_in_corpus(self) -> set[str]:
+        kinds: set[str] = set()
+        for meta in self._doc_metainfo_index().values():
+            doc_kind = (meta.get("doc_kind") or "").lower()
+            if doc_kind in {"pubchem", "chembl"}:
+                kinds.add(doc_kind)
+        return kinds
+
+    def _chemistry_missing_next_action(self) -> str:
+        present = sorted(self._chemistry_doc_kinds_in_corpus())
+        if present:
+            return (
+                f"Structured chemistry sources already indexed ({', '.join(present)}). "
+                "Check structured JSON preservation/extraction for the missing field instead of re-attaching the source."
+            )
+        return "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
 
     # Sprint 17: Regex patterns for deterministic patent expiry extraction.
     # patent_legal_events chunks: "Patent N: EP1234567B1 ... Country: EP ... Estimated expiry: 2045-11-28 (method: ...)"
@@ -1818,12 +2103,12 @@ class DossierReportGenerator:
 
     def _generate_passport(self, unknowns: List[DossierUnknown]) -> DossierPassport:
         """Stage A+B+C+D for passport block. S6: includes PubChem chemistry fields."""
-        # S6-T2: Authority-tiering — Tier-1 sources first, pubchem for chemistry
+        # S6-T2 / Sprint 21: Tier-1 sources first, structured chemistry sources included.
         # WSx.3: Added eaeu_registration/eaeu_document so EAEU docs contribute to
         # registered_where even when they are not retrieved in _generate_registrations.
         passport_doc_kinds = [
             "label", "us_fda", "epar", "smpc", "grls_card", "grls",
-            "ru_instruction", "pubchem", "drug_monograph",
+            "ru_instruction", "pubchem", "chembl", "drug_monograph",
             "eaeu_registration", "eaeu_document",
         ]
         question = (
@@ -1909,12 +2194,13 @@ class DossierReportGenerator:
             if patched_mc:
                 logger.info("passport moa/class patched by deterministic extractor: fields=%s", patched_mc)
 
-        # Sprint 19: Deterministic PubChem chemistry patch — ALWAYS run.
-        # LLM retrieval (top_k=40) often prioritises label/GRLS/CTGov chunks over the
-        # single pubchem chunk, leaving formula/SMILES/InChIKey/MW empty.
-        # Previously conditional (only if ALL fields null) — now unconditional to
-        # patch any individual missing fields even when LLM extracted some.
-        chem = self._extract_pubchem_chemistry_deterministic()
+        # Sprint 21: Deterministic structured chemistry patch.
+        # Fallback order:
+        #   1. PubChem original JSON
+        #   2. ChEMBL original JSON
+        #   3. Rendered chemistry chunk text already in the corpus
+        chem_result = self._extract_structured_chemistry_deterministic()
+        chem = chem_result.get("fields") or {}
         if chem:
             patched = []
             if not (passport.chemical_formula and passport.chemical_formula.value) and "chemical_formula" in chem:
@@ -1930,7 +2216,13 @@ class DossierReportGenerator:
                 passport.molecular_weight = chem["molecular_weight"]
                 patched.append("molecular_weight")
             if patched:
-                logger.info("passport chemistry patched by pubchem_deterministic: fields=%s", patched)
+                logger.info(
+                    "passport chemistry patched by structured fallback: fields=%s sources=%s",
+                    patched,
+                    chem_result.get("field_sources", {}),
+                )
+
+        chemistry_next_action = self._chemistry_missing_next_action()
 
         # S7: Validate — ALL mandatory fields without evidence → unknowns
         # Expanded from 4 to cover all 9 scalar fields + trade_names.
@@ -1944,15 +2236,15 @@ class DossierReportGenerator:
             ("passport.mechanism_of_action", passport.mechanism_of_action,
              "Ensure FDA label, EMA SmPC, or drug_monograph is indexed."),
             ("passport.chemical_formula", passport.chemical_formula,
-             "Ensure PubChem or drug_monograph is indexed."),
+             chemistry_next_action),
             ("passport.route_of_administration", passport.route_of_administration,
              "Ensure FDA label or SmPC is indexed."),
             ("passport.smiles", passport.smiles,
-             "Ensure PubChem compound data (doc_kind=pubchem) is attached."),
+             chemistry_next_action),
             ("passport.inchi_key", passport.inchi_key,
-             "Ensure PubChem compound data (doc_kind=pubchem) is attached."),
+             chemistry_next_action),
             ("passport.molecular_weight", passport.molecular_weight,
-             "Ensure PubChem compound data (doc_kind=pubchem) is attached."),
+             chemistry_next_action),
         ]
         for field_path, ev_val, next_action in mandatory_fields:
             if ev_val is None or not ev_val.evidence_refs:
@@ -2007,11 +2299,21 @@ class DossierReportGenerator:
                     "No action needed — chemistry fields excluded from passport score for biologics."
                 )
             else:
+                chemistry_sources = sorted(self._chemistry_doc_kinds_in_corpus())
+                if chemistry_sources:
+                    chemistry_msg = (
+                        f"No chemistry data (SMILES/InChIKey/formula) could be preserved for {self.inn}, "
+                        f"even though structured chemistry source(s) are already indexed ({', '.join(chemistry_sources)})."
+                    )
+                else:
+                    chemistry_msg = (
+                        f"No chemistry data (SMILES/InChIKey/formula) for {self.inn}. "
+                        "Structured chemistry sources are not yet in corpus."
+                    )
                 self._add_unknown(
                     unknowns, "passport.chemistry", "NO_DOCUMENT_IN_CORPUS",
-                    f"No chemistry data (SMILES/InChIKey/formula) for {self.inn}. "
-                    "PubChem document not in corpus.",
-                    "Ensure PubChem compound data (doc_kind=pubchem) is attached to corpus."
+                    chemistry_msg,
+                    chemistry_next_action,
                 )
 
         return passport

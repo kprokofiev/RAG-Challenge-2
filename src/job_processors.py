@@ -2256,6 +2256,7 @@ class DossierGenerateProcessor:
     def _download_case_artifacts(self, temp_path: Path, tenant_id: str, case_id: str) -> bool:
         """Download chunks + vectors from S3 (mirrors ReportGenerateProcessor logic)."""
         import tarfile
+        from pathlib import PurePosixPath
         base_prefix = f"tenants/{tenant_id}/cases/{case_id}/documents/"
         keys = self.storage_client.list_objects(base_prefix)
         if not keys:
@@ -2264,15 +2265,19 @@ class DossierGenerateProcessor:
             )
             (temp_path / "databases" / "chunked_reports").mkdir(parents=True, exist_ok=True)
             (temp_path / "databases" / "vector_dbs").mkdir(parents=True, exist_ok=True)
+            (temp_path / "databases" / "original_documents").mkdir(parents=True, exist_ok=True)
             return True
 
         chunks_dir = temp_path / "databases" / "chunked_reports"
         vectors_dir = temp_path / "databases" / "vector_dbs"
+        originals_dir = temp_path / "databases" / "original_documents"
         chunks_dir.mkdir(parents=True, exist_ok=True)
         vectors_dir.mkdir(parents=True, exist_ok=True)
+        originals_dir.mkdir(parents=True, exist_ok=True)
 
         chunk_count = 0
         vector_count = 0
+        original_json_count = 0
         for key in keys:
             if "/chunks/" in key and key.endswith("chunks_bundle.tar.gz"):
                 bundle_path = chunks_dir / Path(key).name
@@ -2300,8 +2305,27 @@ class DossierGenerateProcessor:
                     logger.error("Failed to download vector %s", key)
                     return False
                 vector_count += 1
+            if "/original/" in key and key.lower().endswith(".json"):
+                parts = PurePosixPath(key).parts
+                doc_id = ""
+                try:
+                    doc_idx = parts.index("documents")
+                    doc_id = parts[doc_idx + 1]
+                except Exception:
+                    doc_id = Path(key).stem
+                local_name = f"{doc_id}__{Path(key).name}"
+                local_path = originals_dir / local_name
+                if not self.storage_client.download_to_path(key, local_path):
+                    logger.warning("Failed to download original JSON %s", key)
+                    continue
+                original_json_count += 1
 
-        logger.info("dossier_artifacts_downloaded chunks=%d vectors=%d", chunk_count, vector_count)
+        logger.info(
+            "dossier_artifacts_downloaded chunks=%d vectors=%d original_json=%d",
+            chunk_count,
+            vector_count,
+            original_json_count,
+        )
         return True
 
 
