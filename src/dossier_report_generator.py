@@ -583,6 +583,7 @@ def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
     - assignees (who owns it)
     - summary (what it covers)
     - what_blocks (what it protects)
+    - country_coverage / legal metadata from structured summaries
 
     Without this minimum, the family is just an empty shell and should not
     appear in the final dossier as if it's usable IP information.
@@ -601,7 +602,9 @@ def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
     has_assignees = bool(family.assignees)
     has_summary = family.summary and family.summary.value
     has_blocks = family.what_blocks and family.what_blocks.value
-    if not (has_assignees or has_summary or has_blocks):
+    has_coverage = bool(family.country_coverage)
+    has_legal = family.legal_status_snapshot and family.legal_status_snapshot.value
+    if not (has_assignees or has_summary or has_blocks or has_coverage or has_legal):
         return False
 
     return True
@@ -1948,6 +1951,229 @@ class DossierReportGenerator:
             )
         return "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
 
+    def _make_patent_list_values(
+        self,
+        *,
+        doc_id: str,
+        doc_title: str,
+        source_url: str,
+        doc_kind: str,
+        content_hash: str,
+        locator_base: str,
+        field_name: str,
+        values: List[str],
+        confidence: float = 0.98,
+    ) -> List[EvidencedValue]:
+        out: List[EvidencedValue] = []
+        seen: set[str] = set()
+        for idx, raw in enumerate(values):
+            value = (raw or "").strip()
+            if not value:
+                continue
+            norm = value.lower()
+            if norm in seen:
+                continue
+            seen.add(norm)
+            out.append(
+                self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                    content_hash=content_hash,
+                    locator=f"{locator_base}/{idx}",
+                    field_name=field_name,
+                    value=value,
+                    confidence=confidence,
+                )
+            )
+        return out
+
+    def _extract_patent_metadata_deterministic(self) -> Dict[str, Dict[str, Any]]:
+        meta_map: Dict[str, Dict[str, Any]] = {}
+
+        def _register_keys(entry: Dict[str, Any], *keys: Optional[str]) -> None:
+            for key in keys:
+                raw = (key or "").strip()
+                if not raw:
+                    continue
+                meta_map.setdefault(raw.lower(), entry)
+                try:
+                    norm = self._normalise_patent_number(raw)
+                except Exception:
+                    norm = ""
+                if norm:
+                    meta_map.setdefault(norm, entry)
+
+        for item in self._iter_original_json_docs({"patent_family_summary", "patent_discovery_us"}) or []:
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_kind = item["doc_kind"]
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+            data = item["data"] or {}
+
+            if doc_kind == "patent_family_summary":
+                families = data.get("families") or data.get("patent_families") or []
+                for idx, fam in enumerate(families):
+                    family_id = str(fam.get("family_id") or fam.get("inpadoc_family_id") or "").strip()
+                    representative = str(
+                        fam.get("representative_publication")
+                        or fam.get("publication_number")
+                        or fam.get("representative")
+                        or ""
+                    ).strip()
+                    priority_raw = str(fam.get("priority_date") or fam.get("earliest_priority") or "").strip()
+                    assignee_values = [
+                        str(v).strip() for v in (fam.get("assignees") or fam.get("applicants") or [])
+                        if str(v).strip()
+                    ]
+                    coverage_values = [
+                        str(v).strip() for v in (fam.get("countries") or fam.get("designated_states") or [])
+                        if str(v).strip()
+                    ]
+                    if not coverage_values:
+                        family_members = fam.get("publications") or fam.get("family_members") or []
+                        for member in family_members:
+                            country = ""
+                            if isinstance(member, dict):
+                                country = str(member.get("country") or member.get("jurisdiction") or "").strip()
+                                if not country:
+                                    pub = str(member.get("number") or member.get("publication_number") or "").strip().upper()
+                                    m = re.match(r"^([A-Z]{2})", pub)
+                                    if m:
+                                        country = m.group(1)
+                            elif isinstance(member, str):
+                                m = re.match(r"^([A-Z]{2})", member.strip().upper())
+                                if m:
+                                    country = m.group(1)
+                            if country:
+                                coverage_values.append(country)
+
+                    entry: Dict[str, Any] = {
+                        "priority_date": None,
+                        "assignees": [],
+                        "country_coverage": [],
+                    }
+                    if priority_raw:
+                        entry["priority_date"] = self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind=doc_kind,
+                            content_hash=content_hash,
+                            locator=f"/families/{idx}/priority_date",
+                            field_name="priority_date",
+                            value=priority_raw,
+                            confidence=0.98,
+                        )
+                    entry["assignees"] = self._make_patent_list_values(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator_base=f"/families/{idx}/assignees",
+                        field_name="assignee",
+                        values=assignee_values,
+                    )
+                    entry["country_coverage"] = self._make_patent_list_values(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator_base=f"/families/{idx}/countries",
+                        field_name="country_coverage",
+                        values=coverage_values,
+                    )
+                    _register_keys(entry, family_id, representative)
+
+            elif doc_kind == "patent_discovery_us":
+                items = data.get("items") or []
+                for idx, pat in enumerate(items):
+                    representative = str(pat.get("number") or pat.get("doc_id") or "").strip()
+                    if not representative:
+                        continue
+                    priority_locator = f"/items/{idx}/priority/earliest_date"
+                    priority_raw = str((pat.get("priority") or {}).get("earliest_date") or "").strip()
+                    if not priority_raw:
+                        priority_raw = str((pat.get("dates") or {}).get("publication") or "").strip()
+                        priority_locator = f"/items/{idx}/dates/publication"
+                    assignee_values = [
+                        str(v).strip() for v in (pat.get("assignees") or [])
+                        if str(v).strip()
+                    ]
+                    country = str(pat.get("country") or pat.get("jurisdiction") or "US").strip()
+                    entry = {
+                        "priority_date": None,
+                        "assignees": [],
+                        "country_coverage": [],
+                    }
+                    if priority_raw:
+                        entry["priority_date"] = self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind=doc_kind,
+                            content_hash=content_hash,
+                            locator=priority_locator,
+                            field_name="priority_date",
+                            value=priority_raw,
+                            confidence=0.96,
+                        )
+                    entry["assignees"] = self._make_patent_list_values(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator_base=f"/items/{idx}/assignees",
+                        field_name="assignee",
+                        values=assignee_values,
+                        confidence=0.96,
+                    )
+                    entry["country_coverage"] = self._make_patent_list_values(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator_base=f"/items/{idx}/country",
+                        field_name="country_coverage",
+                        values=[country] if country else [],
+                        confidence=0.96,
+                    )
+                    _register_keys(entry, representative)
+
+        if meta_map:
+            logger.info("patent_metadata_deterministic extracted keys=%d", len(meta_map))
+        return meta_map
+
+    def _lookup_patent_metadata(
+        self,
+        metadata_map: Dict[str, Dict[str, Any]],
+        family_id: Optional[str],
+        representative_pub: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        keys: List[str] = []
+        for raw in (family_id, representative_pub):
+            text = (raw or "").strip()
+            if not text:
+                continue
+            keys.append(text.lower())
+            try:
+                norm = self._normalise_patent_number(text)
+            except Exception:
+                norm = ""
+            if norm:
+                keys.append(norm)
+        for key in keys:
+            if key in metadata_map:
+                return metadata_map[key]
+        return None
+
     # Sprint 17: Regex patterns for deterministic patent expiry extraction.
     # patent_legal_events chunks: "Patent N: EP1234567B1 ... Country: EP ... Estimated expiry: 2045-11-28 (method: ...)"
     _PATENT_LEGAL_EVENT_EXPIRY_RE = re.compile(
@@ -2974,6 +3200,7 @@ class DossierReportGenerator:
         families: List[DossierPatentFamily] = []
         filtered_synthetic = 0
         filtered_minimal = 0
+        det_patent_meta = self._extract_patent_metadata_deterministic()
         am = alias_map
         for fam_llm in result.families:
             ev_refs: List[str] = []
@@ -3012,6 +3239,35 @@ class DossierReportGenerator:
             family_id = fam_llm.family_id
             if not family_id:
                 family_id = rep.value if (rep and rep.value) else f"FAMILY_{len(families)+1}"
+
+            metadata_patch = self._lookup_patent_metadata(
+                det_patent_meta,
+                family_id=family_id,
+                representative_pub=str(rep.value) if (rep and rep.value) else None,
+            )
+            if metadata_patch:
+                patched_fields = []
+                if not (priority and priority.value) and metadata_patch.get("priority_date"):
+                    priority = metadata_patch["priority_date"]
+                    ev_refs.extend(priority.evidence_refs)
+                    patched_fields.append("priority_date")
+                if not assignees and metadata_patch.get("assignees"):
+                    assignees = metadata_patch["assignees"]
+                    for ev in assignees:
+                        ev_refs.extend(ev.evidence_refs)
+                    patched_fields.append("assignees")
+                if not coverage and metadata_patch.get("country_coverage"):
+                    coverage = metadata_patch["country_coverage"]
+                    for ev in coverage:
+                        ev_refs.extend(ev.evidence_refs)
+                    patched_fields.append("country_coverage")
+                if patched_fields:
+                    logger.info(
+                        "patent_metadata_patch inn=%s family_id=%s fields=%s",
+                        self.inn,
+                        family_id[:80],
+                        patched_fields,
+                    )
 
             # Key docs: doc_ids of used evidence
             key_docs = list({self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry})
