@@ -2078,6 +2078,177 @@ class DossierReportGenerator:
             )
         return registrations
 
+    def _extract_ru_clinical_studies_from_original_json(self) -> List[DossierClinicalStudy]:
+        studies: List[DossierClinicalStudy] = []
+        seen_ids: set[str] = set()
+
+        for item in self._iter_original_json_docs({"ru_clinical_permission"}) or []:
+            data = item["data"] or {}
+            clinical = data.get("clinical") or {}
+            structured_studies = clinical.get("studies") or []
+            if not structured_studies:
+                continue
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+
+            for idx, study in enumerate(structured_studies):
+                study_id_raw = str(study.get("id") or "").strip()
+                if not study_id_raw:
+                    continue
+                study_id_key = study_id_raw.upper()
+                if study_id_key in seen_ids:
+                    continue
+                seen_ids.add(study_id_key)
+
+                title_raw = str(study.get("title") or "").strip()
+                phase_raw = str(study.get("phase") or "").strip()
+                status_raw = str(study.get("status") or "").strip()
+                countries_raw = [
+                    str(country).strip()
+                    for country in (study.get("countries") or [])
+                    if str(country).strip()
+                ]
+                has_ru_sites = bool(study.get("has_ru_sites"))
+
+                study_id = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="ru_clinical_permission",
+                    content_hash=content_hash,
+                    locator=f"/clinical/studies/{idx}/id",
+                    field_name="RU clinical study_id",
+                    value=study_id_raw,
+                )
+
+                title = None
+                if title_raw:
+                    title = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="ru_clinical_permission",
+                        content_hash=content_hash,
+                        locator=f"/clinical/studies/{idx}/title",
+                        field_name="RU clinical title",
+                        value=title_raw,
+                    )
+
+                phase = None
+                if phase_raw and phase_raw.upper() != "NA":
+                    phase = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="ru_clinical_permission",
+                        content_hash=content_hash,
+                        locator=f"/clinical/studies/{idx}/phase",
+                        field_name="RU clinical phase",
+                        value=phase_raw,
+                    )
+
+                status = None
+                if status_raw:
+                    status = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="ru_clinical_permission",
+                        content_hash=content_hash,
+                        locator=f"/clinical/studies/{idx}/status",
+                        field_name="RU clinical status",
+                        value=status_raw,
+                    )
+
+                is_ongoing = None
+                status_norm = status_raw.lower()
+                if status_norm and status_norm != "unknown":
+                    is_ongoing = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="ru_clinical_permission",
+                        content_hash=content_hash,
+                        locator=f"/clinical/studies/{idx}/status",
+                        field_name="RU clinical is_ongoing",
+                        value=status_norm in {"recruiting", "ongoing", "active"},
+                    )
+
+                countries = self._make_patent_list_values(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="ru_clinical_permission",
+                    content_hash=content_hash,
+                    locator_base=f"/clinical/studies/{idx}/countries",
+                    field_name="RU clinical countries",
+                    values=countries_raw,
+                )
+
+                has_ru_presence = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="ru_clinical_permission",
+                    content_hash=content_hash,
+                    locator=f"/clinical/studies/{idx}/has_ru_sites",
+                    field_name="RU clinical has_ru_sites",
+                    value=has_ru_sites,
+                )
+
+                is_post_reg = None
+                if phase_raw and phase_raw.upper() in {"I", "II", "III", "IV"}:
+                    is_post_reg = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="ru_clinical_permission",
+                        content_hash=content_hash,
+                        locator=f"/clinical/studies/{idx}/phase",
+                        field_name="RU clinical is_post_reg",
+                        value=phase_raw.upper() == "IV",
+                    )
+
+                evidence_refs: List[str] = list(study_id.evidence_refs)
+                if title:
+                    evidence_refs.extend(title.evidence_refs)
+                if phase:
+                    evidence_refs.extend(phase.evidence_refs)
+                if status:
+                    evidence_refs.extend(status.evidence_refs)
+                if is_ongoing:
+                    evidence_refs.extend(is_ongoing.evidence_refs)
+                if is_post_reg:
+                    evidence_refs.extend(is_post_reg.evidence_refs)
+                for country in countries:
+                    evidence_refs.extend(country.evidence_refs)
+                evidence_refs.extend(has_ru_presence.evidence_refs)
+
+                studies.append(
+                    DossierClinicalStudy(
+                        title=title,
+                        study_id=study_id,
+                        phase=phase,
+                        status=status,
+                        is_ongoing=is_ongoing,
+                        is_post_reg=is_post_reg,
+                        countries=countries,
+                        has_ru_presence=has_ru_presence,
+                        evidence_refs=list(dict.fromkeys(evidence_refs)),
+                    )
+                )
+
+        if studies:
+            logger.info(
+                "ru_structured_clinical_studies extracted=%d inn=%s",
+                len(studies), self.inn,
+            )
+        return studies
+
     def _extract_rendered_chemistry_deterministic(self, allowed_doc_kinds: set[str]) -> Dict[str, EvidencedValue]:
         """Fallback extractor from rendered corpus text when original JSON is unavailable."""
         results: Dict[str, EvidencedValue] = {}
@@ -3319,6 +3490,8 @@ class DossierReportGenerator:
         This replaces the Sprint 12 approach of one global LLM call + post-hoc filtering.
         Each study gets its own evidence bucket, preventing cross-study contamination.
         """
+        structured_ru_studies = self._extract_ru_clinical_studies_from_original_json()
+
         # Step 1: Pre-scan corpus for NCT IDs
         corpus_nct_ids = _extract_nct_ids_from_corpus(self.documents_dir)
         logger.info(
@@ -3345,6 +3518,12 @@ class DossierReportGenerator:
                 )
 
         if not corpus_nct_ids:
+            if structured_ru_studies:
+                logger.info(
+                    "clinical_structured_ru_only inn=%s studies=%d",
+                    self.inn, len(structured_ru_studies),
+                )
+                return structured_ru_studies
             self._add_unknown(
                 unknowns, "clinical_studies[*]", "NO_DOCUMENT_IN_CORPUS",
                 f"No clinical studies with NCT IDs found in corpus for {self.inn}.",
@@ -3405,7 +3584,7 @@ class DossierReportGenerator:
                 "Ensure per-study CTGov protocol/results pages are attached.",
             )
 
-        if not studies:
+        if not studies and not structured_ru_studies:
             self._add_unknown(
                 unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
                 f"Found {len(corpus_nct_ids)} NCT IDs but could not assemble any study cards.",
@@ -3441,7 +3620,31 @@ class DossierReportGenerator:
                         f"Ensure CTGov {evidence_hint} is attached and preserved in the indexed study payload.",
                     )
 
-        return studies
+        merged_studies: List[DossierClinicalStudy] = []
+        seen_ids: Set[str] = set()
+        for study in studies:
+            study_id = (
+                str(study.study_id.value).strip().upper()
+                if study.study_id and study.study_id.value is not None
+                else ""
+            )
+            if study_id:
+                seen_ids.add(study_id)
+            merged_studies.append(study)
+
+        for study in structured_ru_studies:
+            study_id = (
+                str(study.study_id.value).strip().upper()
+                if study.study_id and study.study_id.value is not None
+                else ""
+            )
+            if study_id and study_id in seen_ids:
+                continue
+            if study_id:
+                seen_ids.add(study_id)
+            merged_studies.append(study)
+
+        return merged_studies
 
     def _generate_patent_families(self, unknowns: List[DossierUnknown]) -> List[DossierPatentFamily]:
         """Generate patent family records."""
