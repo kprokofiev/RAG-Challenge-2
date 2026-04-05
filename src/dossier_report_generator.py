@@ -401,7 +401,7 @@ def _ev_id(doc_id: str, page: Optional[int], text: str) -> str:
 _JSON_DOC_KINDS = {
     "pubchem", "chembl", "label", "us_fda", "ctgov", "ctgov_results", "ctgov_protocol",
     "patent_family_summary", "patent_legal_events", "patent_expiry_us", "patent_discovery_us",
-    "ru_patent_fips", "eaeu_document", "eaeu_registration",
+    "ru_patent_fips", "grls", "eaeu_document", "eaeu_registration", "ru_clinical_permission",
 }
 
 
@@ -1835,6 +1835,128 @@ class DossierReportGenerator:
                 return results
         return {}
 
+    def _extract_ru_registrations_from_original_json(self) -> List[DossierRegistration]:
+        registrations: List[DossierRegistration] = []
+        seen_keys: set[str] = set()
+
+        for item in self._iter_original_json_docs({"grls"}) or []:
+            data = item["data"] or {}
+            regulatory = data.get("regulatory") or {}
+            structured_regs = regulatory.get("registrations") or []
+            if not structured_regs:
+                continue
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+
+            for idx, reg in enumerate(structured_regs):
+                reg_no = str(reg.get("reg_no") or "").strip()
+                holder = str(reg.get("holder") or "").strip()
+                status_raw = str(reg.get("status") or "").strip()
+                dosage_form = str(reg.get("dosage_form") or "").strip()
+                strength = str(reg.get("strength") or "").strip()
+                route = str(reg.get("route") or "").strip()
+                packaging = [
+                    str(v).strip()
+                    for v in (reg.get("packaging") or [])
+                    if str(v).strip()
+                ]
+                reg_key = reg_no or f"{holder}|{status_raw}|{dosage_form}|{strength}|{route}|{idx}"
+                if reg_key in seen_keys:
+                    continue
+                seen_keys.add(reg_key)
+
+                identifiers: List[EvidencedValue] = []
+                if reg_no:
+                    identifiers.append(
+                        self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind="grls",
+                            content_hash=content_hash,
+                            locator=f"/regulatory/registrations/{idx}/reg_no",
+                            field_name="GRLS reg_no",
+                            value=reg_no,
+                        )
+                    )
+
+                status = None
+                if status_raw:
+                    status = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="grls",
+                        content_hash=content_hash,
+                        locator=f"/regulatory/registrations/{idx}/status",
+                        field_name="GRLS status",
+                        value=status_raw,
+                    )
+
+                mah = None
+                if holder:
+                    mah = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind="grls",
+                        content_hash=content_hash,
+                        locator=f"/regulatory/registrations/{idx}/holder",
+                        field_name="GRLS holder",
+                        value=holder,
+                    )
+
+                forms_strengths: List[EvidencedValue] = []
+                form_parts = [part for part in [dosage_form, strength, route] if part]
+                if packaging:
+                    form_parts.append("Packaging: " + "; ".join(packaging))
+                if form_parts:
+                    forms_strengths.append(
+                        self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind="grls",
+                            content_hash=content_hash,
+                            locator=f"/regulatory/registrations/{idx}",
+                            field_name="GRLS presentation",
+                            value=" | ".join(form_parts),
+                        )
+                    )
+
+                evidence_refs: List[str] = []
+                if status:
+                    evidence_refs.extend(status.evidence_refs)
+                if mah:
+                    evidence_refs.extend(mah.evidence_refs)
+                for ev in identifiers + forms_strengths:
+                    evidence_refs.extend(ev.evidence_refs)
+
+                if not any([status, mah, identifiers, forms_strengths]):
+                    continue
+
+                registrations.append(
+                    DossierRegistration(
+                        region="RU",
+                        status=status,
+                        forms_strengths=forms_strengths,
+                        mah=mah,
+                        identifiers=identifiers,
+                        evidence_refs=list(dict.fromkeys(evidence_refs)),
+                    )
+                )
+
+        if registrations:
+            logger.info(
+                "ru_structured_registrations extracted=%d inn=%s",
+                len(registrations), self.inn,
+            )
+        return registrations
+
     def _extract_rendered_chemistry_deterministic(self, allowed_doc_kinds: set[str]) -> Dict[str, EvidencedValue]:
         """Fallback extractor from rendered corpus text when original JSON is unavailable."""
         results: Dict[str, EvidencedValue] = {}
@@ -2560,6 +2682,12 @@ class DossierReportGenerator:
         registrations: List[DossierRegistration] = []
 
         for region, doc_kinds, question in regions:
+            if region == "RU":
+                structured_ru_regs = self._extract_ru_registrations_from_original_json()
+                if structured_ru_regs:
+                    registrations.extend(structured_ru_regs)
+                    continue
+
             retrieved = self._retrieve(question, doc_kinds, top_k=30)
             if not retrieved:
                 self._add_unknown(
