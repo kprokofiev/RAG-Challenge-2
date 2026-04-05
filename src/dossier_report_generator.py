@@ -1957,6 +1957,127 @@ class DossierReportGenerator:
             )
         return registrations
 
+    def _extract_eaeu_registrations_from_original_json(self) -> List[DossierRegistration]:
+        registrations: List[DossierRegistration] = []
+        seen_reg_nos: set[str] = set()
+
+        for item in self._iter_original_json_docs({"eaeu_document", "eaeu_registration"}) or []:
+            data = item["data"] or {}
+            structured_regs = data.get("items") or []
+            if not structured_regs:
+                continue
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_kind = item["doc_kind"]
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+
+            for idx, reg in enumerate(structured_regs):
+                reg_no = str(reg.get("reg_no") or "").strip()
+                if reg_no and reg_no in seen_reg_nos:
+                    continue
+                if reg_no:
+                    seen_reg_nos.add(reg_no)
+
+                status_raw = str(reg.get("status") or "").strip()
+                holder = str(reg.get("holder") or "").strip()
+                presentations = reg.get("authorized_presentations") or []
+
+                identifiers: List[EvidencedValue] = []
+                if reg_no:
+                    identifiers.append(
+                        self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind=doc_kind,
+                            content_hash=content_hash,
+                            locator=f"/items/{idx}/reg_no",
+                            field_name="EAEU reg_no",
+                            value=reg_no,
+                        )
+                    )
+
+                status = None
+                if status_raw:
+                    status = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator=f"/items/{idx}/status",
+                        field_name="EAEU status",
+                        value=status_raw,
+                    )
+
+                mah = None
+                if holder:
+                    mah = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator=f"/items/{idx}/holder",
+                        field_name="EAEU holder",
+                        value=holder,
+                    )
+
+                forms_strengths: List[EvidencedValue] = []
+                for pres_idx, presentation in enumerate(presentations):
+                    parts = [
+                        str(presentation.get("dosage_form") or "").strip(),
+                        str(presentation.get("strength") or "").strip(),
+                        str(presentation.get("route") or "").strip(),
+                    ]
+                    parts = [part for part in parts if part]
+                    if not parts:
+                        continue
+                    forms_strengths.append(
+                        self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind=doc_kind,
+                            content_hash=content_hash,
+                            locator=f"/items/{idx}/authorized_presentations/{pres_idx}",
+                            field_name="EAEU presentation",
+                            value=" | ".join(parts),
+                        )
+                    )
+
+                evidence_refs: List[str] = []
+                if status:
+                    evidence_refs.extend(status.evidence_refs)
+                if mah:
+                    evidence_refs.extend(mah.evidence_refs)
+                for ev in identifiers + forms_strengths:
+                    evidence_refs.extend(ev.evidence_refs)
+
+                if not any([status, mah, identifiers, forms_strengths]):
+                    continue
+
+                registrations.append(
+                    DossierRegistration(
+                        region="EAEU",
+                        status=status,
+                        forms_strengths=forms_strengths,
+                        mah=mah,
+                        identifiers=identifiers,
+                        evidence_refs=list(dict.fromkeys(evidence_refs)),
+                    )
+                )
+
+        if registrations:
+            logger.info(
+                "eaeu_structured_registrations extracted=%d inn=%s",
+                len(registrations), self.inn,
+            )
+        return registrations
+
     def _extract_rendered_chemistry_deterministic(self, allowed_doc_kinds: set[str]) -> Dict[str, EvidencedValue]:
         """Fallback extractor from rendered corpus text when original JSON is unavailable."""
         results: Dict[str, EvidencedValue] = {}
@@ -2686,6 +2807,11 @@ class DossierReportGenerator:
                 structured_ru_regs = self._extract_ru_registrations_from_original_json()
                 if structured_ru_regs:
                     registrations.extend(structured_ru_regs)
+                    continue
+            if region == "EAEU":
+                structured_eaeu_regs = self._extract_eaeu_registrations_from_original_json()
+                if structured_eaeu_regs:
+                    registrations.extend(structured_eaeu_regs)
                     continue
 
             retrieved = self._retrieve(question, doc_kinds, top_k=30)
