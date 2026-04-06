@@ -1,0 +1,208 @@
+# Executive Question Library — Sprint 22 WS2
+# =============================================
+# Fixed set of business-critical exec questions.
+# Each question defines required sections, fields, jurisdictions, and fallback policy.
+# Free-text routing is out of scope for Sprint 22.
+
+version: "1.0"
+updated_at: "2026-04-06"
+
+questions:
+
+  # ── Registration & Market Access ────────────────────────────────────────
+
+  - id: q_reg_4geo
+    title: "Is the product registered across US/EU/RU/EAEU?"
+    question_type: registration_status
+    business_lens: regulatory
+    required_jurisdictions: [US, EU, RU, EAEU]
+    required_confidence: medium
+    required_sections:
+      - product_contexts
+      - registrations
+      - unknowns
+      - dossier_quality_v2
+    must_have_fields:
+      - registrations[*].region
+      - registrations[*].status
+      - registrations[*].identifiers
+    fallback_policy: allow_answer_with_unknowns
+
+  - id: q_reg_status_detail
+    title: "What is the detailed registration status in each jurisdiction?"
+    question_type: registration_status
+    business_lens: regulatory
+    required_jurisdictions: [US, EU, RU, EAEU]
+    required_confidence: high
+    required_sections:
+      - registrations
+      - product_contexts
+      - unknowns
+    must_have_fields:
+      - registrations[*].region
+      - registrations[*].status
+      - registrations[*].mah
+      - registrations[*].identifiers
+      - registrations[*].forms_strengths
+    fallback_policy: require_warning_if_incomplete
+
+  - id: q_mah_landscape
+    title: "Who are the MAH holders across geographies?"
+    question_type: registration_status
+    business_lens: commercial
+    required_jurisdictions: [US, EU, RU, EAEU]
+    required_confidence: medium
+    required_sections:
+      - registrations
+      - product_contexts
+      - passport
+    must_have_fields:
+      - registrations[*].mah
+      - passport.mah_holders
+    fallback_policy: allow_answer_with_unknowns
+
+  # ── IP / Patent Landscape ───────────────────────────────────────────────
+
+  - id: q_ip_blockers
+    title: "What are the main IP blockers by geography?"
+    question_type: ip_fto_risk
+    business_lens: portfolio
+    required_jurisdictions: [US, EU, RU, EAEU]
+    required_confidence: high
+    required_sections:
+      - patent_families
+      - unknowns
+      - coverage_ledger
+    must_have_fields:
+      - patent_families[*].representative_pub
+      - patent_families[*].legal_status_snapshot
+      - patent_families[*].expiry_by_country
+    fallback_policy: require_warning_if_legal_incomplete
+
+  - id: q_patent_expiry
+    title: "When do the key patents expire in US and EU?"
+    question_type: ip_fto_risk
+    business_lens: portfolio
+    required_jurisdictions: [US, EU]
+    required_confidence: high
+    required_sections:
+      - patent_families
+      - unknowns
+    must_have_fields:
+      - patent_families[*].expiry_by_country
+      - patent_families[*].legal_status_snapshot
+    fallback_policy: require_warning_if_legal_incomplete
+
+  - id: q_patent_types
+    title: "What types of patents protect this product (compound, formulation, method of use)?"
+    question_type: ip_fto_risk
+    business_lens: portfolio
+    required_jurisdictions: [US, EU]
+    required_confidence: medium
+    required_sections:
+      - patent_families
+    must_have_fields:
+      - patent_families[*].what_blocks
+      - patent_families[*].technical_focus
+    fallback_policy: allow_answer_with_unknowns
+
+  # ── Clinical Evidence ───────────────────────────────────────────────────
+
+  - id: q_clinical_overview
+    title: "What is the clinical evidence profile (phases, key trials, endpoints)?"
+    question_type: clinical_evidence
+    business_lens: medical
+    required_jurisdictions: []
+    required_confidence: medium
+    required_sections:
+      - clinical_studies
+      - passport
+      - unknowns
+    must_have_fields:
+      - clinical_studies[*].phase
+      - clinical_studies[*].n_enrolled
+      - clinical_studies[*].efficacy_keypoints
+      - clinical_studies[*].conclusion
+    fallback_policy: allow_answer_with_unknowns
+
+  - id: q_ongoing_trials
+    title: "Are there ongoing clinical trials, and what are they studying?"
+    question_type: clinical_evidence
+    business_lens: medical
+    required_jurisdictions: []
+    required_confidence: medium
+    required_sections:
+      - clinical_studies
+      - unknowns
+    must_have_fields:
+      - clinical_studies[*].status
+      - clinical_studies[*].phase
+      - clinical_studies[*].title
+    fallback_policy: allow_answer_with_unknowns
+
+  # ── Chemistry & Manufacturing ───────────────────────────────────────────
+
+  - id: q_chemistry_identity
+    title: "What is the chemical identity of the drug (SMILES, formula, molecular weight)?"
+    question_type: chemistry_identity
+    business_lens: technical
+    required_jurisdictions: []
+    required_confidence: high
+    required_sections:
+      - passport
+      - unknowns
+    must_have_fields:
+      - passport.smiles
+      - passport.chemical_formula
+      - passport.molecular_weight
+      - passport.inchi_key
+    fallback_policy: require_warning_if_incomplete
+
+  - id: q_synthesis_overview
+    title: "What is known about the synthesis route?"
+    question_type: synthesis_manufacturing
+    business_lens: technical
+    required_jurisdictions: []
+    required_confidence: medium
+    required_sections:
+      - synthesis_steps
+      - patent_families
+      - unknowns
+    must_have_fields:
+      - synthesis_steps[*].description
+      - synthesis_steps[*].reagents
+    fallback_policy: allow_answer_with_unknowns
+
+  # ── Commercial / BD ─────────────────────────────────────────────────────
+
+  - id: q_commercial_opportunity
+    title: "What is the overall commercial opportunity assessment (registration gaps, IP window, clinical maturity)?"
+    question_type: commercial_assessment
+    business_lens: BD
+    required_jurisdictions: [US, EU, RU, EAEU]
+    required_confidence: medium
+    required_sections:
+      - registrations
+      - patent_families
+      - clinical_studies
+      - passport
+      - unknowns
+      - dossier_quality_v2
+    must_have_fields:
+      - registrations[*].status
+      - patent_families[*].expiry_by_country
+      - clinical_studies[*].phase
+    fallback_policy: allow_answer_with_unknowns
+
+  - id: q_data_completeness
+    title: "How complete is the available data for decision-making?"
+    question_type: data_quality
+    business_lens: operations
+    required_jurisdictions: []
+    required_confidence: low
+    required_sections:
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    must_have_fields: []
+    fallback_policy: allow_answer_with_unknowns
