@@ -1,0 +1,532 @@
+# Field → Source Priority Map — Sprint 22 WS1
+# ==============================================
+# Maps every dossier field_path to a prioritized source chain.
+# Used by gap_resolver.py to build acquisition plans.
+#
+# Schema per entry:
+#   preferred_chain:    ordered list of tier-1 sources to try first
+#   fallback_chain:     tier-2 / secondary sources (marked provisional)
+#   stop_condition:     when to stop searching
+#   allow_provisional:  whether fallback/secondary evidence is acceptable
+#   supports_execution: whether gap_resolver can auto-attach/fetch/index
+#
+# Stop conditions:
+#   field_has_value          — any non-null value with evidence
+#   found_verified_primary   — value from tier-1 source with evidence
+#   study_card_assembled     — all mandatory study card fields filled
+#   all_regions_covered      — value present for all required regions
+#   family_identified        — at least one patent family with pub number
+#   synthesis_extracted      — at least one step with description + reagents
+
+version: "1.0"
+updated_at: "2026-04-06"
+
+field_source_map:
+
+  # ═══════════════════════════════════════════════════════════════════
+  # PASSPORT — Drug Identity
+  # ═══════════════════════════════════════════════════════════════════
+
+  passport.inn:
+    preferred_chain: [openfda, ema_smpc, grls]
+    fallback_chain: [pubchem]
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+  passport.trade_names:
+    preferred_chain: [openfda, ema_smpc, grls, dailymed]
+    fallback_chain: [ema_epar]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.fda_approval_date:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  passport.fda_indication:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  passport.registered_where:
+    preferred_chain: [openfda, ema_smpc, ema_epar, grls, eaeu_portal]
+    fallback_chain: []
+    stop_condition: all_regions_covered
+    allow_provisional: false
+    supports_execution: true
+
+  passport.chemical_formula:
+    preferred_chain: [pubchem, chembl]
+    fallback_chain: [ema_smpc, openfda]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.smiles:
+    preferred_chain: [pubchem, chembl]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+  passport.inchi_key:
+    preferred_chain: [pubchem, chembl]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+  passport.molecular_weight:
+    preferred_chain: [pubchem, chembl]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.drug_class:
+    preferred_chain: [openfda, ema_smpc]
+    fallback_chain: [pubchem, moa_overview]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.mechanism_of_action:
+    preferred_chain: [openfda, ema_smpc]
+    fallback_chain: [moa_overview, drug_monograph]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.mah_holders:
+    preferred_chain: [openfda, ema_smpc, grls]
+    fallback_chain: [ema_epar]
+    stop_condition: all_regions_covered
+    allow_provisional: false
+    supports_execution: true
+
+  passport.route_of_administration:
+    preferred_chain: [openfda, ema_smpc, grls]
+    fallback_chain: [dailymed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.dosage_forms:
+    preferred_chain: [openfda, ema_smpc, grls]
+    fallback_chain: [dailymed, ru_instruction]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  passport.key_dosages:
+    preferred_chain: [openfda, ema_smpc]
+    fallback_chain: [dailymed, ru_instruction]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  # ═══════════════════════════════════════════════════════════════════
+  # REGISTRATIONS — Per-region marketing authorization
+  # ═══════════════════════════════════════════════════════════════════
+
+  registrations.US.status:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.US.mah:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.US.identifiers:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: [drugsatfda]
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.US.forms_strengths:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  registrations.US.primary_docs:
+    preferred_chain: [openfda, dailymed]
+    fallback_chain: [drugsatfda]
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EU.status:
+    preferred_chain: [ema_smpc, ema_epar]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EU.mah:
+    preferred_chain: [ema_smpc, ema_epar]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EU.identifiers:
+    preferred_chain: [ema_smpc, ema_epar]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EU.forms_strengths:
+    preferred_chain: [ema_smpc, ema_epar]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  registrations.EU.primary_docs:
+    preferred_chain: [ema_smpc, ema_epar, ema_pil]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.RU.status:
+    preferred_chain: [grls, grls_instruction]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.RU.mah:
+    preferred_chain: [grls, grls_instruction]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.RU.identifiers:
+    preferred_chain: [grls]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.RU.forms_strengths:
+    preferred_chain: [grls, grls_instruction]
+    fallback_chain: [ru_instruction]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  registrations.RU.primary_docs:
+    preferred_chain: [grls, grls_instruction]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EAEU.status:
+    preferred_chain: [eaeu_portal]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EAEU.mah:
+    preferred_chain: [eaeu_portal]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EAEU.identifiers:
+    preferred_chain: [eaeu_portal]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  registrations.EAEU.primary_docs:
+    preferred_chain: [eaeu_portal]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  # ═══════════════════════════════════════════════════════════════════
+  # CLINICAL STUDIES — Trial cards
+  # ═══════════════════════════════════════════════════════════════════
+
+  clinical_studies[*].title:
+    preferred_chain: [ctgov, ctgov_protocol]
+    fallback_chain: [ctis, pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].study_id:
+    preferred_chain: [ctgov, ctgov_protocol]
+    fallback_chain: [ctis]
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+  clinical_studies[*].phase:
+    preferred_chain: [ctgov, ctgov_protocol]
+    fallback_chain: [ctis, pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].n_enrolled:
+    preferred_chain: [ctgov, ctgov_results]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].comparator:
+    preferred_chain: [ctgov, ctgov_protocol]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].regimen_dosing:
+    preferred_chain: [ctgov, ctgov_protocol]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].efficacy_keypoints:
+    preferred_chain: [ctgov_results, ctgov]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].conclusion:
+    preferred_chain: [ctgov_results, ctgov]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  clinical_studies[*].status:
+    preferred_chain: [ctgov, ctgov_protocol]
+    fallback_chain: [ctis]
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+  clinical_studies[*].study_card:
+    preferred_chain: [ctgov_protocol, ctgov_results, ctgov_documents]
+    fallback_chain: [ctis]
+    stop_condition: study_card_assembled
+    allow_provisional: false
+    supports_execution: true
+
+  # ═══════════════════════════════════════════════════════════════════
+  # PATENT FAMILIES — IP landscape
+  # ═══════════════════════════════════════════════════════════════════
+
+  patent_families[*].representative_pub:
+    preferred_chain: [epo_register, orange_book]
+    fallback_chain: [patent_family_summary]
+    stop_condition: family_identified
+    allow_provisional: false
+    supports_execution: true
+
+  patent_families[*].priority_date:
+    preferred_chain: [epo_register, patent_family_summary, orange_book]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+  patent_families[*].assignees:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: [orange_book]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].what_blocks:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].technical_focus:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].process_relevance:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].legal_status_snapshot:
+    preferred_chain: [epo_register]
+    fallback_chain: [patent_family_summary, orange_book]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].country_coverage:
+    preferred_chain: [epo_register]
+    fallback_chain: [patent_family_summary]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].expiry_by_country:
+    preferred_chain: [epo_register, orange_book]
+    fallback_chain: [patent_family_summary]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  patent_families[*].summary:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SYNTHESIS STEPS — Manufacturing / API synthesis
+  # ═══════════════════════════════════════════════════════════════════
+
+  synthesis_steps[*].description:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: [pubmed, review_article]
+    stop_condition: synthesis_extracted
+    allow_provisional: true
+    supports_execution: true
+
+  synthesis_steps[*].reagents:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  synthesis_steps[*].intermediates:
+    preferred_chain: [epo_register, patent_family_summary]
+    fallback_chain: [pubmed]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  # ═══════════════════════════════════════════════════════════════════
+  # PRODUCT CONTEXTS — Multi-product disambiguation
+  # ═══════════════════════════════════════════════════════════════════
+
+  product_contexts[*].primary_docs:
+    preferred_chain: [openfda, ema_smpc, grls, eaeu_portal]
+    fallback_chain: []
+    stop_condition: found_verified_primary
+    allow_provisional: false
+    supports_execution: true
+
+  product_contexts[*].mah:
+    preferred_chain: [openfda, ema_smpc, grls]
+    fallback_chain: [ema_epar]
+    stop_condition: field_has_value
+    allow_provisional: true
+    supports_execution: true
+
+  product_contexts[*].identifiers:
+    preferred_chain: [openfda, ema_smpc, grls, eaeu_portal]
+    fallback_chain: []
+    stop_condition: field_has_value
+    allow_provisional: false
+    supports_execution: true
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SOURCE METADATA — maps source_id to doc_kinds and execution capability
+# Used by gap_resolver to determine what doc_kind to attach
+# ═══════════════════════════════════════════════════════════════════════
+
+source_doc_kinds:
+  openfda:        [label, us_fda]
+  dailymed:       [label]
+  drugsatfda:     [approval_letter, complete_response_letter]
+  ema_smpc:       [smpc]
+  ema_epar:       [epar, assessment_report]
+  ema_pil:        [pil]
+  grls:           [grls_card, grls]
+  grls_instruction: [ru_instruction]
+  eaeu_portal:    [eaeu_document]
+  ctgov:          [ctgov]
+  ctgov_protocol: [ctgov_protocol]
+  ctgov_results:  [ctgov_results]
+  ctgov_documents: [ctgov_documents]
+  ctis:           [ctis]
+  pubchem:        [pubchem]
+  chembl:         [chembl]
+  epo_register:   [patent_family_summary, patent_legal_events, patent_expiry_us]
+  orange_book:    [orange_book]
+  patent_family_summary: [patent_family_summary]
+  pubmed:         [publication, scientific_pdf]
+  moa_overview:   [moa_overview]
+  drug_monograph: [drug_monograph]
+  review_article: [review_article]
+  ru_instruction: [ru_instruction]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EXECUTION SAFETY — sources that can be auto-attached/fetched in V1
+# ═══════════════════════════════════════════════════════════════════════
+
+safe_execution_sources:
+  - pubchem
+  - chembl
+  - ctgov
+  - ctgov_protocol
+  - ctgov_results
+  - ctgov_documents
+  - ema_smpc
+  - ema_epar
+  - ema_pil
+  - grls
+  - grls_instruction
+  - eaeu_portal
+  - epo_register
+  - orange_book
+  - openfda
+  - dailymed
+
+# Sources that must NOT auto-execute (web search, press, forums)
+unsafe_execution_sources:
+  - moa_overview
+  - drug_monograph
+  - review_article
+  - press_release
+  - pubmed
+  - ctis
