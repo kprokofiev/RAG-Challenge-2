@@ -67,6 +67,7 @@ class AcquisitionPlan(BaseModel):
     """Full gap resolution plan for a case."""
     case_id: str
     generated_at: str
+    inn: Optional[str] = None
     items: List[AcquisitionItem] = Field(default_factory=list)
     summary: Dict[str, Any] = Field(default_factory=dict)
 
@@ -454,9 +455,19 @@ class GapResolver:
 
         summary = self._build_summary(items)
 
+        # Extract INN from dossier for URL templates
+        inn = None
+        passport = dossier.get("passport", {})
+        inn_raw = passport.get("inn")
+        if isinstance(inn_raw, dict):
+            inn = inn_raw.get("value")
+        elif isinstance(inn_raw, str):
+            inn = inn_raw
+
         return AcquisitionPlan(
             case_id=case_id,
             generated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            inn=inn,
             items=items,
             summary=summary,
         )
@@ -549,6 +560,7 @@ class ControlledExecutor:
         self.gateway = gateway_base_url.rstrip("/")
         self.auth_token = auth_token
         self.tenant_id = tenant_id
+        self._current_inn: Optional[str] = None
 
     def execute(
         self,
@@ -564,6 +576,8 @@ class ControlledExecutor:
             max_items: Max items to execute in one pass.
             dry_run: If True, log but don't actually call APIs.
         """
+        self._current_inn = plan.inn
+
         result = ExecutionResult(
             case_id=plan.case_id,
             executed_items=0,
@@ -658,6 +672,39 @@ class ControlledExecutor:
         else:
             return {"status": "skipped", "details": f"Unsupported mode: {item.mode}"}
 
+    # URL templates for known API sources. {inn} is replaced at runtime.
+    _SOURCE_URL_TEMPLATES: Dict[str, Dict[str, str]] = {
+        "openfda": {
+            "us_fda": "https://api.fda.gov/drug/label.json?search=openfda.generic_name:{inn}&limit=5",
+            "label": "https://api.fda.gov/drug/label.json?search=openfda.generic_name:{inn}&limit=5",
+        },
+        "pubchem": {
+            "pubchem": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{inn}/JSON",
+        },
+        "ctgov": {
+            "ctgov": "https://clinicaltrials.gov/api/v2/studies?query.term={inn}&pageSize=20",
+        },
+        "ctgov_results": {
+            "ctgov_results": "https://clinicaltrials.gov/api/v2/studies?query.term={inn}&filter.overallStatus=COMPLETED&pageSize=10",
+        },
+        "ctgov_protocol": {
+            "ctgov_protocol": "https://clinicaltrials.gov/api/v2/studies?query.term={inn}&pageSize=10",
+        },
+        "chembl": {
+            "chembl": "https://www.ebi.ac.uk/chembl/api/data/molecule/search?q={inn}&format=json",
+        },
+    }
+
+    def _resolve_source_url(self, source_id: str, doc_kind: str, inn: Optional[str]) -> Optional[str]:
+        """Resolve a source-specific URL from templates."""
+        templates = self._SOURCE_URL_TEMPLATES.get(source_id, {})
+        tmpl = templates.get(doc_kind)
+        if not tmpl:
+            return None
+        if not inn:
+            return None
+        return tmpl.replace("{inn}", inn)
+
     def _attach_source(self, item: AcquisitionItem, case_id: str) -> Dict[str, str]:
         """Attach a missing source via POST /cases/{id}/sources:attach."""
         import requests
@@ -668,7 +715,12 @@ class ControlledExecutor:
 
         sources = []
         for dk in doc_kinds:
+            url = self._resolve_source_url(item.target_source, dk, self._current_inn)
+            if not url:
+                logger.warning("No URL template for %s/%s (inn=%s) — skipping", item.target_source, dk, self._current_inn)
+                continue
             sources.append({
+                "url": url,
                 "doc_kind": dk,
                 "title": f"Auto-attached by WS1 gap resolver: {item.target_source}/{dk}",
                 "region": item.jurisdiction or "",
@@ -681,17 +733,25 @@ class ControlledExecutor:
                 ),
             })
 
-        url = f"{self.gateway}/ddkit/cases/{case_id}/sources:attach"
+        if not sources:
+            return {"status": "failed", "details": f"No resolvable URLs for {item.target_source} (inn={self._current_inn})"}
+
+        api_url = f"{self.gateway}/ddkit/cases/{case_id}/sources:attach"
         headers = {
             "Authorization": f"Bearer {self.auth_token}",
             "Content-Type": "application/json",
         }
 
         try:
-            resp = requests.post(url, json={"sources": sources}, headers=headers, timeout=30)
+            resp = requests.post(api_url, json={"sources": sources}, headers=headers, timeout=30)
             if resp.status_code == 200:
                 data = resp.json()
-                attached = sum(1 for r in data.get("results", []) if not r.get("is_duplicate"))
+                results = data.get("results", [])
+                attached = sum(1 for r in results if r.get("document_id") and not r.get("error"))
+                errors = [r.get("error") for r in results if r.get("error")]
+                if errors:
+                    return {"status": "partial" if attached > 0 else "failed",
+                            "details": f"Attached {attached}, errors: {'; '.join(errors[:3])}"}
                 return {"status": "success", "details": f"Attached {attached} docs for {item.target_source}"}
             else:
                 return {"status": "failed", "details": f"HTTP {resp.status_code}: {resp.text[:200]}"}
