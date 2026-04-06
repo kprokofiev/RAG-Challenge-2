@@ -30,6 +30,10 @@ class JobQueueHandler:
             return self.case_view_generate_queue
         elif job_type == "dossier_generate":
             return self.dossier_generate_queue
+        elif job_type == "exec_answer":
+            # Sprint 22 WS2: exec_answer reuses dossier_generate queue
+            # (P1 will get its own queue if async processing is needed)
+            return self.dossier_generate_queue
         else:
             raise ValueError(f"Unknown job type: {job_type}")
 
@@ -105,7 +109,6 @@ class JobQueueHandler:
         Returns:
             Job data dict (with _raw_payload and _processing_list set) or None
         """
-        import os
         try:
             queue_name = self._get_queue_name(job_type)
             processing_list = queue_name + ":processing"
@@ -117,9 +120,23 @@ class JobQueueHandler:
                 return None
 
             job_data = json.loads(job_json)
-            # Stamp acquisition time for watchdog
+            # Stamp acquisition time inside the processing-list payload so the
+            # watchdog can reclaim jobs that were abandoned after a worker crash.
             job_data["_acquired_at"] = int(time.time())
-            job_data["_raw_payload"] = job_json
+            stamped_json = json.dumps(job_data, default=str)
+            try:
+                pipe = self.redis_client.pipeline()
+                pipe.lrem(processing_list, 1, job_json)
+                pipe.lpush(processing_list, stamped_json)
+                pipe.execute()
+            except RedisError as exc:
+                logger.warning(
+                    "Failed to stamp processing payload with _acquired_at for %s: %s",
+                    queue_name, exc,
+                )
+                stamped_json = job_json
+
+            job_data["_raw_payload"] = stamped_json
             job_data["_processing_list"] = processing_list
 
             logger.info(
