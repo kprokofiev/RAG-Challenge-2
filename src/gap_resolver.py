@@ -386,7 +386,7 @@ class GapResolver:
                 src_class = _source_class_from_contracts(source_id, self.contracts)
                 can_execute = supports_exec and (source_id in self.safe_sources)
 
-                reason = self._build_reason(field_path, state, source_id, src_status, is_explicit_unknown)
+                reason = self._build_reason(field_path, state, source_id, src_status, is_explicit_unknown, stop_cond)
 
                 items.append(AcquisitionItem(
                     field_path=field_path,
@@ -474,12 +474,14 @@ class GapResolver:
 
     def _build_reason(
         self, field_path: str, state: str, source_id: str,
-        src_status: str, is_unknown: bool,
+        src_status: str, is_unknown: bool, stop_cond: str = "",
     ) -> str:
         """Build human-readable reason for an acquisition item."""
         parts = []
         if is_unknown:
             parts.append(f"Explicit unknown: {field_path}")
+        elif state == "filled":
+            parts.append(f"Field {field_path} is filled but stop condition '{stop_cond}' not yet met")
         else:
             parts.append(f"Field {field_path} is {state}")
         parts.append(f"Next source: {source_id} (status={src_status})")
