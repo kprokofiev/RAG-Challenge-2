@@ -499,7 +499,7 @@ class GapResolver:
             by_tier[item.source_tier] += 1
             if item.supports_execution:
                 executable += 1
-            if item.source_tier == "fallback":
+            if item.allow_provisional:
                 provisional += 1
 
         return {
