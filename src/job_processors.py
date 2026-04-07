@@ -508,7 +508,17 @@ class DocParseIndexProcessor:
                 force_docling_ocr = _dk in _ocr_doc_kinds
                 force_tables = _dk in _tables_doc_kinds
 
-                if force_docling_ocr and not text_layer.get("has_text_layer"):
+                smpc_fast_text = _dk == "smpc" and text_layer.get("has_text_layer")
+
+                if smpc_fast_text:
+                    # EMA SmPC PDFs are usually text-native. Forcing Docling+tabled
+                    # extraction on them is much slower than plain text extraction
+                    # and was the main reason clean e2e runs got stuck behind a
+                    # single SmPC. Scanned SmPCs still fall back to Docling+OCR
+                    # through the branches below when no text layer exists.
+                    parser_mode = "fast_text"
+                    docling_do_ocr = False
+                elif force_docling_ocr and not text_layer.get("has_text_layer"):
                     # Scan doc: Docling + OCR
                     parser_mode = "docling"
                     docling_do_ocr = True
@@ -525,13 +535,15 @@ class DocParseIndexProcessor:
                     parser_mode = "fast_text"
                     docling_do_ocr = False
 
-                # Tables: always Docling path + tables for table-required doc_kinds
+                # Tables: only enable them for doc_kinds that explicitly require
+                # table structure. Turning tables on for every Docling parse was
+                # making generic scanned docs far heavier than necessary.
                 if force_tables and parser_mode == "fast_text":
                     # Upgrade to Docling (no OCR needed if text layer exists)
                     parser_mode = "docling"
                     docling_do_ocr = False
 
-                docling_do_tables = force_tables or (bool(settings.docling_do_tables) and parser_mode == "docling")
+                docling_do_tables = force_tables
 
                 metrics["parser_path"] = parser_mode
                 metrics["parser_used"] = parser_mode
@@ -828,6 +840,7 @@ class DocParseIndexProcessor:
         _HEAVY_KINDS = {
             "patent", "patent_pdf", "epar", "smpc",
             "ru_instruction", "grls_card",
+            "us_fda", "label", "approval_letter",
         }
         # Sprint 19: Patent PDFs get a shorter timeout — they're smaller than
         # SmPC/EPAR but docling hangs on them due to complex layouts.
