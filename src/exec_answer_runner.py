@@ -77,8 +77,16 @@ def run_exec_pipeline(
 
     elapsed = time.time() - t0
 
+    # Extract INN from dossier for downstream consumers (PDF renderer, etc.)
+    passport = dossier.get("passport", {})
+    inn_raw = passport.get("inn")
+    inn = inn_raw.get("value") if isinstance(inn_raw, dict) else inn_raw
+
     # Build response matching TZ spec
     return {
+        "inn": inn or "Unknown",
+        "case_id": case_id,
+        "question_id": question_id,
         "answer": exec_result.markdown,
         "short_summary": exec_result.short_summary,
         "answer_frame": answer_frame.model_dump(),

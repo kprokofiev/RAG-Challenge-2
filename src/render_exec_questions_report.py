@@ -81,7 +81,7 @@ def _esc(text: str) -> str:
 def render_exec_questions_report(
     exec_results: List[Dict[str, Any]],
     output_path: str,
-    inn: str = "Unknown",
+    inn: str = "",
 ) -> str:
     """
     Render multiple exec Q&A results into a single PDF.
@@ -89,13 +89,22 @@ def render_exec_questions_report(
     Args:
         exec_results: List of dicts, each from exec_answer_runner.run_exec_pipeline().
         output_path: Output PDF path.
-        inn: Drug INN for title.
+        inn: Drug INN for title. Auto-detected from results if empty.
 
     Returns:
         Path to generated PDF.
     """
     if not HAS_REPORTLAB:
         raise ImportError("reportlab is required for PDF rendering")
+
+    # Auto-detect INN from results if not provided
+    if not inn:
+        for r in exec_results:
+            inn = r.get("inn", "")
+            if inn:
+                break
+    if not inn:
+        inn = "Unknown"
 
     styles = _get_styles()
     doc = SimpleDocTemplate(
@@ -202,7 +211,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Render exec questions report PDF")
     parser.add_argument("--results", required=True, help="Path to JSON file with exec results array")
     parser.add_argument("--output", required=True, help="Output PDF path")
-    parser.add_argument("--inn", default="Unknown", help="Drug INN for title")
+    parser.add_argument("--inn", default="", help="Drug INN for title (auto-detected from results if empty)")
     args = parser.parse_args()
 
     with open(args.results, "r", encoding="utf-8") as f:
