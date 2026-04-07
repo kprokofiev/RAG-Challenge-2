@@ -33,30 +33,38 @@ except ImportError:
     HAS_REPORTLAB = False
     logger.warning("reportlab not installed — PDF rendering disabled")
 
+from pdf_fonts import register_cyrillic_fonts, FONT_BOLD
+
 
 # ── Styles ──────────────────────────────────────────────────────────────────
 
 def _get_styles():
+    font = register_cyrillic_fonts()
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(
         "DossierTitle", parent=styles["Heading1"], fontSize=18,
         spaceAfter=12, textColor=colors.HexColor("#1a237e"),
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "SectionHead", parent=styles["Heading2"], fontSize=14,
         spaceAfter=8, spaceBefore=12, textColor=colors.HexColor("#283593"),
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "SubHead", parent=styles["Heading3"], fontSize=11,
         spaceAfter=4, spaceBefore=8,
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "BodySmall", parent=styles["Normal"], fontSize=9,
         spaceAfter=4, leading=12,
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "Evidence", parent=styles["Normal"], fontSize=8,
         textColor=colors.HexColor("#616161"), leftIndent=12,
+        fontName=font,
     ))
     return styles
 
@@ -237,11 +245,13 @@ def _esc(text: str) -> str:
 
 def _make_kv_table(rows: List[List[str]]) -> Table:
     """Create a simple key-value table."""
+    from pdf_fonts import FONT_NORMAL, FONT_BOLD
     style = TableStyle([
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#455a64")),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (0, -1), FONT_BOLD),
+        ("FONTNAME", (1, 0), (1, -1), FONT_NORMAL),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
     ])

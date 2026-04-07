@@ -32,32 +32,41 @@ try:
 except ImportError:
     HAS_REPORTLAB = False
 
+from pdf_fonts import register_cyrillic_fonts
+
 
 def _get_styles():
+    font = register_cyrillic_fonts()
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(
         "ReportTitle", parent=styles["Heading1"], fontSize=18,
         spaceAfter=12, textColor=colors.HexColor("#1a237e"),
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "QuestionHead", parent=styles["Heading2"], fontSize=13,
         spaceAfter=6, spaceBefore=10, textColor=colors.HexColor("#283593"),
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "SectionLabel", parent=styles["Heading3"], fontSize=10,
         spaceAfter=4, spaceBefore=6, textColor=colors.HexColor("#455a64"),
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "Body", parent=styles["Normal"], fontSize=9,
         spaceAfter=3, leading=12,
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "Confidence", parent=styles["Normal"], fontSize=10,
         spaceAfter=4, textColor=colors.HexColor("#2e7d32"),
+        fontName=font,
     ))
     styles.add(ParagraphStyle(
         "Warning", parent=styles["Normal"], fontSize=9,
         textColor=colors.HexColor("#e65100"), spaceAfter=3,
+        fontName=font,
     ))
     return styles
 
