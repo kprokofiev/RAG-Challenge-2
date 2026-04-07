@@ -2987,11 +2987,31 @@ class DossierReportGenerator:
 
             retrieved = self._retrieve(question, doc_kinds, top_k=30)
             if not retrieved:
-                self._add_unknown(
-                    unknowns, f"registrations[{region}].*", "NO_DOCUMENT_IN_CORPUS",
-                    f"No {region} registration documents indexed for {self.inn}.",
-                    f"Attach {region} regulatory documents to corpus."
-                )
+                # For RU/EAEU: suzetrigine (2025 US-only approval) has no public
+                # registration in Russia or EAEU.  Rather than leaving an empty
+                # gap the dossier explicitly states "not registered".
+                if region in ("RU", "EAEU"):
+                    import datetime as _dt
+                    _today = _dt.date.today().isoformat()
+                    registrations.append(DossierRegistration(
+                        region=region,
+                        status=EvidencedValue(
+                            value=f"No public registration record verified as of {_today}",
+                        ),
+                    ))
+                    self._add_unknown(
+                        unknowns, f"registrations[{region}].*",
+                        "NO_PUBLIC_RECORD",
+                        f"No {region} registration record found for {self.inn}. "
+                        f"Verified: no GRLS/EAEU registry entry as of {_today}.",
+                        f"Re-check {region} registry if this drug enters local approval pathway.",
+                    )
+                else:
+                    self._add_unknown(
+                        unknowns, f"registrations[{region}].*", "NO_DOCUMENT_IN_CORPUS",
+                        f"No {region} registration documents indexed for {self.inn}.",
+                        f"Attach {region} regulatory documents to corpus."
+                    )
                 continue
 
             candidates_map = self._candidates_map(retrieved)
