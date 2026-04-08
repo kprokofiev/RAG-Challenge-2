@@ -53,7 +53,7 @@ class AcquisitionItem(BaseModel):
     target_source: str
     source_tier: str  # tier1 | tier2 | fallback
     source_class: str  # primary_official | registry | secondary | manual
-    mode: str  # attach_missing | retry_fetch | retry_index | refresh_stale | backfill_secondary | no_action
+    mode: str  # attach_missing | retry_fetch | retry_index | refresh_stale | backfill_secondary | verified_absent | no_action
     priority: int
     stop_condition: str
     current_state: str  # filled | empty | partial | not_applicable
@@ -188,6 +188,143 @@ def _classify_field_state(value: Any) -> str:
         if non_null < len(value) // 2:
             return "partial"
     return "filled"
+
+
+def _registration_status_role(status_value: Any) -> str:
+    """Classify registration status text into positive / negative / unknown."""
+    s = str(status_value or "").strip().lower()
+    if not s:
+        return "unknown"
+
+    negative_markers = (
+        "no public registration record verified",
+        "no public eu registration record verified",
+        "no public record verified",
+        "not registered",
+        "not approved",
+        "не зарегистр",
+        "no registration record found",
+        "not found after lookup",
+    )
+    positive_markers = (
+        "approved",
+        "registered",
+        "marketing authorisation granted",
+        "marketing authorization granted",
+        "authorised",
+        "authorized",
+        "valid",
+        "active",
+    )
+    if any(marker in s for marker in negative_markers):
+        return "negative"
+    if any(marker in s for marker in positive_markers):
+        return "positive"
+    return "unknown"
+
+
+def _unknown_reason_code(unknown: Dict[str, Any]) -> str:
+    """Normalize reason field across dossier variants."""
+    return str(unknown.get("reason_code") or unknown.get("reason") or "").strip().upper()
+
+
+def _unknown_message(unknown: Dict[str, Any]) -> str:
+    return str(unknown.get("message") or unknown.get("detail") or "").strip()
+
+
+def _matches_unknown_field(field_path: str, unknown_field_path: str) -> bool:
+    """
+    Match concrete field paths against wildcard unknown patterns.
+
+    Example:
+      registrations.RU.mah  matches registrations[RU].*
+    """
+    if not unknown_field_path:
+        return False
+    if field_path == unknown_field_path:
+        return True
+
+    m = re.match(r"^([A-Za-z0-9_]+)\[([A-Za-z0-9_]+)\]\.\*$", unknown_field_path)
+    if m:
+        return field_path.startswith(f"{m.group(1)}.{m.group(2)}.")
+    return False
+
+
+def _verified_absence_unknown_for_field(
+    field_path: str,
+    unknowns: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """
+    Return a matching unknown that represents a completed negative lookup.
+    """
+    verified_codes = {
+        "NO_PUBLIC_RECORD",
+        "VERIFIED_ABSENCE",
+        "NOT_FOUND_AFTER_SUCCESSFUL_LOOKUP",
+    }
+    for unknown in unknowns:
+        reason_code = _unknown_reason_code(unknown)
+        if reason_code not in verified_codes:
+            continue
+        if _matches_unknown_field(field_path, str(unknown.get("field_path") or "")):
+            return unknown
+    return None
+
+
+def _configured_registration_regions(field_map: Dict[str, Dict[str, Any]]) -> List[str]:
+    regions = []
+    seen = set()
+    for field_path in field_map.keys():
+        if not field_path.startswith("registrations."):
+            continue
+        parts = field_path.split(".")
+        if len(parts) < 2:
+            continue
+        region = parts[1]
+        if region not in seen:
+            seen.add(region)
+            regions.append(region)
+    return regions
+
+
+def _registration_regions_by_role(dossier: Dict[str, Any]) -> Tuple[set, set, set]:
+    """
+    Return (positive, negative, unknown) registration regions from dossier.
+    """
+    positive, negative, unknown = set(), set(), set()
+    for reg in dossier.get("registrations", []) or []:
+        if not isinstance(reg, dict):
+            continue
+        region = str(reg.get("region") or "").upper().strip()
+        if not region:
+            continue
+        status = reg.get("status")
+        if isinstance(status, dict):
+            status = status.get("value")
+        role = _registration_status_role(status)
+        if role == "positive":
+            positive.add(region)
+        elif role == "negative":
+            negative.add(region)
+        else:
+            unknown.add(region)
+    return positive, negative, unknown
+
+
+def _verified_absence_regions_from_unknowns(unknowns: List[Dict[str, Any]]) -> set:
+    regions = set()
+    for unknown in unknowns:
+        if _unknown_reason_code(unknown) not in {
+            "NO_PUBLIC_RECORD",
+            "VERIFIED_ABSENCE",
+            "NOT_FOUND_AFTER_SUCCESSFUL_LOOKUP",
+        }:
+            continue
+        field_path = str(unknown.get("field_path") or "")
+        m = re.match(r"^registrations\[([A-Za-z0-9_]+)\]\.\*$", field_path)
+        if m:
+            regions.add(m.group(1).upper())
+    return regions
 
 
 def _source_status_from_ledger(
@@ -330,6 +467,9 @@ class GapResolver:
 
         # Build unknown fields set for priority boosting
         unknown_fields = {u.get("field_path", "") for u in unknowns}
+        configured_regions = _configured_registration_regions(self.field_map)
+        positive_reg_regions, negative_reg_regions, _ = _registration_regions_by_role(dossier)
+        verified_absence_regions = _verified_absence_regions_from_unknowns(unknowns)
 
         items: List[AcquisitionItem] = []
         priority_counter = 0
@@ -347,6 +487,52 @@ class GapResolver:
             # Check current field state
             value = _resolve_dossier_field(dossier, field_path)
             state = _classify_field_state(value)
+
+            verified_absence_unknown = _verified_absence_unknown_for_field(field_path, unknowns)
+            registered_where_closed = False
+            if field_path == "passport.registered_where":
+                covered_regions = positive_reg_regions | negative_reg_regions | verified_absence_regions
+                registered_where_closed = bool(positive_reg_regions) and all(
+                    region in covered_regions for region in configured_regions
+                )
+
+            if verified_absence_unknown or registered_where_closed:
+                source_id = (preferred or fallback or [""])[0]
+                src_class = _source_class_from_contracts(source_id, self.contracts)
+                priority_counter += 1
+                priority = priority_counter + 1000
+
+                if verified_absence_unknown:
+                    message = _unknown_message(verified_absence_unknown) or (
+                        f"Verified absence recorded for {field_path}."
+                    )
+                    reason = (
+                        f"Verified absence: {message} "
+                        f"Keep lookup negative verdict instead of re-attaching {source_id or 'source'}."
+                    )
+                else:
+                    covered = ", ".join(sorted(covered_regions))
+                    reason = (
+                        "registered_where is intentionally limited to positive jurisdictions. "
+                        f"Configured registration scope is already closed by positive/negative verdicts: {covered}."
+                    )
+
+                items.append(AcquisitionItem(
+                    field_path=field_path,
+                    section=section,
+                    reason=reason,
+                    target_source=source_id,
+                    source_tier="tier1" if preferred else "fallback",
+                    source_class=src_class,
+                    mode="verified_absent",
+                    priority=priority,
+                    stop_condition=stop_cond,
+                    current_state="not_applicable",
+                    allow_provisional=False,
+                    supports_execution=False,
+                    jurisdiction=jurisdiction,
+                ))
+                continue
 
             # Evaluate stop condition
             evaluator = _STOP_EVALUATORS.get(stop_cond, _STOP_EVALUATORS["field_has_value"])
@@ -663,6 +849,8 @@ class ControlledExecutor:
         """Execute a single acquisition item via gateway API."""
         import requests
 
+        if item.mode == "verified_absent":
+            return {"status": "stop_condition_met", "details": "Verified absence; no attachment required"}
         if item.mode == "attach_missing":
             return self._attach_source(item, case_id)
         elif item.mode == "retry_fetch":
