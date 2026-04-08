@@ -29,6 +29,7 @@ class Claim(BaseModel):
     claim_id: str
     text: str
     jurisdiction: Optional[str] = None
+    semantic_role: Optional[str] = None
     support_level: str  # strong | moderate | weak | unsupported
     support_fields: List[str] = Field(default_factory=list)
     evidence_refs: List[str] = Field(default_factory=list)
@@ -78,11 +79,13 @@ def _build_registration_claims(
             if id_strs:
                 text += f" [{', '.join(id_strs[:3])}]"
 
+            semantic_role = _classify_registration_status(status_val)
             support = "strong" if status_refs else "weak"
             claims.append(Claim(
                 claim_id=_claim_id(f"reg_{region}"),
                 text=text,
                 jurisdiction=region,
+                semantic_role=semantic_role,
                 support_level=support,
                 support_fields=[f"registrations.{region}.status"],
                 evidence_refs=status_refs,
@@ -92,6 +95,7 @@ def _build_registration_claims(
                 claim_id=_claim_id(f"reg_{region}_missing"),
                 text=f"{region}: Registration status unknown",
                 jurisdiction=region,
+                semantic_role="registration_unknown",
                 support_level="unsupported",
                 support_fields=[f"registrations.{region}.status"],
                 evidence_refs=[],
@@ -313,6 +317,47 @@ def _extract_refs_from_raw(raw: Any) -> List[str]:
     return []
 
 
+def _classify_registration_status(status_val: str) -> str:
+    """
+    Separate positive registration outcomes from verified absence / negative outcomes.
+
+    This keeps business implications honest: a verified negative lookup such as
+    "No public registration record verified" must not be counted as
+    "registered in jurisdiction X".
+    """
+    s = (status_val or "").strip().lower()
+    if not s:
+        return "registration_unknown"
+
+    negative_markers = (
+        "no public registration record verified",
+        "no public record verified",
+        "not registered",
+        "not approved",
+        "не зарегистр",
+        "нет публичной записи",
+        "not found after lookup",
+        "no registration record found",
+        "no eu registration record verified",
+    )
+    positive_markers = (
+        "approved",
+        "registered",
+        "marketing authorisation granted",
+        "marketing authorization granted",
+        "authorised",
+        "authorized",
+        "valid",
+        "active",
+    )
+
+    if any(marker in s for marker in negative_markers):
+        return "registration_negative"
+    if any(marker in s for marker in positive_markers):
+        return "registration_positive"
+    return "registration_unknown"
+
+
 # ── Main ClaimBuilder ──────────────────────────────────────────────────────
 
 class ClaimBuilder:
@@ -479,11 +524,23 @@ class ClaimBuilder:
         q_type = routed_question.question_type
 
         if q_type == "registration_status":
-            registered = [c for c in claims if "unknown" not in c.text.lower() and c.support_level != "unsupported"]
-            missing = [c for c in claims if c.support_level == "unsupported"]
-            if registered:
-                regions = [c.jurisdiction for c in registered if c.jurisdiction]
-                implications.append(f"Product is registered in {len(regions)} jurisdiction(s): {', '.join(regions)}")
+            positive = [c for c in claims if c.semantic_role == "registration_positive"]
+            negative = [c for c in claims if c.semantic_role == "registration_negative"]
+            missing = [c for c in claims if c.semantic_role == "registration_unknown" or c.support_level == "unsupported"]
+
+            if positive:
+                regions = [c.jurisdiction for c in positive if c.jurisdiction]
+                implications.append(
+                    f"Product is registered in {len(regions)} jurisdiction(s): {', '.join(regions)}"
+                )
+
+            if negative:
+                regions = [c.jurisdiction for c in negative if c.jurisdiction]
+                if regions:
+                    implications.append(
+                        f"No public registration record verified for: {', '.join(regions)}"
+                    )
+
             if missing:
                 regions = [c.jurisdiction for c in missing if c.jurisdiction]
                 if regions:
