@@ -3295,16 +3295,57 @@ class DossierReportGenerator:
         Primary doc_kinds: ctgov_protocol/ctgov_results/ctgov/ctgov_documents.
         Secondary (enrichment): publication/scientific_pmc/scientific_pdf.
         """
-        primary_kinds = list(_CTGOV_DOC_KINDS)
-        enrichment_kinds = list(_ENRICHMENT_ONLY_DOC_KINDS)
-        all_kinds = primary_kinds + enrichment_kinds
+        results_first_kinds = [
+            "ctgov_results", "ctgov_documents", "scientific_pmc",
+            "scientific_pdf", "publication", "preprint",
+        ]
+        protocol_kinds = ["ctgov_protocol", "ctgov", "trial_registry"]
+        seen_keys: Set[Tuple[Any, Any, Any]] = set()
+        merged: List[Dict[str, Any]] = []
 
-        question = (
+        def _extend(items: List[Dict[str, Any]]) -> None:
+            for item in items:
+                key = (
+                    item.get("doc_id"),
+                    item.get("page"),
+                    (item.get("text", "") or "")[:160],
+                )
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                merged.append(item)
+
+        results_question = (
+            f"Clinical study {nct_id} for {self.inn}: "
+            "primary endpoint results, efficacy outcomes, safety outcomes, "
+            "numeric findings, sponsor conclusions, interpretation."
+        )
+        protocol_question = (
+            f"Clinical study {nct_id} for {self.inn}: "
+            "study title, phase, study type, enrollment, countries, "
+            "comparator, dosing, arms, status."
+        )
+
+        _extend(self._retrieve(results_question, results_first_kinds, top_k=max(12, top_k // 2)))
+        _extend(self._retrieve(protocol_question, protocol_kinds, top_k=max(12, top_k // 2)))
+
+        # Final broad pass keeps resilience if results/protocol retrieval misses a study.
+        broad_question = (
             f"Clinical study {nct_id} for {self.inn}: "
             f"extract study title, phase, type, enrollment, countries, "
             f"comparator, dosing, primary endpoint, results, status, conclusion."
         )
-        return self._retrieve(question, all_kinds, top_k=top_k)
+        _extend(self._retrieve(
+            broad_question,
+            list(_CTGOV_DOC_KINDS) + list(_ENRICHMENT_ONLY_DOC_KINDS),
+            top_k=top_k,
+        ))
+
+        logger.info(
+            "clinical_study_retrieval nct=%s inn=%s merged=%d",
+            nct_id, self.inn, len(merged),
+        )
+        return merged[: max(top_k, 40)]
 
     def _assemble_single_clinical_study(
         self,
@@ -3323,13 +3364,23 @@ class DossierReportGenerator:
         scoped = [r for r in retrieved if nct_upper in (r.get("text", "") + r.get("doc_title", "")).upper()]
         other = [r for r in retrieved if r not in scoped]
 
-        # Build evidence from scoped first, then pad with general if needed
-        combined = scoped + other
+        results_kinds = {"ctgov_results", "ctgov_documents", "scientific_pmc", "scientific_pdf", "publication", "preprint"}
+        protocol_kinds = {"ctgov_protocol", "ctgov", "trial_registry"}
+
+        scoped_results = [r for r in scoped if (r.get("doc_kind") or "") in results_kinds]
+        scoped_protocol = [r for r in scoped if (r.get("doc_kind") or "") in protocol_kinds]
+        scoped_other = [r for r in scoped if r not in scoped_results and r not in scoped_protocol]
+        other_results = [r for r in other if (r.get("doc_kind") or "") in results_kinds]
+        other_protocol = [r for r in other if (r.get("doc_kind") or "") in protocol_kinds]
+        other_misc = [r for r in other if r not in other_results and r not in other_protocol]
+
+        # Results-first ordering: explicit result chunks should outrank protocol-only chunks.
+        combined = scoped_results + scoped_protocol + scoped_other + other_results + other_protocol + other_misc
         if not combined:
             return None
 
-        candidates_map = self._candidates_map(combined[:30])
-        context = self._context_str(combined[:20])
+        candidates_map = self._candidates_map(combined[:40])
+        context = self._context_str(combined[:24])
         alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         # Single-study extraction prompt
@@ -3341,6 +3392,11 @@ class DossierReportGenerator:
             f"- Extract fields ONLY from evidence that relates to this specific study.\n"
             f"- Do NOT mix data from other studies into this card.\n"
             f"- If a field cannot be found for this study specifically, set it to null.\n\n"
+            f"RESULTS-FIRST POLICY:\n"
+            f"- Treat ctgov_results / publication / scientific result snippets as highest priority for "
+            f"efficacy_keypoints and conclusion.\n"
+            f"- Do not let protocol-only text overwrite or dilute explicit study results.\n"
+            f"- If results evidence exists but is sparse, still extract the best supported conclusion from it.\n\n"
             f"Extract these fields:\n"
             f"- title: official or brief study title\n"
             f"- study_id: must be \"{nct_id}\"\n"
@@ -3407,6 +3463,14 @@ class DossierReportGenerator:
             conclusion=conclusion, status=status,
             evidence_refs=list(set(ev_refs)),
         )
+        if scoped_results and study.conclusion is None:
+            self._add_unknown(
+                unknowns,
+                "clinical_studies[*].conclusion",
+                "RESULTS_PRESENT_CONCLUSION_NOT_EXTRACTED",
+                f"Study {nct_id} had results-scoped evidence in corpus but no conclusion could be extracted.",
+                "Prioritize ctgov_results/publication chunks for this NCT and inspect result sections directly.",
+            )
         return study
 
     @staticmethod
