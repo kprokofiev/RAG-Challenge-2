@@ -2739,6 +2739,78 @@ class DossierReportGenerator:
         s = re.sub(r"[A-Z]\d?$", "", s)
         return s
 
+    @staticmethod
+    def _registration_status_role(status_value: Optional[str]) -> str:
+        """Classify a registration status into positive / negative / unknown."""
+        s = (status_value or "").strip().lower()
+        if not s:
+            return "unknown"
+
+        negative_markers = (
+            "no public registration record verified",
+            "no public eu registration record verified",
+            "no public record verified",
+            "not registered",
+            "not approved",
+            "не зарегистр",
+            "no registration record found",
+            "not found after lookup",
+        )
+        positive_markers = (
+            "approved",
+            "registered",
+            "marketing authorisation granted",
+            "marketing authorization granted",
+            "authorised",
+            "authorized",
+            "valid",
+            "active",
+        )
+        if any(marker in s for marker in negative_markers):
+            return "negative"
+        if any(marker in s for marker in positive_markers):
+            return "positive"
+        return "unknown"
+
+    @staticmethod
+    def _passport_region_label(region: str) -> str:
+        mapping = {
+            "US": "United States",
+            "EU": "European Union",
+            "RU": "Russia",
+            "EAEU": "EAEU",
+        }
+        return mapping.get((region or "").upper(), region)
+
+    def _sync_passport_registered_where(
+        self,
+        passport: DossierPassport,
+        registrations: List[DossierRegistration],
+    ) -> None:
+        """
+        Keep passport.registered_where aligned with positive registration outcomes.
+
+        Passport can over-collect jurisdictions via broad tier-1 retrieval. After the
+        structured registrations block is assembled, use it as the source of truth for
+        which jurisdictions are positively registered.
+        """
+        synced: List[EvidencedValue] = []
+        seen_regions: Set[str] = set()
+        for reg in registrations:
+            region = (reg.region or "").upper().strip()
+            status_value = reg.status.value if reg.status and reg.status.value is not None else None
+            if not region or self._registration_status_role(status_value) != "positive":
+                continue
+            if region in seen_regions:
+                continue
+            seen_regions.add(region)
+            synced.append(EvidencedValue(
+                value=self._passport_region_label(region),
+                evidence_refs=list(reg.status.evidence_refs) if reg.status else [],
+            ))
+        if synced:
+            passport.registered_where = synced
+
     # ── Block generators ─────────────────────────────────────────────────────
 
     def _generate_passport(self, unknowns: List[DossierUnknown]) -> DossierPassport:
@@ -2990,21 +3062,42 @@ class DossierReportGenerator:
                 # For RU/EAEU: suzetrigine (2025 US-only approval) has no public
                 # registration in Russia or EAEU.  Rather than leaving an empty
                 # gap the dossier explicitly states "not registered".
-                if region in ("RU", "EAEU"):
+                if region in ("RU", "EAEU", "EU"):
                     import datetime as _dt
                     _today = _dt.date.today().isoformat()
+                    if region == "EU":
+                        status_value = (
+                            f"No public EU registration record verified in current lookup scope "
+                            f"as of {_today}"
+                        )
+                        message = (
+                            f"No EMA/EPAR-based EU registration record found for {self.inn} "
+                            f"in the current lookup scope as of {_today}."
+                        )
+                        next_action = (
+                            "Re-check EMA centralized sources; expand to national EU registries "
+                            "only if EU market access becomes material for this case."
+                        )
+                    else:
+                        status_value = f"No public registration record verified as of {_today}"
+                        message = (
+                            f"No {region} registration record found for {self.inn}. "
+                            f"Verified: no GRLS/EAEU registry entry as of {_today}."
+                        )
+                        next_action = (
+                            f"Re-check {region} registry if this drug enters local approval pathway."
+                        )
                     registrations.append(DossierRegistration(
                         region=region,
                         status=EvidencedValue(
-                            value=f"No public registration record verified as of {_today}",
+                            value=status_value,
                         ),
                     ))
                     self._add_unknown(
                         unknowns, f"registrations[{region}].*",
                         "NO_PUBLIC_RECORD",
-                        f"No {region} registration record found for {self.inn}. "
-                        f"Verified: no GRLS/EAEU registry entry as of {_today}.",
-                        f"Re-check {region} registry if this drug enters local approval pathway.",
+                        message,
+                        next_action,
                     )
                 else:
                     self._add_unknown(
@@ -4173,6 +4266,7 @@ class DossierReportGenerator:
         # ── B: Registrations ─────────────────────────────────────────────────
         _check_deadline("registrations")
         registrations = self._generate_registrations(unknowns)
+        self._sync_passport_registered_where(passport, registrations)
         logger.info("registrations done (%.1fs)", time.time() - start_ts)
 
         # ── C: Clinical studies ───────────────────────────────────────────────
