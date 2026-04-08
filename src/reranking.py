@@ -6,6 +6,14 @@ import requests
 import src.prompts as prompts
 from concurrent.futures import ThreadPoolExecutor
 from src.settings import settings
+from src.openai_model_router import (
+    choose_routed_model,
+    extract_usage_metrics,
+    is_quota_exhausted_error,
+    mark_tier_exhausted,
+    next_tier_index,
+    record_usage,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -36,7 +44,7 @@ class JinaReranker:
 
 class LLMReranker:
     # Default model used when DDKIT_RERANK_MODEL env is not set (Sprint 3 §6).
-    _DEFAULT_RERANK_MODEL = "gpt-4o-mini-2024-07-18"
+    _DEFAULT_RERANK_MODEL = "gpt-5.4"
 
     def __init__(self):
         self.llm = self.set_up_llm()
@@ -59,21 +67,30 @@ class LLMReranker:
 
     def get_rank_for_single_block(self, query, retrieved_document):
         user_prompt = f'/nHere is the query:/n"{query}"/n/nHere is the retrieved text block:/n"""/n{retrieved_document}/n"""/n'
+        minimum_tier_index = 0
+        while True:
+            routed = choose_routed_model(self.rerank_model, minimum_tier_index=minimum_tier_index)
+            try:
+                completion = self.llm.beta.chat.completions.parse(
+                    model=routed.model,
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": self.system_prompt_rerank_single_block},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    response_format=self.schema_for_single_block
+                )
 
-        completion = self.llm.beta.chat.completions.parse(
-            model=self.rerank_model,
-            temperature=0,
-            messages=[
-                {"role": "system", "content": self.system_prompt_rerank_single_block},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format=self.schema_for_single_block
-        )
-
-        response = completion.choices[0].message.parsed
-        response_dict = response.model_dump()
-
-        return response_dict
+                usage = extract_usage_metrics(completion)
+                record_usage(routed, usage)
+                response = completion.choices[0].message.parsed
+                return response.model_dump()
+            except Exception as exc:
+                if is_quota_exhausted_error(exc) and routed.tier in {"elite", "mini"}:
+                    mark_tier_exhausted(routed, str(exc))
+                    minimum_tier_index = next_tier_index(routed.tier)
+                    continue
+                raise
 
     def get_rank_for_multiple_blocks(self, query, retrieved_documents):
         formatted_blocks = "\n\n---\n\n".join([f'Block {i+1}:\n\n"""\n{text}\n"""' for i, text in enumerate(retrieved_documents)])
@@ -83,21 +100,30 @@ class LLMReranker:
             f"{formatted_blocks}\n\n"
             f"You should provide exactly {len(retrieved_documents)} rankings, in order."
         )
+        minimum_tier_index = 0
+        while True:
+            routed = choose_routed_model(self.rerank_model, minimum_tier_index=minimum_tier_index)
+            try:
+                completion = self.llm.beta.chat.completions.parse(
+                    model=routed.model,
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": self.system_prompt_rerank_multiple_blocks},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    response_format=self.schema_for_multiple_blocks
+                )
 
-        completion = self.llm.beta.chat.completions.parse(
-            model=self.rerank_model,
-            temperature=0,
-            messages=[
-                {"role": "system", "content": self.system_prompt_rerank_multiple_blocks},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format=self.schema_for_multiple_blocks
-        )
-
-        response = completion.choices[0].message.parsed
-        response_dict = response.model_dump()
-      
-        return response_dict
+                usage = extract_usage_metrics(completion)
+                record_usage(routed, usage)
+                response = completion.choices[0].message.parsed
+                return response.model_dump()
+            except Exception as exc:
+                if is_quota_exhausted_error(exc) and routed.tier in {"elite", "mini"}:
+                    mark_tier_exhausted(routed, str(exc))
+                    minimum_tier_index = next_tier_index(routed.tier)
+                    continue
+                raise
 
     def rerank_documents(self, query: str, documents: list, documents_batch_size: int = 4, llm_weight: float = 0.7):
         """

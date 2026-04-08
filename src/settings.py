@@ -94,8 +94,8 @@ class WorkerSettings(BaseSettings):
     min_pdf_bytes: int = Field(5000, env="MIN_PDF_BYTES")
 
     # Sprint-3: LLM model configuration
-    # Reranker model (used in LLMReranker). Default: gpt-4o-mini-2024-07-18
-    ddkit_rerank_model: str = Field("gpt-4o-mini-2024-07-18", env="DDKIT_RERANK_MODEL")
+    # Reranker model (used in LLMReranker). Default: gpt-5.4
+    ddkit_rerank_model: str = Field("gpt-5.4", env="DDKIT_RERANK_MODEL")
     # Max parallel reranking threads (prevents 429 bursts). Default: 4
     ddkit_rerank_max_concurrency: int = Field(4, env="DDKIT_RERANK_MAX_CONCURRENCY")
     # Answering model (used in APIProcessor.send_message). Default: gpt-4o-2024-08-06

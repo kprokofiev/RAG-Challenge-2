@@ -2745,7 +2745,7 @@ class CaseViewV2Generator:
                 response = self.api.send_message(
                     system_content="Ты - медицинский писатель, генерирующий краткие саммари о препаратах.",
                     human_content=prompt,
-                    model=self.answering_model or "gpt-4o",
+                    model=self.answering_model or "gpt-5.4",
                     temperature=0.3,
                     is_structured=False,
                 )

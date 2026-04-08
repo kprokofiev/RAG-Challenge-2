@@ -118,7 +118,6 @@ class TableSerializer(BaseOpenaiProcessor):
         reponse_schema = TableSerialization.TableBlocksCollection
 
         answer_dict = self.send_message(
-            model='gpt-4o-mini-2024-07-18',
             temperature=0,
             system_content=system_prompt,
             human_content=user_prompt,
@@ -197,7 +196,6 @@ class TableSerializer(BaseOpenaiProcessor):
             queries.append(query)
 
         results = await AsyncOpenaiProcessor().process_structured_ouputs_requests(
-            model='gpt-4o-mini-2024-07-18',
             temperature=0,
             system_content=TableSerialization.system_prompt,
             queries=queries,

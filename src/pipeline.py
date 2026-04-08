@@ -60,7 +60,7 @@ class RunConfig:
     submission_file: bool = True
     full_context: bool = False
     api_provider: str = "openai"
-    answering_model: str = "gpt-4o-mini-2024-07-18" #or "gpt-4o-2024-08-06"
+    answering_model: str = "gpt-5.4" #or "gpt-4o-2024-08-06"
     config_suffix: str = ""
     # DD metadata filters
     tenant_id: Optional[str] = None

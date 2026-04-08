@@ -14,6 +14,14 @@ from pydantic import BaseModel
 import google.generativeai as genai
 from copy import deepcopy
 from tenacity import retry, stop_after_attempt, wait_fixed
+from src.openai_model_router import (
+    choose_routed_model,
+    extract_usage_metrics,
+    is_quota_exhausted_error,
+    mark_tier_exhausted,
+    next_tier_index,
+    record_usage,
+)
 
 
 
@@ -28,7 +36,7 @@ def _get_llm_timeout_seconds() -> float:
 class BaseOpenaiProcessor:
     def __init__(self):
         self.llm = self.set_up_llm()
-        self.default_model = os.getenv("DDKIT_DEFAULT_MODEL", "gpt-5.2")
+        self.default_model = os.getenv("DDKIT_DEFAULT_MODEL", "gpt-5.4")
 
     def set_up_llm(self):
         load_dotenv()
@@ -54,12 +62,6 @@ class BaseOpenaiProcessor:
         if model is None:
             model = self.default_model
 
-        # Resolve reasoning_effort: env override, then auto-set "none" for gpt-5.x
-        if reasoning_effort is None:
-            reasoning_effort = os.getenv("DDKIT_REASONING_EFFORT") or None
-        if reasoning_effort is None and model.startswith("gpt-5"):
-            reasoning_effort = "none"
-
         # Resolve max_completion_tokens from env if not passed
         if max_completion_tokens is None:
             _env_mct = os.getenv("DDKIT_MAX_COMPLETION_TOKENS", "").strip()
@@ -69,43 +71,70 @@ class BaseOpenaiProcessor:
                 except ValueError:
                     pass
 
-        params = {
-            "model": model,
-            "seed": seed,
-            "messages": [
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": human_content}
-            ]
-        }
+        minimum_tier_index = 0
+        while True:
+            routed = choose_routed_model(model, minimum_tier_index=minimum_tier_index)
+            active_model = routed.model
 
-        # temperature: skip for reasoning models and gpt-5.x with reasoning_effort != "none"
-        _is_reasoning = model.startswith("o1") or model.startswith("o3") or model.startswith("o4")
-        _gpt5_thinking = model.startswith("gpt-5") and reasoning_effort and reasoning_effort != "none"
-        if not _is_reasoning and not _gpt5_thinking:
-            params["temperature"] = temperature
+            # Resolve reasoning_effort: env override, then auto-set "none" for gpt-5.x
+            active_reasoning_effort = reasoning_effort
+            if active_reasoning_effort is None:
+                active_reasoning_effort = os.getenv("DDKIT_REASONING_EFFORT") or None
+            if active_reasoning_effort is None and active_model.startswith("gpt-5"):
+                active_reasoning_effort = "none"
 
-        # reasoning_effort only applies to unstructured calls (parse() doesn't accept it)
-        if reasoning_effort is not None and not is_structured:
-            params["reasoning_effort"] = reasoning_effort
+            params = {
+                "model": active_model,
+                "seed": seed,
+                "messages": [
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": human_content}
+                ]
+            }
 
-        if max_completion_tokens is not None:
-            params["max_completion_tokens"] = max_completion_tokens
+            # temperature: skip for reasoning models and gpt-5.x with reasoning_effort != "none"
+            _is_reasoning = active_model.startswith("o1") or active_model.startswith("o3") or active_model.startswith("o4")
+            _gpt5_thinking = active_model.startswith("gpt-5") and active_reasoning_effort and active_reasoning_effort != "none"
+            if not _is_reasoning and not _gpt5_thinking:
+                params["temperature"] = temperature
 
-        if not is_structured:
-            completion = self.llm.chat.completions.create(**params)
-            content = completion.choices[0].message.content
+            # reasoning_effort only applies to unstructured calls (parse() doesn't accept it)
+            if active_reasoning_effort is not None and not is_structured:
+                params["reasoning_effort"] = active_reasoning_effort
 
-        elif is_structured:
-            params["response_format"] = response_format
-            completion = self.llm.beta.chat.completions.parse(**params)
+            if max_completion_tokens is not None:
+                params["max_completion_tokens"] = max_completion_tokens
 
-            response = completion.choices[0].message.parsed
-            content = response.dict()
+            try:
+                if not is_structured:
+                    completion = self.llm.chat.completions.create(**params)
+                    content = completion.choices[0].message.content
+                else:
+                    params["response_format"] = response_format
+                    completion = self.llm.beta.chat.completions.parse(**params)
+                    response = completion.choices[0].message.parsed
+                    content = response.dict()
 
-        self.response_data = {"model": completion.model, "input_tokens": completion.usage.prompt_tokens, "output_tokens": completion.usage.completion_tokens}
-        print(self.response_data)
-
-        return content
+                usage = extract_usage_metrics(completion)
+                record_usage(routed, usage)
+                self.response_data = {
+                    "requested_model": model,
+                    "model": completion.model,
+                    "router_tier": routed.tier,
+                    "input_tokens": usage.get("input_tokens"),
+                    "output_tokens": usage.get("output_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                    "cached_tokens": usage.get("cached_tokens", 0),
+                    "reasoning_tokens": usage.get("reasoning_tokens", 0),
+                }
+                print(self.response_data)
+                return content
+            except Exception as exc:
+                if is_quota_exhausted_error(exc) and routed.tier in {"elite", "mini"}:
+                    mark_tier_exhausted(routed, str(exc))
+                    minimum_tier_index = next_tier_index(routed.tier)
+                    continue
+                raise
 
     @staticmethod
     def count_tokens(string, encoding_name="o200k_base"):
@@ -540,7 +569,10 @@ class AsyncOpenaiProcessor:
         reasoning_effort: Optional[str] = None,
     ):
         if model is None:
-            model = os.getenv("DDKIT_DEFAULT_MODEL", "gpt-5.2")
+            model = os.getenv("DDKIT_DEFAULT_MODEL", "gpt-5.4")
+
+        routed = choose_routed_model(model)
+        model = routed.model
 
         # Resolve reasoning_effort
         if reasoning_effort is None:
@@ -644,6 +676,9 @@ class AsyncOpenaiProcessor:
                 if finish_reason != "stop":
                     print(f"[WARNING] Line {line_number}: finish_reason is '{finish_reason}' (expected 'stop').")
 
+                usage = extract_usage_metrics(result[1])
+                record_usage(routed, usage)
+
                 # Safely parse answer; if it fails, leave answer empty and report the error.
                 try:
                     answer_content = result[1]['choices'][0]['message']['content']
@@ -656,12 +691,13 @@ class AsyncOpenaiProcessor:
                 results.append({
                     'index': result[2],
                     'question': result[0]['messages'],
-                    'answer': answer
+                    'answer': answer,
+                    'usage': usage,
                 })
             
             # Sort by original index and build final list
             validated_data_list = [
-                {'question': r['question'], 'answer': r['answer']} 
+                {'question': r['question'], 'answer': r['answer'], 'usage': r['usage']} 
                 for r in sorted(results, key=lambda x: x['index']['original_index'])
             ]
 
