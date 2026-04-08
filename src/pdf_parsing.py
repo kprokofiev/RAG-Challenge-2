@@ -3,7 +3,6 @@ import time
 import logging
 import re
 import json
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from tabulate import tabulate
 from pathlib import Path
 from typing import Iterable, List, Optional, Dict
@@ -127,39 +126,27 @@ class PDFParser:
         
         return DocumentConverter(format_options=format_options)
 
-    # Sprint 19: Per-document timeout to prevent docling hangs on complex PDFs.
-    # Default 120s per document; configurable via DDKIT_DOCLING_TIMEOUT_S env var.
-    DOCLING_TIMEOUT_S = int(os.getenv("DDKIT_DOCLING_TIMEOUT_S", "120"))
-
     def convert_documents(self, input_doc_paths: List[Path]) -> Iterable[ConversionResult]:
-        """Convert PDFs via docling with per-document timeout protection.
+        """Convert PDFs via Docling.
 
-        If a single document takes longer than DOCLING_TIMEOUT_S, it is skipped
-        and a FAILURE ConversionResult is yielded so callers can handle it.
+        Timeout isolation is handled one level above in DocParseIndexProcessor,
+        which runs each document in a dedicated subprocess with a doc-kind-aware
+        wall-clock budget. A second thread-level timeout here is counterproductive:
+        the worker thread cannot be cancelled safely, so the "timed out" Docling
+        conversion keeps burning CPU in the same subprocess until the outer budget
+        eventually kills it. Running conversions directly here keeps timeout logic
+        single-sourced and avoids false early failures at 120 seconds.
         """
-        timeout = self.DOCLING_TIMEOUT_S
-
-        def _convert_one(path: Path):
-            results = list(self.doc_converter.convert_all(source=[path]))
-            return results[0] if results else None
-
         for doc_path in input_doc_paths:
             try:
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_convert_one, doc_path)
-                    result = future.result(timeout=timeout)
-                    if result is not None:
-                        yield result
-                    else:
-                        _log.warning(
-                            "docling returned no result for %s — skipping", doc_path.name
-                        )
-            except FuturesTimeoutError:
-                _log.error(
-                    "docling TIMEOUT (%ds) for %s — skipping document",
-                    timeout, doc_path.name,
-                )
-                yield self._make_failure_result(doc_path)
+                results = list(self.doc_converter.convert_all(source=[doc_path]))
+                if results:
+                    yield results[0]
+                else:
+                    _log.warning(
+                        "docling returned no result for %s — skipping", doc_path.name
+                    )
+                    yield self._make_failure_result(doc_path)
             except Exception as exc:
                 _log.error(
                     "docling error for %s: %s — skipping", doc_path.name, exc,

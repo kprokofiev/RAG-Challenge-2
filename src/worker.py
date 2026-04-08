@@ -96,10 +96,10 @@ class DDKitWorker:
         import redis
         while self.running:
             try:
-                rdb = redis.Redis.from_url(
-                    os.getenv("DDKIT_REDIS_URL", "redis://localhost:6379/0"),
-                    decode_responses=True,
-                )
+                # Use the same Redis connection config as the queue handler.
+                # Older code read DDKIT_REDIS_URL directly and silently fell back
+                # to localhost, which broke report/index workers in Docker.
+                rdb = redis.Redis.from_url(settings.redis_url, decode_responses=True)
                 pubsub = rdb.pubsub()
                 pubsub.subscribe("ddkit:events:index_done")
                 for message in pubsub.listen():
@@ -337,9 +337,11 @@ class DDKitWorker:
             return
 
         # ── Terminal path: no retry makes sense ───────────────────────────
+        error_lower = (error_msg or "").lower()
         is_terminal = (
             job_status in self._TERMINAL_STATUSES
-            or (error_msg or "").startswith("terminal:")
+            or error_lower.startswith("terminal:")
+            or "processing_timeout_" in error_lower
         )
         if is_terminal or attempt >= settings.max_job_attempts:
             reason = "terminal_status" if is_terminal else "max_attempts_exceeded"
