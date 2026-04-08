@@ -3590,6 +3590,94 @@ class DossierReportGenerator:
                 study.has_ru_presence.value if study.has_ru_presence else None,
             )
 
+    def _backfill_clinical_flags_from_local_fields(
+        self, studies: List[DossierClinicalStudy]
+    ) -> None:
+        """
+        Deterministic fallback for screening flags when CTGov API enrichment did not
+        populate them but the assembled study card already contains enough signal.
+        """
+        ongoing_statuses = {
+            "RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATION",
+            "NOT_YET_RECRUITING", "AVAILABLE",
+        }
+        combo_keywords = (" and ", " combined with ", " plus ", " + ", " with ", " in combination")
+        ru_countries = {"russia", "russian federation"}
+        patched = {
+            "is_ongoing": 0,
+            "is_post_reg": 0,
+            "is_combination_therapy": 0,
+            "has_ru_presence": 0,
+        }
+
+        for study in studies:
+            if study.is_ongoing is None and study.status and study.status.value is not None:
+                status_text = str(study.status.value).strip().upper().replace("-", "_").replace(" ", "_")
+                if status_text:
+                    study.is_ongoing = EvidencedValue(
+                        value=status_text in ongoing_statuses,
+                        evidence_refs=list(study.status.evidence_refs),
+                    )
+                    patched["is_ongoing"] += 1
+
+            if study.is_post_reg is None:
+                phase_text = str(study.phase.value).upper() if study.phase and study.phase.value is not None else ""
+                study_type_text = (
+                    str(study.study_type.value).upper().replace("-", "_").replace(" ", "_")
+                    if study.study_type and study.study_type.value is not None
+                    else ""
+                )
+                refs: List[str] = []
+                if study.phase:
+                    refs.extend(study.phase.evidence_refs)
+                if study.study_type:
+                    refs.extend(study.study_type.evidence_refs)
+                if refs:
+                    study.is_post_reg = EvidencedValue(
+                        value=("PHASE 4" in phase_text or "PHASE4" in phase_text or "POST_MARKETING" in study_type_text or "EXPANDED_ACCESS" in study_type_text),
+                        evidence_refs=list(dict.fromkeys(refs)),
+                    )
+                    patched["is_post_reg"] += 1
+
+            if study.is_combination_therapy is None:
+                signal_parts = []
+                refs: List[str] = []
+                for ev in (study.title, study.comparator, study.regimen_dosing):
+                    if ev and ev.value is not None:
+                        signal_parts.append(str(ev.value))
+                        refs.extend(ev.evidence_refs)
+                signal_text = " ".join(signal_parts).lower()
+                if signal_text and refs:
+                    comparator_text = (
+                        str(study.comparator.value).strip().lower()
+                        if study.comparator and study.comparator.value is not None
+                        else ""
+                    )
+                    combo_value = any(keyword in signal_text for keyword in combo_keywords)
+                    if comparator_text in {"placebo", "none", "none (single-arm)", "single-arm"}:
+                        combo_value = False
+                    study.is_combination_therapy = EvidencedValue(
+                        value=combo_value,
+                        evidence_refs=list(dict.fromkeys(refs)),
+                    )
+                    patched["is_combination_therapy"] += 1
+
+            if study.has_ru_presence is None and study.countries:
+                refs: List[str] = []
+                countries = []
+                for ev in study.countries:
+                    if ev and ev.value is not None:
+                        countries.append(str(ev.value).strip().lower())
+                        refs.extend(ev.evidence_refs)
+                if countries and refs:
+                    study.has_ru_presence = EvidencedValue(
+                        value=any(country in ru_countries for country in countries),
+                        evidence_refs=list(dict.fromkeys(refs)),
+                    )
+                    patched["has_ru_presence"] += 1
+
+        logger.info("clinical_local_flag_backfill inn=%s patched=%s", self.inn, patched)
+
     def _generate_clinical_studies(self, unknowns: List[DossierUnknown]) -> List[DossierClinicalStudy]:
         """Generate structured clinical study cards.
 
@@ -3706,6 +3794,7 @@ class DossierReportGenerator:
         # Step 4: CTGov API enrichment — fill null phase/status/enrollment/countries
         if studies:
             self._enrich_clinical_from_ctgov_api(studies)
+            self._backfill_clinical_flags_from_local_fields(studies)
             clinical_flag_specs = {
                 "is_ongoing": "overall CTGov status metadata",
                 "is_post_reg": "phase / study-type / primary-purpose metadata",
