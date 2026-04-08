@@ -259,6 +259,98 @@ def _build_generic_claims(
     return claims
 
 
+def _build_data_quality_claims(
+    dossier: Dict[str, Any],
+    evidence_pack,
+    resolved_scope,
+) -> List[Claim]:
+    """Build completeness / readiness claims from dossier-quality summaries."""
+    claims = []
+    quality = dossier.get("dossier_quality_v2") or {}
+    coverage = quality.get("coverage") or {}
+    readiness = quality.get("decision_readiness") or {}
+    critical_unknowns = quality.get("critical_unknowns") or []
+    notes = quality.get("notes") or []
+    all_unknowns = dossier.get("unknowns") or []
+    coverage_ledger = dossier.get("coverage_ledger") or {}
+
+    if readiness:
+        readiness_parts = [f"{k}={v}" for k, v in readiness.items()]
+        claims.append(Claim(
+            claim_id=_claim_id("quality_readiness"),
+            text=f"Decision readiness gates: {'; '.join(readiness_parts)}",
+            semantic_role="quality_readiness",
+            support_level="moderate",
+            support_fields=["dossier_quality_v2.decision_readiness"],
+            evidence_refs=[],
+        ))
+
+    if coverage:
+        coverage_parts = [f"{k}={round(float(v) * 100):d}%" for k, v in coverage.items()]
+        claims.append(Claim(
+            claim_id=_claim_id("quality_coverage"),
+            text=f"Section coverage: {'; '.join(coverage_parts)}",
+            semantic_role="quality_coverage",
+            support_level="moderate",
+            support_fields=["dossier_quality_v2.coverage"],
+            evidence_refs=[],
+        ))
+
+    if critical_unknowns:
+        impacts = []
+        total_count = 0
+        for item in critical_unknowns:
+            total_count += int(item.get("count", 0) or 0)
+            impact = str(item.get("impact") or "").strip()
+            if impact:
+                impacts.append(impact)
+        impact_text = "; ".join(impacts[:3]) if impacts else "critical coverage issues remain"
+        claims.append(Claim(
+            claim_id=_claim_id("quality_critical_unknowns"),
+            text=f"Critical unknowns: {total_count or len(critical_unknowns)} item(s) flagged; impact: {impact_text}",
+            semantic_role="quality_critical_unknowns",
+            support_level="moderate",
+            support_fields=["dossier_quality_v2.critical_unknowns"],
+            evidence_refs=[],
+        ))
+
+    claims.append(Claim(
+        claim_id=_claim_id("quality_unknown_count"),
+        text=f"Outstanding dossier unknowns: {len(all_unknowns)}",
+        semantic_role="quality_unknown_count",
+        support_level="moderate",
+        support_fields=["unknowns"],
+        evidence_refs=[],
+    ))
+
+    ledger_summary = coverage_ledger.get("summary")
+    if isinstance(ledger_summary, dict) and ledger_summary:
+        summary_parts = []
+        for key in ("total_declared_sources", "total_attached_sources", "total_indexed_sources", "passport_pct"):
+            if key in ledger_summary:
+                summary_parts.append(f"{key}={ledger_summary[key]}")
+        if summary_parts:
+            claims.append(Claim(
+                claim_id=_claim_id("quality_coverage_ledger"),
+                text=f"Coverage ledger summary: {'; '.join(summary_parts)}",
+                semantic_role="quality_coverage_ledger",
+                support_level="moderate",
+                support_fields=["coverage_ledger.summary"],
+                evidence_refs=[],
+            ))
+    elif notes:
+        claims.append(Claim(
+            claim_id=_claim_id("quality_notes"),
+            text=f"Quality notes: {'; '.join(str(n) for n in notes[:2])}",
+            semantic_role="quality_notes",
+            support_level="weak",
+            support_fields=["dossier_quality_v2.notes"],
+            evidence_refs=[],
+        ))
+
+    return claims
+
+
 # ── Claim builder dispatch ──────────────────────────────────────────────────
 
 _CLAIM_BUILDERS = {
@@ -268,7 +360,7 @@ _CLAIM_BUILDERS = {
     "chemistry_identity": _build_chemistry_claims,
     "synthesis_manufacturing": _build_generic_claims,
     "commercial_assessment": _build_generic_claims,
-    "data_quality": _build_generic_claims,
+    "data_quality": _build_data_quality_claims,
 }
 
 
@@ -441,6 +533,8 @@ class ClaimBuilder:
     ) -> List[Dict[str, Any]]:
         """Filter dossier unknowns relevant to the question's must_have_fields."""
         all_unknowns = dossier.get("unknowns", [])
+        if routed_question.question_type == "data_quality":
+            return list(all_unknowns)
         relevant = []
         must_sections = set()
         for f in routed_question.must_have_fields:
@@ -552,6 +646,24 @@ class ClaimBuilder:
                 implications.append(f"{len(blocking)} patent families with blocking coverage identified")
             if unknowns:
                 implications.append("Patent landscape incomplete — FTO assessment may need additional data")
+
+        elif q_type == "data_quality":
+            readiness = next((c for c in claims if c.semantic_role == "quality_readiness"), None)
+            coverage = next((c for c in claims if c.semantic_role == "quality_coverage"), None)
+            critical = next((c for c in claims if c.semantic_role == "quality_critical_unknowns"), None)
+
+            if readiness:
+                implications.append(readiness.text)
+                if "registrations=YELLOW" in readiness.text or "registrations=RED" in readiness.text:
+                    implications.append("Registration layer still limits decision readiness.")
+            if coverage:
+                implications.append(coverage.text)
+            if critical:
+                implications.append("Critical unknowns remain and should be resolved before treating the dossier as decision-ready.")
+            elif unknowns:
+                implications.append(
+                    f"The dossier is answerable but still carries {len(unknowns)} unresolved unknown(s)."
+                )
 
         return implications
 
