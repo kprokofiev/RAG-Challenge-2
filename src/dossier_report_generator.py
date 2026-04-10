@@ -587,6 +587,25 @@ def _is_synthetic_patent_family(family: "DossierPatentFamily") -> bool:
     return False
 
 
+def _minimal_patent_family_presence(family: "DossierPatentFamily") -> Dict[str, bool]:
+    """Return presence flags used by the minimal patent-family validity gate."""
+    return {
+        "representative_pub": bool(family.representative_pub and family.representative_pub.value),
+        "priority_date": bool(family.priority_date and family.priority_date.value),
+        "assignees": bool(family.assignees),
+        "summary": bool(family.summary and family.summary.value),
+        "what_blocks": bool(family.what_blocks and family.what_blocks.value),
+        "country_coverage": bool(family.country_coverage),
+        "legal_status_snapshot": bool(family.legal_status_snapshot and family.legal_status_snapshot.value),
+    }
+
+
+def _minimal_patent_family_missing_fields(family: "DossierPatentFamily") -> List[str]:
+    """Return human-readable missing fields for debugging thin patent families."""
+    presence = _minimal_patent_family_presence(family)
+    return [field for field, present in presence.items() if not present]
+
+
 def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
     """Sprint 12 WS3: Check if a patent family has minimum viable content.
 
@@ -605,19 +624,17 @@ def _is_minimally_valid_patent_family(family: "DossierPatentFamily") -> bool:
     if _is_synthetic_patent_family(family):
         return False
 
+    presence = _minimal_patent_family_presence(family)
+
     # Must have basic identification
-    has_pub = family.representative_pub and family.representative_pub.value
-    has_priority = family.priority_date and family.priority_date.value
-    if not (has_pub or has_priority):
+    if not (presence["representative_pub"] or presence["priority_date"]):
         return False
 
     # Must have at least one content field
-    has_assignees = bool(family.assignees)
-    has_summary = family.summary and family.summary.value
-    has_blocks = family.what_blocks and family.what_blocks.value
-    has_coverage = bool(family.country_coverage)
-    has_legal = family.legal_status_snapshot and family.legal_status_snapshot.value
-    if not (has_assignees or has_summary or has_blocks or has_coverage or has_legal):
+    if not any(
+        presence[key]
+        for key in ("assignees", "summary", "what_blocks", "country_coverage", "legal_status_snapshot")
+    ):
         return False
 
     return True
@@ -717,6 +734,7 @@ class DossierReportGenerator:
         # Evidence registry: evidence_id → DossierEvidence
         self._evidence_registry: Dict[str, DossierEvidence] = {}
         self._doc_metainfo_index_cache: Optional[Dict[str, Dict[str, Any]]] = None
+        self._ctgov_countries_cache: Dict[str, List[EvidencedValue]] = {}
         self.checkpoint_path = Path(checkpoint_path) if checkpoint_path else None
         self._checkpoint_state: Dict[str, Any] = {}
         self._retrieve_cache: Dict[str, List[Dict[str, Any]]] = {}
@@ -2809,29 +2827,53 @@ class DossierReportGenerator:
                         str(v).strip() for v in (fam.get("countries") or fam.get("designated_states") or [])
                         if str(v).strip()
                     ]
-                    if not coverage_values:
-                        family_members = fam.get("publications") or fam.get("family_members") or []
-                        for member in family_members:
-                            country = ""
-                            if isinstance(member, dict):
-                                country = str(member.get("country") or member.get("jurisdiction") or "").strip()
-                                if not country:
-                                    pub = str(member.get("number") or member.get("publication_number") or "").strip().upper()
-                                    m = re.match(r"^([A-Z]{2})", pub)
-                                    if m:
-                                        country = m.group(1)
-                            elif isinstance(member, str):
-                                m = re.match(r"^([A-Z]{2})", member.strip().upper())
+                    publication_keys: List[str] = []
+                    family_members = fam.get("publications") or fam.get("family_members") or []
+                    for member in family_members:
+                        country = ""
+                        if isinstance(member, dict):
+                            publication_number = str(
+                                member.get("number")
+                                or member.get("publication_number")
+                                or member.get("doc_id")
+                                or ""
+                            ).strip()
+                            if publication_number:
+                                publication_keys.append(publication_number)
+                            country = str(member.get("country") or member.get("jurisdiction") or "").strip()
+                            if not country:
+                                pub = publication_number.upper()
+                                m = re.match(r"^([A-Z]{2})", pub)
                                 if m:
                                     country = m.group(1)
-                            if country:
-                                coverage_values.append(country)
+                        elif isinstance(member, str):
+                            member_text = member.strip()
+                            if member_text:
+                                publication_keys.append(member_text)
+                            m = re.match(r"^([A-Z]{2})", member_text.upper())
+                            if m:
+                                country = m.group(1)
+                        if country and country not in coverage_values:
+                            coverage_values.append(country)
 
                     entry: Dict[str, Any] = {
+                        "representative_pub": None,
                         "priority_date": None,
                         "assignees": [],
                         "country_coverage": [],
                     }
+                    if representative:
+                        entry["representative_pub"] = self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind=doc_kind,
+                            content_hash=content_hash,
+                            locator=f"/families/{idx}/representative_publication",
+                            field_name="representative_pub",
+                            value=representative,
+                            confidence=0.98,
+                        )
                     if priority_raw:
                         entry["priority_date"] = self._build_structured_json_value(
                             doc_id=doc_id,
@@ -2864,7 +2906,7 @@ class DossierReportGenerator:
                         field_name="country_coverage",
                         values=coverage_values,
                     )
-                    _register_keys(entry, family_id, representative)
+                    _register_keys(entry, family_id, representative, *publication_keys)
 
             elif doc_kind == "patent_discovery_us":
                 items = data.get("items") or []
@@ -2883,10 +2925,23 @@ class DossierReportGenerator:
                     ]
                     country = str(pat.get("country") or pat.get("jurisdiction") or "US").strip()
                     entry = {
+                        "representative_pub": None,
                         "priority_date": None,
                         "assignees": [],
                         "country_coverage": [],
                     }
+                    if representative:
+                        entry["representative_pub"] = self._build_structured_json_value(
+                            doc_id=doc_id,
+                            doc_title=doc_title,
+                            source_url=source_url,
+                            doc_kind=doc_kind,
+                            content_hash=content_hash,
+                            locator=f"/items/{idx}/number",
+                            field_name="representative_pub",
+                            value=representative,
+                            confidence=0.96,
+                        )
                     if priority_raw:
                         entry["priority_date"] = self._build_structured_json_value(
                             doc_id=doc_id,
@@ -3922,7 +3977,10 @@ class DossierReportGenerator:
 
         Returns parsed JSON or None on failure. Timeout: 10s.
         """
-        url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}?fields=protocolSection"
+        # Use the same full JSON payload that is attached into the corpus. Nested
+        # contacts/locations fields are more consistently present here than in
+        # the narrow `fields=protocolSection` projection.
+        url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}?format=json"
         try:
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -3930,6 +3988,152 @@ class DossierReportGenerator:
         except Exception as exc:
             logger.debug("ctgov_api_fetch nct=%s error=%s", nct_id, exc)
             return None
+
+    @staticmethod
+    def _extract_ctgov_location_countries(data: Dict[str, Any]) -> List[str]:
+        """Extract unique country values from CTGov payload location/contact trees."""
+        protocol = data.get("protocolSection", {}) if isinstance(data, dict) else {}
+        contacts = protocol.get("contactsLocationsModule", {}) if isinstance(protocol, dict) else {}
+        countries: List[str] = []
+        seen: Set[str] = set()
+
+        def _add_country(raw: Any) -> None:
+            if raw is None:
+                return
+            if isinstance(raw, list):
+                for item in raw:
+                    _add_country(item)
+                return
+            text = str(raw).strip()
+            if not text:
+                return
+            norm = text.lower()
+            if norm in seen:
+                return
+            seen.add(norm)
+            countries.append(text)
+
+        def _walk(obj: Any) -> None:
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    key_lower = str(key).lower()
+                    if key_lower in {"country", "locationcountry"}:
+                        _add_country(value)
+                    elif key_lower in {"countries", "countrylist"}:
+                        _add_country(value)
+                    _walk(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _walk(item)
+
+        _walk(contacts)
+        return countries
+
+    _CTGOV_COUNTRIES_LINE_RE = re.compile(
+        r"Countr(?:y|ies):\s*(.+?)(?=\n(?:Enrollment|Lead Sponsor|Source|Contacts?|Officials?)\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    @staticmethod
+    def _parse_ctgov_countries_block(raw_block: str) -> List[str]:
+        cleaned = re.sub(r"\s+", " ", raw_block or "").strip(" ,;:\n\t")
+        if not cleaned:
+            return []
+        parts = re.split(r"\s*,\s*|;\s*", cleaned)
+        out: List[str] = []
+        seen: Set[str] = set()
+        for part in parts:
+            value = part.strip(" .")
+            if not value:
+                continue
+            norm = value.lower()
+            if norm in {"n/a", "na", "none", "unknown"}:
+                continue
+            if norm in seen:
+                continue
+            seen.add(norm)
+            out.append(value)
+        return out
+
+    def _extract_ctgov_countries_from_corpus(self, nct_id: str) -> List[EvidencedValue]:
+        """Parse Countries: lines from already-downloaded CTGov corpus docs."""
+        nct_key = (nct_id or "").strip().upper()
+        if not nct_key:
+            return []
+        cached = self._ctgov_countries_cache.get(nct_key)
+        if cached is not None:
+            return list(cached)
+
+        allowed_doc_kinds = {"ctgov", "ctgov_protocol", "ctgov_results", "ctgov_documents"}
+        extracted: List[EvidencedValue] = []
+        seen_countries: Set[str] = set()
+
+        for doc_path in self.documents_dir.glob("*.json"):
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {}) or {}
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in allowed_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+            source_url = metainfo.get("source_url", "")
+            title_blob = " ".join(
+                str(v) for v in (doc_title, source_url, metainfo.get("source_id", ""))
+                if str(v).strip()
+            ).upper()
+
+            content = doc.get("content", {}) or {}
+            raw_chunks = content.get("chunks") or content.get("pages") or []
+
+            for chunk in raw_chunks:
+                text = str(chunk.get("text", "") or "")
+                if not text:
+                    continue
+                if nct_key not in title_blob and nct_key not in text.upper():
+                    continue
+                match = self._CTGOV_COUNTRIES_LINE_RE.search(text)
+                if not match:
+                    continue
+                countries = self._parse_ctgov_countries_block(match.group(1))
+                if not countries:
+                    continue
+                page = chunk.get("page")
+                evidence = _build_evidence(
+                    doc_id,
+                    page,
+                    text,
+                    doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                )
+                self._evidence_registry[evidence.evidence_id] = evidence
+                for country in countries:
+                    norm = country.lower()
+                    if norm in seen_countries:
+                        continue
+                    seen_countries.add(norm)
+                    extracted.append(
+                        EvidencedValue(value=country, evidence_refs=[evidence.evidence_id])
+                    )
+
+        if extracted:
+            logger.info(
+                "ctgov_corpus_country_fallback nct=%s countries=%s",
+                nct_key,
+                [item.value for item in extracted],
+            )
+        self._ctgov_countries_cache[nct_key] = list(extracted)
+        return list(extracted)
 
     def _enrich_clinical_from_ctgov_api(
         self, studies: List[DossierClinicalStudy]
@@ -4001,13 +4205,16 @@ class DossierReportGenerator:
                 if enroll_count:
                     study.n_enrolled = EvidencedValue(value=str(enroll_count), evidence_refs=refs)
 
+            api_countries = self._extract_ctgov_location_countries(data)
             if needs_countries:
-                locations = contacts.get("locations", [])
-                country_set = {loc.get("country", "") for loc in locations if loc.get("country")}
-                if country_set:
+                if api_countries:
                     study.countries = [
-                        EvidencedValue(value=c, evidence_refs=refs) for c in sorted(country_set)
+                        EvidencedValue(value=c, evidence_refs=refs) for c in api_countries
                     ]
+                else:
+                    corpus_countries = self._extract_ctgov_countries_from_corpus(nct_id)
+                    if corpus_countries:
+                        study.countries = corpus_countries
 
             if needs_title:
                 title_str = ident.get("officialTitle") or ident.get("briefTitle", "")
@@ -4072,12 +4279,24 @@ class DossierReportGenerator:
                     evidence_refs=refs,
                 )
 
-            # has_ru_presence: Russia listed in locations
-            locations = contacts.get("locations", [])
-            ru_countries = {"Russia", "Russian Federation"}
-            if locations:
+            # has_ru_presence: compute from deterministic country evidence when available
+            ru_countries = {"russia", "russian federation"}
+            if study.countries:
+                country_refs: List[str] = []
+                normalized_countries: Set[str] = set()
+                for country_ev in study.countries:
+                    if not country_ev or country_ev.value is None:
+                        continue
+                    normalized_countries.add(str(country_ev.value).strip().lower())
+                    country_refs.extend(country_ev.evidence_refs)
+                if normalized_countries:
+                    study.has_ru_presence = EvidencedValue(
+                        value=any(country in ru_countries for country in normalized_countries),
+                        evidence_refs=list(dict.fromkeys(country_refs)) or refs,
+                    )
+            elif api_countries:
                 study.has_ru_presence = EvidencedValue(
-                    value=any(loc.get("country", "") in ru_countries for loc in locations),
+                    value=any(country.lower() in ru_countries for country in api_countries),
                     evidence_refs=refs,
                 )
 
@@ -4460,6 +4679,7 @@ class DossierReportGenerator:
         families: List[DossierPatentFamily] = []
         filtered_synthetic = 0
         filtered_minimal = 0
+        filtered_minimal_details: List[str] = []
         det_patent_meta = self._extract_patent_metadata_deterministic()
         am = alias_map
         for fam_llm in result.families:
@@ -4507,6 +4727,10 @@ class DossierReportGenerator:
             )
             if metadata_patch:
                 patched_fields = []
+                if not (rep and rep.value) and metadata_patch.get("representative_pub"):
+                    rep = metadata_patch["representative_pub"]
+                    ev_refs.extend(rep.evidence_refs)
+                    patched_fields.append("representative_pub")
                 if not (priority and priority.value) and metadata_patch.get("priority_date"):
                     priority = metadata_patch["priority_date"]
                     ev_refs.extend(priority.evidence_refs)
@@ -4567,10 +4791,15 @@ class DossierReportGenerator:
             # Sprint 12 WS3: Reject minimally-invalid families
             if not _is_minimally_valid_patent_family(fam):
                 filtered_minimal += 1
+                missing_fields = _minimal_patent_family_missing_fields(fam)
+                if len(filtered_minimal_details) < 5:
+                    filtered_minimal_details.append(
+                        f"{family_id}: missing {', '.join(missing_fields)}"
+                    )
                 logger.info(
-                    "patent_family_filtered_minimal inn=%s family_id=%s — lacks minimum viable content "
+                    "patent_family_filtered_minimal inn=%s family_id=%s missing=%s — lacks minimum viable content "
                     "(needs representative_pub/priority_date + assignees/summary/what_blocks)",
-                    self.inn, family_id[:60],
+                    self.inn, family_id[:60], missing_fields,
                 )
                 continue
 
@@ -4620,12 +4849,16 @@ class DossierReportGenerator:
                     "For on-patent drugs, verify EPO OPS search or add manual patent sources."
                 )
             if filtered_minimal > 0:
+                detail_msg = ""
+                if filtered_minimal_details:
+                    detail_msg = " Examples: " + "; ".join(filtered_minimal_details[:3]) + "."
                 self._add_unknown(
                     unknowns, "patent_families[*].minimal_validity",
                     "NO_EVIDENCE_IN_CORPUS",
                     f"{filtered_minimal} patent family(ies) lacked minimum viable content "
                     "(no representative_pub/priority_date or no assignees/summary/what_blocks). "
-                    "Filtered out to prevent empty shells from appearing as usable IP data.",
+                    "Filtered out to prevent empty shells from appearing as usable IP data."
+                    f"{detail_msg}",
                 )
 
         # ── Sprint 19: Deduplicate patent families by representative_pub ────
@@ -4729,86 +4962,141 @@ class DossierReportGenerator:
 
     def _generate_synthesis_steps(self, unknowns: List[DossierUnknown]) -> List[DossierSynthesisStep]:
         """Generate synthesis steps from patent text, with EPAR/assessment_report fallback."""
-        # S7-E1: Primary sources are patents; if no patent corpus, try EPAR as fallback
         _PATENT_DOC_KINDS = ["patent_pdf", "ru_patent_pdf", "patent", "drug_monograph"]
         _EPAR_FALLBACK_KINDS = ["epar", "assessment_report"]
-
-        use_epar_fallback = False
-        if not self._has_patent_corpus():
-            use_epar_fallback = True
-            logger.info("synthesis_epar_fallback inn=%s — no patent corpus, trying EPAR", self.inn)
-
-        patent_doc_kinds = _EPAR_FALLBACK_KINDS if use_epar_fallback else _PATENT_DOC_KINDS
         question = (
             f"For {self.inn}: extract synthesis/manufacturing steps from patent or monograph text. "
             "For each step: step number, description, starting materials/reagents, intermediates, yield."
         )
-        retrieved = self._retrieve(question, patent_doc_kinds, top_k=24)
-        if not retrieved:
-            reason = "PATENT_DISCOVERY_GAP" if use_epar_fallback else "NO_EVIDENCE_IN_CORPUS"
-            msg = (
-                f"No synthesis-relevant passages found for {self.inn} in "
-                f"{'EPAR/assessment_report (fallback)' if use_epar_fallback else 'patent corpus'}."
+        patent_corpus_present = self._has_patent_corpus()
+
+        def _extract_from_doc_kinds(
+            doc_kinds: List[str],
+            source_label: str,
+        ) -> Tuple[str, List[DossierSynthesisStep]]:
+            retrieved = self._retrieve(question, doc_kinds, top_k=24)
+            if not retrieved:
+                logger.info("synthesis_source_empty inn=%s source=%s", self.inn, source_label)
+                return "no_docs", []
+
+            candidates_map = self._candidates_map(retrieved)
+            context = self._context_str(retrieved)
+            alias_map, candidates_str = self._build_alias_map(candidates_map)
+            result = self._call_llm(
+                _SYNTHESIS_INSTRUCTION, context, question, candidates_str, _SynthesisExtractLLM
             )
-            self._add_unknown(
-                unknowns, "synthesis_steps[*]", reason, msg,
-                "Attach patent PDFs with full text (claims + examples) to corpus."
-            )
-            return []
-
-        candidates_map = self._candidates_map(retrieved)
-        context = self._context_str(retrieved)
-        alias_map, candidates_str = self._build_alias_map(candidates_map)
-
-        result = self._call_llm(
-            _SYNTHESIS_INSTRUCTION, context, question, candidates_str, _SynthesisExtractLLM
-        )
-
-        if result is None or not result.steps:
-            self._add_unknown(
-                unknowns, "synthesis_steps[*]", "NO_EVIDENCE_IN_CORPUS",
-                f"Synthesis steps not found in patent documents for {self.inn}. "
-                "Patent may describe composition/use only (no Example synthesis section).",
-            )
-            return []
-
-        steps: List[DossierSynthesisStep] = []
-        am = alias_map
-        for step_llm in result.steps:
-            if step_llm.description is None:
-                continue
-            desc = _ev_to_evidenced_value(step_llm.description, am)
-            if desc is None or not desc.evidence_refs:
-                self._add_unknown(
-                    unknowns, f"synthesis_steps[{step_llm.step_number}].description",
-                    "NO_EVIDENCE_IN_CORPUS",
-                    "Synthesis step description lacked linked evidence_id.",
+            if result is None or not result.steps:
+                logger.info(
+                    "synthesis_source_no_steps inn=%s source=%s retrieved=%d",
+                    self.inn,
+                    source_label,
+                    len(retrieved),
                 )
-                continue
+                return "no_steps", []
 
-            reagents = _ev_list(step_llm.reagents, am)
-            intermediates = _ev_list(step_llm.intermediates, am)
-            ev_refs = list(desc.evidence_refs)
-            for ev in reagents + intermediates:
-                ev_refs.extend(ev.evidence_refs)
+            steps: List[DossierSynthesisStep] = []
+            am = alias_map
+            for step_llm in result.steps:
+                if step_llm.description is None:
+                    continue
+                desc = _ev_to_evidenced_value(step_llm.description, am)
+                if desc is None or not desc.evidence_refs:
+                    self._add_unknown(
+                        unknowns, f"synthesis_steps[{step_llm.step_number}].description",
+                        "NO_EVIDENCE_IN_CORPUS",
+                        "Synthesis step description lacked linked evidence_id.",
+                    )
+                    continue
 
-            key_docs = list({self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry})
+                reagents = _ev_list(step_llm.reagents, am)
+                intermediates = _ev_list(step_llm.intermediates, am)
+                ev_refs = list(desc.evidence_refs)
+                for ev in reagents + intermediates:
+                    ev_refs.extend(ev.evidence_refs)
 
-            # Sprint 7.5 TZ-4: classify synthesis kind
-            kind = classify_synthesis_kind(str(desc.value or ""))
+                key_docs = list(
+                    {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
+                )
+                kind = classify_synthesis_kind(str(desc.value or ""))
+                steps.append(
+                    DossierSynthesisStep(
+                        step_number=step_llm.step_number or (len(steps) + 1),
+                        kind=kind,
+                        description=desc,
+                        reagents=reagents,
+                        intermediates=intermediates,
+                        source_patent_refs=key_docs,
+                        evidence_refs=list(set(ev_refs)),
+                    )
+                )
 
-            step = DossierSynthesisStep(
-                step_number=step_llm.step_number or (len(steps) + 1),
-                kind=kind,
-                description=desc,
-                reagents=reagents,
-                intermediates=intermediates,
-                source_patent_refs=key_docs,
-                evidence_refs=list(set(ev_refs)),
+            if steps:
+                logger.info(
+                    "synthesis_source_success inn=%s source=%s steps=%d",
+                    self.inn,
+                    source_label,
+                    len(steps),
+                )
+                return "ok", steps
+            return "no_steps", []
+
+        primary_status, primary_steps = _extract_from_doc_kinds(_PATENT_DOC_KINDS, "patent_corpus")
+        if primary_steps:
+            return primary_steps
+
+        if not patent_corpus_present:
+            logger.info("synthesis_epar_fallback inn=%s — no patent corpus, trying EPAR", self.inn)
+        else:
+            logger.info(
+                "synthesis_epar_fallback inn=%s — patent corpus present but primary extraction_status=%s",
+                self.inn,
+                primary_status,
             )
-            steps.append(step)
 
-        return steps
+        fallback_status, fallback_steps = _extract_from_doc_kinds(
+            _EPAR_FALLBACK_KINDS,
+            "epar_assessment_fallback",
+        )
+        if fallback_steps:
+            return fallback_steps
+
+        if not patent_corpus_present and fallback_status == "no_docs":
+            self._add_unknown(
+                unknowns,
+                "synthesis_steps[*]",
+                "PATENT_DISCOVERY_GAP",
+                f"No synthesis-relevant passages found for {self.inn} in patent corpus or EPAR/assessment_report fallback.",
+                "Attach patent PDFs with full text (claims + examples) or assessment reports with chemistry sections to corpus.",
+            )
+            return []
+
+        if primary_status == "no_steps":
+            self._add_unknown(
+                unknowns,
+                "synthesis_steps[*]",
+                "NO_EVIDENCE_IN_CORPUS",
+                f"Synthesis steps not found in patent documents for {self.inn}; fallback to EPAR/assessment_report also returned no extractable process steps.",
+                "If patents are composition/use-only, attach process-chemistry patents, EPAR assessment reports, or CMC/manufacturing reviews.",
+            )
+            return []
+
+        if primary_status == "no_docs" and fallback_status in {"no_docs", "no_steps"}:
+            self._add_unknown(
+                unknowns,
+                "synthesis_steps[*]",
+                "NO_EVIDENCE_IN_CORPUS",
+                f"No synthesis-relevant passages found for {self.inn} in patent corpus; fallback EPAR/assessment_report also lacked extractable synthesis content.",
+                "Attach patent PDFs with full text (claims + examples) to corpus.",
+            )
+            return []
+
+        self._add_unknown(
+            unknowns,
+            "synthesis_steps[*]",
+            "NO_EVIDENCE_IN_CORPUS",
+            f"Synthesis steps could not be assembled for {self.inn} from patents or EPAR/assessment_report fallback.",
+        )
+        return []
 
     def _build_fallback_sections_manifest(self, report: DossierReport) -> List[Dict[str, Any]]:
         """Honest non-null fallback when legacy DD sections[] payload is unavailable."""
