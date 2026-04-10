@@ -162,6 +162,11 @@ class _ClinicalStudiesExtractLLM(BaseModel):
     studies: List[_ClinicalStudyLLM] = Field(default_factory=list)
 
 
+class _ClinicalConclusionExtractLLM(BaseModel):
+    conclusion: Optional[_EvidencedValueLLM] = None
+    efficacy_keypoints: List[_EvidencedValueLLM] = Field(default_factory=list)
+
+
 class _PatentFamilyLLM(BaseModel):
     family_id: str = ""
     representative_pub: Optional[_EvidencedValueLLM] = None
@@ -192,6 +197,10 @@ class _SynthesisStepLLM(BaseModel):
 
 class _SynthesisExtractLLM(BaseModel):
     steps: List[_SynthesisStepLLM] = Field(default_factory=list)
+
+
+class _FDAApprovalDateExtractLLM(BaseModel):
+    fda_approval_date: Optional[_EvidencedValueLLM] = None
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
@@ -969,6 +978,167 @@ class DossierReportGenerator:
                 continue
         return False
 
+    def _extract_clinical_conclusion_from_results_llm(
+        self,
+        nct_id: str,
+        retrieved: List[Dict[str, Any]],
+    ) -> Tuple[Optional[EvidencedValue], List[EvidencedValue]]:
+        """Run a second, results-only extraction pass for a study conclusion.
+
+        This is used when the main study-card extraction found result-scoped
+        evidence but still returned a null conclusion. We keep the prompt
+        narrowly focused so numeric endpoints and sponsor interpretations are
+        not diluted by protocol/background text.
+        """
+        if not retrieved:
+            return None, []
+
+        candidates_map = self._candidates_map(retrieved[:60])
+        if not candidates_map:
+            return None, []
+        context = self._context_str(retrieved[:30])
+        alias_map, candidates_str = self._build_alias_map(candidates_map)
+
+        instruction = (
+            "You are a pharmaceutical dossier extraction system.\n"
+            f"Extract ONLY the study conclusion for {nct_id} ({self.inn}) from RESULTS evidence.\n\n"
+            "RULES:\n"
+            "- Prefer ctgov_results / publication / scientific result snippets over protocol text.\n"
+            "- If there are numeric efficacy or safety outcomes, synthesize a 1-2 sentence conclusion from them.\n"
+            "- Do NOT restate protocol intent as a conclusion.\n"
+            "- If the snippets do not support a conclusion, return null.\n"
+            "- Every non-null field MUST reference at least one evidence alias.\n"
+        )
+        question = (
+            f"Clinical study {nct_id} for {self.inn}: extract the best supported "
+            "results-based conclusion and optional efficacy key points."
+        )
+
+        result = self._call_llm(
+            instruction, context, question, candidates_str, _ClinicalConclusionExtractLLM
+        )
+        if result is None:
+            return None, []
+
+        conclusion = _ev_to_evidenced_value(result.conclusion, alias_map)
+        if conclusion is not None and not conclusion.evidence_refs:
+            conclusion = None
+        efficacy = _ev_list(result.efficacy_keypoints, alias_map)
+        return conclusion, efficacy
+
+    def _extract_fda_approval_date_llm(self) -> Optional[EvidencedValue]:
+        """LLM-based FDA approval date extractor over approval-related docs.
+
+        This is a full-document fallback that does not depend on top-K vector
+        retrieval and includes approval letters, which are often the only place
+        where the exact first approval date appears.
+        """
+        target_doc_kinds = {"label", "us_fda", "approval_letter"}
+        approval_markers = (
+            "fda approval date",
+            "approval date",
+            "original approval",
+            "initial u.s. approval",
+            "first approved",
+            "approved",
+            "approval",
+            "drugs@fda",
+            "appletter",
+        )
+        collected: List[Dict[str, Any]] = []
+        seen: Set[Tuple[str, Any, str]] = set()
+
+        for doc_path in self.documents_dir.glob("*.json"):
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            metainfo = doc.get("metainfo", {})
+            doc_kind = (metainfo.get("doc_kind") or "").lower()
+            if doc_kind not in target_doc_kinds:
+                continue
+            if self.tenant_id and metainfo.get("tenant_id") != self.tenant_id:
+                continue
+            if self.case_id and metainfo.get("case_id") != self.case_id:
+                continue
+
+            doc_id = metainfo.get("doc_id", doc_path.stem)
+            doc_title = metainfo.get("title") or doc_id
+            raw_chunks = (doc.get("content", {}) or {}).get("chunks") or (doc.get("content", {}) or {}).get("pages") or []
+            doc_hits = 0
+
+            for idx, chunk in enumerate(raw_chunks):
+                text = chunk.get("text", "")
+                if not text:
+                    continue
+                lower = text.lower()
+                is_hit = any(marker in lower for marker in approval_markers)
+                # Approval letters often state the decision on the opening page without the exact marker wording.
+                if not is_hit and doc_kind == "approval_letter" and idx < 4:
+                    is_hit = True
+                if not is_hit:
+                    continue
+
+                page = chunk.get("page")
+                key = (doc_id, page, text[:160])
+                if key in seen:
+                    continue
+                seen.add(key)
+                collected.append({
+                    "doc_id": doc_id,
+                    "page": page,
+                    "text": text,
+                    "doc_title": doc_title,
+                    "source_url": metainfo.get("source_url"),
+                    "doc_kind": doc_kind,
+                })
+                doc_hits += 1
+                if doc_hits >= 8:
+                    break
+
+        if not collected:
+            collected = self._retrieve(
+                f"FDA approval date for {self.inn}: approval date, first approved, initial U.S. approval.",
+                ["approval_letter", "label", "us_fda"],
+                top_k=20,
+            )
+        if not collected:
+            logger.info("fda_approval_date_llm: no approval-related evidence candidates found")
+            return None
+
+        candidates_map = self._candidates_map(collected[:60])
+        if not candidates_map:
+            return None
+        context = self._context_str(collected[:30])
+        alias_map, candidates_str = self._build_alias_map(candidates_map)
+
+        instruction = (
+            "You are a pharmaceutical dossier extraction system.\n"
+            f"Extract ONLY the FDA approval date for {self.inn}.\n\n"
+            "RULES:\n"
+            "- Prefer the exact first FDA approval date from approval letters, Drugs@FDA, or label text.\n"
+            "- Return ISO format YYYY-MM-DD when a full date is available.\n"
+            "- If only a year is explicitly stated, return YYYY-01-01.\n"
+            "- Do not guess or infer dates.\n"
+            "- Every non-null field MUST reference at least one evidence alias.\n"
+        )
+        question = f"What is the FDA approval date for {self.inn}?"
+
+        result = self._call_llm(
+            instruction, context, question, candidates_str, _FDAApprovalDateExtractLLM
+        )
+        if result is None:
+            return None
+
+        approval_date = _ev_to_evidenced_value(result.fda_approval_date, alias_map)
+        if approval_date is None or not approval_date.evidence_refs or not approval_date.value:
+            return None
+
+        logger.info("fda_approval_date_llm found=%s", approval_date.value)
+        return approval_date
+
     # ── Deterministic extractors (Sprint 15) ─────────────────────────────────
 
     # Patterns for FDA approval date, ordered by specificity (most specific first).
@@ -1037,12 +1207,12 @@ class DossierReportGenerator:
     def _extract_fda_approval_date_deterministic(
         self,
     ) -> Optional[EvidencedValue]:
-        """Scan ALL label/us_fda chunks for FDA approval date via regex.
+        """Scan ALL label/us_fda/approval_letter chunks for FDA approval date via regex.
 
         Bypasses top-K retrieval — reads chunk JSONs directly from documents_dir.
         Returns EvidencedValue with evidence ref, or None.
         """
-        target_doc_kinds = {"label", "us_fda"}
+        target_doc_kinds = {"label", "us_fda", "approval_letter"}
         best_date: Optional[str] = None
         best_evidence: Optional[DossierEvidence] = None
 
@@ -1164,7 +1334,7 @@ class DossierReportGenerator:
                 evidence_refs=[best_evidence.evidence_id],
             )
 
-        logger.info("fda_approval_date_deterministic: no match in %d label/us_fda docs",
+        logger.info("fda_approval_date_deterministic: no match in %d approval-related docs",
                      sum(1 for _ in self.documents_dir.glob("*.json")))
         return None
 
@@ -2876,7 +3046,13 @@ class DossierReportGenerator:
             key_dosages=_ev_list(result.key_dosages, am),
         )
 
-        # Sprint 15 P0.1: Deterministic fallback for fda_approval_date
+        # Prefer an approval-focused LLM pass over approval letters / label / Drugs@FDA.
+        # Keep the old deterministic regex extractor only as the last-resort fallback.
+        if not passport.fda_approval_date or not passport.fda_approval_date.value:
+            llm_date = self._extract_fda_approval_date_llm()
+            if llm_date:
+                passport.fda_approval_date = llm_date
+                logger.info("passport.fda_approval_date patched by LLM extractor: %s", llm_date.value)
         if not passport.fda_approval_date or not passport.fda_approval_date.value:
             det_date = self._extract_fda_approval_date_deterministic()
             if det_date:
@@ -3464,13 +3640,31 @@ class DossierReportGenerator:
             evidence_refs=list(set(ev_refs)),
         )
         if scoped_results and study.conclusion is None:
-            self._add_unknown(
-                unknowns,
-                "clinical_studies[*].conclusion",
-                "RESULTS_PRESENT_CONCLUSION_NOT_EXTRACTED",
-                f"Study {nct_id} had results-scoped evidence in corpus but no conclusion could be extracted.",
-                "Prioritize ctgov_results/publication chunks for this NCT and inspect result sections directly.",
+            patched_conclusion, patched_efficacy = self._extract_clinical_conclusion_from_results_llm(
+                nct_id,
+                (scoped_results + other_results)[:40],
             )
+            if patched_conclusion is not None:
+                study.conclusion = patched_conclusion
+                study.evidence_refs = list(set(study.evidence_refs + patched_conclusion.evidence_refs))
+                if (not study.efficacy_keypoints) and patched_efficacy:
+                    study.efficacy_keypoints = patched_efficacy
+                    extra_refs: List[str] = []
+                    for ev in patched_efficacy:
+                        extra_refs.extend(ev.evidence_refs)
+                    study.evidence_refs = list(set(study.evidence_refs + extra_refs))
+                logger.info(
+                    "clinical_conclusion_patch nct=%s inn=%s patched=yes",
+                    nct_id, self.inn,
+                )
+            else:
+                self._add_unknown(
+                    unknowns,
+                    "clinical_studies[*].conclusion",
+                    "RESULTS_PRESENT_CONCLUSION_NOT_EXTRACTED",
+                    f"Study {nct_id} had results-scoped evidence in corpus but no conclusion could be extracted.",
+                    "Prioritize ctgov_results/publication chunks for this NCT and inspect result sections directly.",
+                )
         return study
 
     @staticmethod

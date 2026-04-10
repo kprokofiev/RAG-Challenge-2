@@ -142,7 +142,7 @@ use_cases:
           US:
             tier1_sources:
               - source_id: patentsview
-                doc_kinds: [patent]
+                doc_kinds: [patent_discovery_us, patent]
                 description: "PatentsView API — US patent data"
             tier2_sources:
               - source_id: lens_org
@@ -298,7 +298,7 @@ use_cases:
           US:
             tier1_sources:
               - source_id: patentsview
-                doc_kinds: [patent]
+                doc_kinds: [patent_discovery_us, patent]
               - source_id: lens_org
                 doc_kinds: [patent]
             tier2_sources: []

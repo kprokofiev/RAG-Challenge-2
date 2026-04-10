@@ -285,7 +285,7 @@
       "verdict": "KEEP",
       "region": "US",
       "section": "patents",
-      "doc_kinds_expected": ["patent"],
+      "doc_kinds_expected": ["patent_discovery_us", "patent"],
       "must_have_fields": [
         "patent_families[].representative_pub"
       ],
