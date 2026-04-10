@@ -2062,6 +2062,9 @@ class DossierGenerateProcessor:
                 else:
                     job_data["is_partial"] = True
 
+        checkpoint_key = None
+        local_checkpoint = None
+
         try:
             if job_id and self.ddkit_db.is_configured():
                 self.ddkit_db.mark_job_running(job_id)
@@ -2163,6 +2166,19 @@ class DossierGenerateProcessor:
                     except Exception as sv_exc:
                         logger.warning("Failed to read source_verdicts from %s: %s", gateway_dossier_key, sv_exc)
 
+                checkpoint_key = (
+                    f"tenants/{tenant_id}/cases/{case_id}/reports/{report_id}/dossier_checkpoint.json"
+                )
+                local_checkpoint = temp_path / "dossier_checkpoint.json"
+                if checkpoint_key and self.storage_client.exists(checkpoint_key):
+                    if self.storage_client.download_to_path(checkpoint_key, local_checkpoint):
+                        logger.info(
+                            "dossier_checkpoint_resumed case=%s report=%s key=%s",
+                            case_id,
+                            report_id,
+                            checkpoint_key,
+                        )
+
                 # ── Run DossierReportGenerator ────────────────────────────────────
                 if self.ddkit_db.is_configured():
                     self.ddkit_db.update_report_status(report_id, tenant_id, case_id, "generating")
@@ -2173,6 +2189,7 @@ class DossierGenerateProcessor:
                     inn=inn,
                     tenant_id=tenant_id,
                     case_id=case_id,
+                    checkpoint_path=local_checkpoint,
                 )
                 dossier = generator.generate(
                     case_id=case_id,
@@ -2236,7 +2253,18 @@ class DossierGenerateProcessor:
                     except OSError:
                         pass
 
+                if checkpoint_key and local_checkpoint and local_checkpoint.exists():
+                    if self.storage_client.upload_file(checkpoint_key, local_checkpoint):
+                        logger.info(
+                            "dossier_checkpoint_uploaded case=%s report=%s key=%s",
+                            case_id,
+                            report_id,
+                            checkpoint_key,
+                        )
+
                 job_data["artifacts"] = {"dossier_v3": dossier_key}
+                if checkpoint_key:
+                    job_data["artifacts"]["dossier_checkpoint"] = checkpoint_key
                 job_data["status"] = "completed"
                 job_data["metrics"] = {
                     "elapsed_s": round(elapsed_s, 1),
@@ -2251,6 +2279,14 @@ class DossierGenerateProcessor:
             return True
 
         except RateLimitExhausted as rle:
+            if checkpoint_key and local_checkpoint and local_checkpoint.exists():
+                self.storage_client.upload_file(checkpoint_key, local_checkpoint)
+                logger.info(
+                    "dossier_checkpoint_uploaded_on_rate_limit case=%s report=%s key=%s",
+                    case_id,
+                    report_id,
+                    checkpoint_key,
+                )
             logger.error(
                 "dossier_generate_rate_limited case=%s: %s — marking deferred",
                 case_id, rle,
@@ -2260,6 +2296,14 @@ class DossierGenerateProcessor:
             job_data["status"] = "rate_limited"
             return False
         except Exception as exc:
+            if checkpoint_key and local_checkpoint and local_checkpoint.exists():
+                self.storage_client.upload_file(checkpoint_key, local_checkpoint)
+                logger.info(
+                    "dossier_checkpoint_uploaded_on_failure case=%s report=%s key=%s",
+                    case_id,
+                    report_id,
+                    checkpoint_key,
+                )
             if job_id and self.ddkit_db.is_configured():
                 self.ddkit_db.mark_job_failed(job_id, str(exc))
             job_data["status"] = "failed"

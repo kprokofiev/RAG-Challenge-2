@@ -6,6 +6,7 @@ import requests
 import src.prompts as prompts
 from concurrent.futures import ThreadPoolExecutor
 from src.settings import settings
+from src.tokenizer import tokenize as _pharma_tokenize
 from src.openai_model_router import (
     choose_routed_model,
     extract_usage_metrics,
@@ -125,7 +126,7 @@ class LLMReranker:
                     continue
                 raise
 
-    def rerank_documents(self, query: str, documents: list, documents_batch_size: int = 4, llm_weight: float = 0.7):
+    def rerank_documents(self, query: str, documents: list, documents_batch_size: int = 8, llm_weight: float = 0.7):
         """
         Rerank multiple documents using parallel processing with threading.
         Combines vector similarity and LLM relevance scores using weighted average.
@@ -201,8 +202,9 @@ class LLMReranker:
 class CrossEncoderReranker:
     """S7-B2: Cross-encoder reranker using sentence-transformers.
 
-    Feature-flagged via DDKIT_RERANKER=cross_encoder (default: llm).
-    Falls back to LLMReranker if sentence-transformers is not installed.
+    Feature-flagged via DDKIT_RERANKER=cross_encoder (default: cross_encoder).
+    Falls back to a cheap deterministic reranker if sentence-transformers is
+    not installed or the model cannot be loaded.
 
     10-20x faster than LLM reranking, deterministic, zero marginal API cost.
     """
@@ -215,10 +217,11 @@ class CrossEncoderReranker:
             from sentence_transformers import CrossEncoder
             self._model = CrossEncoder(model_name)
             _log.info("cross_encoder_loaded model=%s", model_name)
-        except ImportError:
+        except Exception as exc:
             _log.warning(
-                "sentence-transformers not installed — CrossEncoderReranker unavailable. "
-                "Install with: pip install sentence-transformers"
+                "cross_encoder_unavailable model=%s reason=%s",
+                model_name,
+                exc,
             )
             self._model = None
 
@@ -231,8 +234,8 @@ class CrossEncoderReranker:
     ):
         """Rerank documents using cross-encoder scores + vector distance."""
         if self._model is None:
-            _log.warning("cross_encoder_fallback_to_llm — model not loaded")
-            return LLMReranker().rerank_documents(query, documents, documents_batch_size, llm_weight)
+            _log.warning("cross_encoder_fallback_to_heuristic — model not loaded")
+            return HeuristicReranker().rerank_documents(query, documents, documents_batch_size, llm_weight)
 
         vector_weight = 1 - llm_weight
         pairs = [(query, doc["text"]) for doc in documents]
@@ -261,15 +264,78 @@ class CrossEncoderReranker:
         return all_results
 
 
+class HeuristicReranker:
+    """Cheap lexical reranker used when API-heavy rerankers are undesirable.
+
+    This is intentionally simple and deterministic. It keeps retrieval on a
+    low-cost path when cross-encoder assets are unavailable and avoids falling
+    back to token-expensive LLM reranking on the hot path.
+    """
+
+    _RESULT_MARKERS = (
+        "primary endpoint",
+        "secondary endpoint",
+        "overall survival",
+        "progression-free survival",
+        "objective response",
+        "confidence interval",
+        "p-value",
+        "response rate",
+        "results",
+        "adverse event",
+    )
+
+    def rerank_documents(
+        self,
+        query: str,
+        documents: list,
+        documents_batch_size: int = 8,  # kept for interface compatibility
+        llm_weight: float = 0.7,
+    ):
+        vector_weight = 1 - llm_weight
+        query_tokens = [tok for tok in _pharma_tokenize(query) if len(tok) >= 3]
+        query_token_set = set(query_tokens)
+        nct_tokens = {tok for tok in query_token_set if tok.startswith("nct")}
+
+        all_results = []
+        for doc in documents:
+            text = doc.get("text", "") or ""
+            text_lower = text.lower()
+            doc_tokens = set(_pharma_tokenize(text[:5000]))
+            overlap = len(query_token_set & doc_tokens)
+            overlap_score = overlap / max(1, min(len(query_token_set), 12))
+            nct_boost = 0.25 if any(tok in doc_tokens for tok in nct_tokens) else 0.0
+            numeric_boost = 0.1 if any(ch.isdigit() for ch in text[:600]) else 0.0
+            result_boost = 0.15 if any(marker in text_lower for marker in self._RESULT_MARKERS) else 0.0
+            heuristic_score = min(1.0, overlap_score + nct_boost + numeric_boost + result_boost)
+
+            doc_with_score = doc.copy()
+            doc_with_score["relevance_score"] = round(float(heuristic_score), 4)
+            doc_with_score["combined_score"] = round(
+                llm_weight * float(heuristic_score) + vector_weight * doc.get("distance", 0),
+                4,
+            )
+            all_results.append(doc_with_score)
+
+        all_results.sort(key=lambda x: x["combined_score"], reverse=True)
+        return all_results
+
+
 def get_reranker():
     """Factory: return reranker based on DDKIT_RERANKER env var.
 
-    Values: "cross_encoder" | "llm" (default: "llm").
+    Values: "cross_encoder" | "heuristic" | "llm" (default: "cross_encoder").
     """
-    reranker_type = os.getenv("DDKIT_RERANKER", "llm").lower().strip()
+    reranker_type = os.getenv("DDKIT_RERANKER", "cross_encoder").lower().strip()
+    if reranker_type == "llm":
+        return LLMReranker()
+    if reranker_type == "heuristic":
+        return HeuristicReranker()
     if reranker_type == "cross_encoder":
         ce = CrossEncoderReranker()
         if ce._model is not None:
             return ce
-        _log.warning("cross_encoder requested but unavailable, falling back to LLM")
-    return LLMReranker()
+        _log.warning("cross_encoder requested but unavailable, falling back to heuristic")
+        return HeuristicReranker()
+    _log.warning("unknown_reranker_type=%s — falling back to heuristic", reranker_type)
+    return HeuristicReranker()

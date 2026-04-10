@@ -1,4 +1,5 @@
 import json
+import hashlib
 import logging
 from typing import Any, List, Tuple, Dict, Optional, Union
 from rank_bm25 import BM25Okapi
@@ -9,7 +10,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import numpy as np
-from src.reranking import LLMReranker, get_reranker
+from src.reranking import get_reranker
 from src.settings import settings
 from src.tokenizer import tokenize as _pharma_tokenize
 
@@ -274,6 +275,7 @@ class VectorRetriever:
         self.documents_dir = documents_dir
         self.all_dbs = self._load_dbs()
         self.llm = self._set_up_llm()
+        self._query_embedding_cache: Dict[str, np.ndarray] = {}
 
     def _set_up_llm(self):
         load_dotenv()
@@ -365,6 +367,25 @@ class VectorRetriever:
         similarity_score = round(similarity_score, 4)
         return similarity_score
 
+    def _get_query_embedding_array(self, query: str) -> np.ndarray:
+        cache_key = hashlib.sha256(
+            f"{settings.embeddings_model}::{query}".encode("utf-8")
+        ).hexdigest()
+        cached = self._query_embedding_cache.get(cache_key)
+        if cached is not None:
+            return cached.copy()
+
+        embedding = self.llm.embeddings.create(
+            input=query,
+            model=settings.embeddings_model
+        )
+        embedding_array = np.array(embedding.data[0].embedding, dtype=np.float32).reshape(1, -1)
+        norm = np.linalg.norm(embedding_array)
+        if norm > 0:
+            embedding_array = embedding_array / norm
+        self._query_embedding_cache[cache_key] = embedding_array
+        return embedding_array.copy()
+
     def retrieve_by_company_name(self, company_name: str, query: str, llm_reranking_sample_size: int = None, top_n: int = 3, return_parent_pages: bool = False, tenant_id: str = None, case_id: str = None, doc_kind: str = None) -> List[Tuple[str, float]]:
         target_report = None
         for report in self.all_dbs:
@@ -388,16 +409,7 @@ class VectorRetriever:
         
         actual_top_n = min(top_n, len(chunks))
         
-        embedding = self.llm.embeddings.create(
-            input=query,
-            model=settings.embeddings_model
-        )
-        embedding = embedding.data[0].embedding
-        embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
-        # L2-normalize query vector to match normalized index vectors (#6).
-        norm = np.linalg.norm(embedding_array)
-        if norm > 0:
-            embedding_array = embedding_array / norm
+        embedding_array = self._get_query_embedding_array(query)
         distances, indices = vector_db.search(x=embedding_array, k=actual_top_n)
 
         retrieval_results = []
@@ -438,16 +450,7 @@ class VectorRetriever:
         """
         Retrieve chunks across all documents for the given tenant/case.
         """
-        embedding = self.llm.embeddings.create(
-            input=query,
-            model=settings.embeddings_model
-        )
-        embedding = embedding.data[0].embedding
-        embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
-        # L2-normalize query vector to match normalized index vectors (#6).
-        norm = np.linalg.norm(embedding_array)
-        if norm > 0:
-            embedding_array = embedding_array / norm
+        embedding_array = self._get_query_embedding_array(query)
 
         candidates: List[Dict] = []
         for report in self.all_dbs:
@@ -580,13 +583,24 @@ class HybridRetriever:
             documents_dir=documents_dir,
         )
         self.reranker = get_reranker()  # S7-B2: factory selects LLM or cross-encoder
+        self._retrieve_cache: Dict[str, List[Dict[str, Any]]] = {}
+
+    @staticmethod
+    def _clone_results(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [dict(item) for item in items]
+
+    @staticmethod
+    def _stable_doc_kind_key(doc_kind: Optional[Union[str, List[str]]]) -> Any:
+        if isinstance(doc_kind, (list, tuple, set)):
+            return tuple(sorted(str(item) for item in doc_kind))
+        return doc_kind or ""
 
     def retrieve_by_company_name(
         self,
         company_name: str,
         query: str,
         llm_reranking_sample_size: int = 28,
-        documents_batch_size: int = 2,
+        documents_batch_size: Optional[int] = None,
         top_n: int = 6,
         llm_weight: float = 0.7,
         return_parent_pages: bool = False,
@@ -595,6 +609,8 @@ class HybridRetriever:
         doc_kind: str = None
     ) -> List[Dict]:
         """Backward-compatible single-company retrieval (dense only + rerank)."""
+        if documents_batch_size is None:
+            documents_batch_size = settings.ddkit_rerank_batch_size
         vector_results = self.vector_retriever.retrieve_by_company_name(
             company_name=company_name,
             query=query,
@@ -616,15 +632,15 @@ class HybridRetriever:
         self,
         query: str,
         # ── Sprint-3 explicit param contract ─────────────────────────────────
-        dense_k: int = 50,
-        sparse_k: int = 50,
-        rerank_sample_k: int = 80,
-        final_candidates_k: int = 40,
+        dense_k: Optional[int] = None,
+        sparse_k: Optional[int] = None,
+        rerank_sample_k: Optional[int] = None,
+        final_candidates_k: Optional[int] = None,
         # ── Kept for backward compat (maps to final_candidates_k) ─────────────
         top_n: Optional[int] = None,
         llm_reranking_sample_size: Optional[int] = None,   # legacy alias → rerank_sample_k
         # ── Shared options ─────────────────────────────────────────────────────
-        documents_batch_size: int = 2,
+        documents_batch_size: Optional[int] = None,
         llm_weight: float = 0.7,
         return_parent_pages: bool = False,
         tenant_id: Optional[str] = None,
@@ -644,11 +660,23 @@ class HybridRetriever:
           5. LLM reranking on top rerank_sample_k merged candidates.
           6. Return top final_candidates_k.
         """
+        if dense_k is None:
+            dense_k = settings.ddkit_dense_k
+        if sparse_k is None:
+            sparse_k = settings.ddkit_sparse_k
+        if rerank_sample_k is None:
+            rerank_sample_k = settings.ddkit_rerank_sample_k
+        if final_candidates_k is None:
+            final_candidates_k = settings.ddkit_final_candidates_k
+        if documents_batch_size is None:
+            documents_batch_size = settings.ddkit_rerank_batch_size
+
         # Backward compat aliases
         if top_n is not None:
             final_candidates_k = top_n
         if llm_reranking_sample_size is not None:
             rerank_sample_k = llm_reranking_sample_size
+        rerank_sample_k = max(rerank_sample_k, final_candidates_k)
 
         effective_doc_kind = doc_kind
 
@@ -659,6 +687,36 @@ class HybridRetriever:
 
         if tier_1_kinds:
             effective_doc_kind = tier_1_kinds
+
+        cache_key = json.dumps(
+            {
+                "query": query,
+                "dense_k": dense_k,
+                "sparse_k": sparse_k,
+                "rerank_sample_k": rerank_sample_k,
+                "final_candidates_k": final_candidates_k,
+                "documents_batch_size": documents_batch_size,
+                "llm_weight": llm_weight,
+                "return_parent_pages": return_parent_pages,
+                "tenant_id": tenant_id or "",
+                "case_id": case_id or "",
+                "doc_kind": self._stable_doc_kind_key(effective_doc_kind),
+                "authority_scope": authority_scope or "",
+                "reranker": self.reranker.__class__.__name__,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        cached = self._retrieve_cache.get(cache_key)
+        if cached is not None:
+            _log.info(
+                "HybridRetriever cache hit: case=%s doc_kind=%s scope=%s results=%d",
+                case_id,
+                effective_doc_kind,
+                authority_scope,
+                len(cached),
+            )
+            return self._clone_results(cached[:final_candidates_k])
 
         # ── 2. Dense retrieval ──────────────────────────────────────────────────
         dense_results = self.vector_retriever.retrieve_by_case(
@@ -726,4 +784,6 @@ class HybridRetriever:
         )
 
         # ── 6. Return top final_candidates_k ────────────────────────────────────
-        return reranked_results[:final_candidates_k]
+        final_results = reranked_results[:final_candidates_k]
+        self._retrieve_cache[cache_key] = self._clone_results(final_results)
+        return final_results

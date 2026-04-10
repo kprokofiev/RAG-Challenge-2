@@ -94,10 +94,13 @@ class WorkerSettings(BaseSettings):
     min_pdf_bytes: int = Field(5000, env="MIN_PDF_BYTES")
 
     # Sprint-3: LLM model configuration
-    # Reranker model (used in LLMReranker). Default: gpt-5.4
+    # Reranker model (used only when LLM reranking is explicitly enabled).
     ddkit_rerank_model: str = Field("gpt-5.4", env="DDKIT_RERANK_MODEL")
     # Max parallel reranking threads (prevents 429 bursts). Default: 4
     ddkit_rerank_max_concurrency: int = Field(4, env="DDKIT_RERANK_MAX_CONCURRENCY")
+    # Batch size for reranking requests. Larger batches reduce sub-call fan-out when
+    # an LLM reranker is used as an explicit fallback.
+    ddkit_rerank_batch_size: int = Field(8, env="DDKIT_RERANK_BATCH_SIZE")
     # Answering model (used in APIProcessor.send_message). Default: gpt-4o-2024-08-06
     ddkit_answer_model: Optional[str] = Field(None, env="DDKIT_ANSWER_MODEL")
 
@@ -105,10 +108,16 @@ class WorkerSettings(BaseSettings):
     ddkit_sections_plan_version: str = Field("unknown", env="DDKIT_SECTIONS_PLAN_VERSION")
 
     # Sprint-3: evidence K parameters (per-section adaptive defaults can be overridden globally)
-    ddkit_dense_k: int = Field(50, env="DDKIT_DENSE_K")
-    ddkit_sparse_k: int = Field(50, env="DDKIT_SPARSE_K")
-    ddkit_rerank_sample_k: int = Field(80, env="DDKIT_RERANK_SAMPLE_K")
-    ddkit_final_candidates_k: int = Field(40, env="DDKIT_FINAL_CANDIDATES_K")
+    ddkit_dense_k: int = Field(24, env="DDKIT_DENSE_K")
+    ddkit_sparse_k: int = Field(24, env="DDKIT_SPARSE_K")
+    ddkit_rerank_sample_k: int = Field(24, env="DDKIT_RERANK_SAMPLE_K")
+    ddkit_final_candidates_k: int = Field(10, env="DDKIT_FINAL_CANDIDATES_K")
+    # Hard guardrail: once the dossier crosses this number of non-cached retrieve calls,
+    # downstream stages should prefer honest unknowns over unbounded token spend.
+    ddkit_max_retrieve_calls_per_dossier: int = Field(
+        180,
+        env="DDKIT_MAX_RETRIEVE_CALLS_PER_DOSSIER",
+    )
 
     # Sprint-8: per-stage timeout budgets (seconds).
     # These define maximum wall-clock time for each pipeline stage.

@@ -46,6 +46,7 @@ from src.dossier_schema_v3 import (
 )
 from src.evidence_builder import EvidenceCandidatesBuilder
 from src.retrieval import HybridRetriever
+from src.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,9 @@ class RateLimitExhausted(Exception):
     Signals that the job should be parked (deferred), NOT restarted from scratch.
     """
     pass
+
+
+_CHECKPOINT_UNSET = object()
 
 
 # ── Authority-tiering policy (S6-T2) ───────────────��─────────────────────────
@@ -697,6 +701,7 @@ class DossierReportGenerator:
         inn: str,
         tenant_id: Optional[str] = None,
         case_id: Optional[str] = None,
+        checkpoint_path: Optional[Path] = None,
     ):
         self.vector_db_dir = vector_db_dir
         self.documents_dir = documents_dir
@@ -712,6 +717,159 @@ class DossierReportGenerator:
         # Evidence registry: evidence_id → DossierEvidence
         self._evidence_registry: Dict[str, DossierEvidence] = {}
         self._doc_metainfo_index_cache: Optional[Dict[str, Dict[str, Any]]] = None
+        self.checkpoint_path = Path(checkpoint_path) if checkpoint_path else None
+        self._checkpoint_state: Dict[str, Any] = {}
+        self._retrieve_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._retrieve_calls_total = 0
+        self._retrieve_call_limit = int(
+            getattr(settings, "ddkit_max_retrieve_calls_per_dossier", 0) or 0
+        )
+
+    @staticmethod
+    def _clone_results(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [dict(item) for item in items]
+
+    @staticmethod
+    def _restore_model_list(raw_items: Optional[List[Dict[str, Any]]], model_class):
+        restored = []
+        for item in raw_items or []:
+            try:
+                restored.append(model_class.model_validate(item))
+            except Exception as exc:
+                logger.warning(
+                    "checkpoint_item_restore_failed model=%s: %s",
+                    getattr(model_class, "__name__", str(model_class)),
+                    exc,
+                )
+        return restored
+
+    @staticmethod
+    def _restore_model(raw_item: Optional[Dict[str, Any]], model_class):
+        if raw_item is None:
+            return None
+        try:
+            return model_class.model_validate(raw_item)
+        except Exception as exc:
+            logger.warning(
+                "checkpoint_model_restore_failed model=%s: %s",
+                getattr(model_class, "__name__", str(model_class)),
+                exc,
+            )
+            return None
+
+    def _load_checkpoint(self, case_id: str) -> Dict[str, Any]:
+        if self.checkpoint_path is None or not self.checkpoint_path.exists():
+            self._checkpoint_state = {}
+            return {}
+        try:
+            raw = json.loads(self.checkpoint_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("dossier_checkpoint_load_failed path=%s: %s", self.checkpoint_path, exc)
+            self._checkpoint_state = {}
+            return {}
+
+        if raw.get("case_id") not in {"", None, case_id} or raw.get("inn") not in {"", None, self.inn}:
+            logger.warning(
+                "dossier_checkpoint_ignored_mismatch path=%s case_id=%s inn=%s",
+                self.checkpoint_path,
+                raw.get("case_id"),
+                raw.get("inn"),
+            )
+            self._checkpoint_state = {}
+            return {}
+
+        self._checkpoint_state = raw
+        restored_evidence = 0
+        self._evidence_registry = {}
+        for item in raw.get("evidence_registry", []) or []:
+            try:
+                evidence = DossierEvidence.model_validate(item)
+            except Exception as exc:
+                logger.warning("checkpoint_evidence_restore_failed: %s", exc)
+                continue
+            self._evidence_registry[evidence.evidence_id] = evidence
+            restored_evidence += 1
+        if restored_evidence:
+            logger.info(
+                "dossier_checkpoint_loaded case=%s restored_evidence=%d completed_stages=%s",
+                case_id,
+                restored_evidence,
+                sorted((raw.get("completed_stages") or {}).keys()),
+            )
+        return raw
+
+    def _write_checkpoint(self, payload: Dict[str, Any]) -> None:
+        if self.checkpoint_path is None:
+            return
+        try:
+            self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self.checkpoint_path.with_suffix(self.checkpoint_path.suffix + ".tmp")
+            tmp_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            tmp_path.replace(self.checkpoint_path)
+            self._checkpoint_state = payload
+        except Exception as exc:
+            logger.warning("dossier_checkpoint_write_failed path=%s: %s", self.checkpoint_path, exc)
+
+    def _save_checkpoint(
+        self,
+        case_id: str,
+        unknowns: List[DossierUnknown],
+        *,
+        stage_name: Optional[str] = None,
+        stage_payload: Optional[Any] = None,
+        clinical_progress: Any = _CHECKPOINT_UNSET,
+        clear_clinical_progress: bool = False,
+    ) -> None:
+        if self.checkpoint_path is None:
+            return
+
+        state = dict(self._checkpoint_state) if self._checkpoint_state else {}
+        state.update(
+            {
+                "schema_version": 1,
+                "case_id": case_id,
+                "inn": self.inn,
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "unknowns": [item.model_dump() for item in unknowns],
+                "evidence_registry": [
+                    item.model_dump() for item in self._evidence_registry.values()
+                ],
+            }
+        )
+
+        if stage_name is not None and stage_payload is not None:
+            completed = dict(state.get("completed_stages", {}) or {})
+            completed[stage_name] = True
+            state["completed_stages"] = completed
+            state[stage_name] = stage_payload
+
+        if clinical_progress is not _CHECKPOINT_UNSET:
+            state["clinical_progress"] = clinical_progress
+        if clear_clinical_progress:
+            state.pop("clinical_progress", None)
+
+        self._write_checkpoint(state)
+
+    def _save_clinical_progress_checkpoint(
+        self,
+        case_id: str,
+        base_unknowns: List[DossierUnknown],
+        studies: List[DossierClinicalStudy],
+        failed_nct: List[str],
+        clinical_unknowns: List[DossierUnknown],
+    ) -> None:
+        self._save_checkpoint(
+            case_id,
+            base_unknowns,
+            clinical_progress={
+                "studies": [study.model_dump() for study in studies],
+                "failed_nct": failed_nct,
+                "unknowns": [item.model_dump() for item in clinical_unknowns],
+            },
+        )
 
     def _doc_metainfo_index(self) -> Dict[str, Dict[str, Any]]:
         if self._doc_metainfo_index_cache is not None:
@@ -766,6 +924,38 @@ class DossierReportGenerator:
         Retries up to 2 times with backoff on rate-limit (429) errors.
         Raises RateLimitExhausted after exhausting retries so the job can be deferred.
         """
+        normalized_doc_kinds = tuple(sorted(doc_kinds or []))
+        cache_key = json.dumps(
+            {
+                "question": question.strip(),
+                "doc_kinds": normalized_doc_kinds,
+                "top_k": top_k,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        cached = self._retrieve_cache.get(cache_key)
+        if cached is not None:
+            logger.info(
+                "dossier_retrieve_cache_hit inn=%s doc_kinds=%s top_k=%d results=%d",
+                self.inn,
+                normalized_doc_kinds,
+                top_k,
+                len(cached),
+            )
+            return self._clone_results(cached)
+
+        if self._retrieve_call_limit and self._retrieve_calls_total >= self._retrieve_call_limit:
+            logger.warning(
+                "dossier_retrieve_budget_exhausted inn=%s case=%s limit=%d question=%r",
+                self.inn,
+                self.case_id,
+                self._retrieve_call_limit,
+                question[:80],
+            )
+            return []
+
+        self._retrieve_calls_total += 1
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
@@ -776,7 +966,9 @@ class DossierReportGenerator:
                     tenant_id=self.tenant_id,
                     case_id=self.case_id,
                 )
-                return results or []
+                cloned = self._clone_results(results or [])
+                self._retrieve_cache[cache_key] = cloned
+                return self._clone_results(cloned)
             except Exception as exc:
                 exc_str = str(exc)
                 is_rate_limit = "429" in exc_str or "rate_limit" in exc_str.lower()
@@ -3001,7 +3193,7 @@ class DossierReportGenerator:
             "drug class (ATC/pharmacological class), mechanism of action, "
             "MAH/marketing authorization holders, route of administration, dosage forms, key dosing regimens."
         )
-        retrieved = self._retrieve(question, passport_doc_kinds, top_k=40)
+        retrieved = self._retrieve(question, passport_doc_kinds, top_k=24)
         if not retrieved:
             self._add_unknown(
                 unknowns, "passport.*", "NO_DOCUMENT_IN_CORPUS",
@@ -3233,7 +3425,7 @@ class DossierReportGenerator:
                     registrations.extend(structured_eaeu_regs)
                     continue
 
-            retrieved = self._retrieve(question, doc_kinds, top_k=30)
+            retrieved = self._retrieve(question, doc_kinds, top_k=20)
             if not retrieved:
                 # For RU/EAEU: suzetrigine (2025 US-only approval) has no public
                 # registration in Russia or EAEU.  Rather than leaving an empty
@@ -3461,6 +3653,59 @@ class DossierReportGenerator:
 
     # ── Sprint 13 WS1: Per-study helpers ──────────────────────────────────────
 
+    @staticmethod
+    def _clinical_item_has_results_signal(item: Dict[str, Any]) -> bool:
+        doc_kind = (item.get("doc_kind") or "").lower()
+        if doc_kind in {
+            "ctgov_results",
+            "ctgov_documents",
+            "scientific_pmc",
+            "scientific_pdf",
+            "publication",
+            "preprint",
+        }:
+            return True
+
+        text = (item.get("text") or "").lower()
+        markers = (
+            "primary endpoint",
+            "secondary endpoint",
+            "overall survival",
+            "progression-free survival",
+            "objective response",
+            "confidence interval",
+            "p-value",
+            "response rate",
+            "adverse event",
+            "median",
+            "results",
+        )
+        return any(marker in text for marker in markers)
+
+    def _clinical_needs_broad_fallback(
+        self,
+        nct_id: str,
+        merged: List[Dict[str, Any]],
+    ) -> bool:
+        if not merged:
+            return True
+
+        nct_upper = nct_id.upper()
+        scoped = [
+            item for item in merged
+            if nct_upper in ((item.get("text", "") or "") + (item.get("doc_title", "") or "")).upper()
+        ]
+        if not scoped:
+            return True
+
+        has_results = any(self._clinical_item_has_results_signal(item) for item in scoped)
+        has_protocol = any(
+            (item.get("doc_kind") or "") in {"ctgov_protocol", "ctgov", "trial_registry"}
+            for item in scoped
+        )
+        enough_scoped = len(scoped) >= 4
+        return not (enough_scoped and has_results and has_protocol)
+
     def _retrieve_clinical_evidence_for_study(
         self, nct_id: str, top_k: int = 30,
     ) -> List[Dict[str, Any]]:
@@ -3471,11 +3716,17 @@ class DossierReportGenerator:
         Primary doc_kinds: ctgov_protocol/ctgov_results/ctgov/ctgov_documents.
         Secondary (enrichment): publication/scientific_pmc/scientific_pdf.
         """
-        results_first_kinds = [
-            "ctgov_results", "ctgov_documents", "scientific_pmc",
-            "scientific_pdf", "publication", "preprint",
+        primary_doc_kinds = [
+            "ctgov_results",
+            "ctgov_documents",
+            "ctgov_protocol",
+            "ctgov",
+            "trial_registry",
+            "scientific_pmc",
+            "scientific_pdf",
+            "publication",
+            "preprint",
         ]
-        protocol_kinds = ["ctgov_protocol", "ctgov", "trial_registry"]
         seen_keys: Set[Tuple[Any, Any, Any]] = set()
         merged: List[Dict[str, Any]] = []
 
@@ -3491,37 +3742,35 @@ class DossierReportGenerator:
                 seen_keys.add(key)
                 merged.append(item)
 
-        results_question = (
+        primary_question = (
             f"Clinical study {nct_id} for {self.inn}: "
-            "primary endpoint results, efficacy outcomes, safety outcomes, "
-            "numeric findings, sponsor conclusions, interpretation."
+            "study title, phase, study type, enrollment, countries, comparator, dosing, arms, "
+            "primary endpoint results, efficacy outcomes, safety outcomes, numeric findings, "
+            "sponsor conclusions, interpretation, status."
         )
-        protocol_question = (
-            f"Clinical study {nct_id} for {self.inn}: "
-            "study title, phase, study type, enrollment, countries, "
-            "comparator, dosing, arms, status."
-        )
+        _extend(self._retrieve(primary_question, primary_doc_kinds, top_k=top_k))
 
-        _extend(self._retrieve(results_question, results_first_kinds, top_k=max(12, top_k // 2)))
-        _extend(self._retrieve(protocol_question, protocol_kinds, top_k=max(12, top_k // 2)))
-
-        # Final broad pass keeps resilience if results/protocol retrieval misses a study.
-        broad_question = (
-            f"Clinical study {nct_id} for {self.inn}: "
-            f"extract study title, phase, type, enrollment, countries, "
-            f"comparator, dosing, primary endpoint, results, status, conclusion."
-        )
-        _extend(self._retrieve(
-            broad_question,
-            list(_CTGOV_DOC_KINDS) + list(_ENRICHMENT_ONLY_DOC_KINDS),
-            top_k=top_k,
-        ))
+        used_broad_fallback = False
+        if self._clinical_needs_broad_fallback(nct_id, merged):
+            used_broad_fallback = True
+            broad_question = (
+                f"Clinical study {nct_id} for {self.inn}: "
+                "broad fallback for title, phase, type, enrollment, countries, comparator, "
+                "dosing, primary endpoint, results, status, conclusion."
+            )
+            _extend(
+                self._retrieve(
+                    broad_question,
+                    list(_CTGOV_DOC_KINDS) + list(_ENRICHMENT_ONLY_DOC_KINDS),
+                    top_k=max(12, top_k // 2),
+                )
+            )
 
         logger.info(
-            "clinical_study_retrieval nct=%s inn=%s merged=%d",
-            nct_id, self.inn, len(merged),
+            "clinical_study_retrieval nct=%s inn=%s merged=%d broad_fallback=%s",
+            nct_id, self.inn, len(merged), used_broad_fallback,
         )
-        return merged[: max(top_k, 40)]
+        return merged[: max(top_k, 24)]
 
     def _assemble_single_clinical_study(
         self,
@@ -3950,6 +4199,45 @@ class DossierReportGenerator:
         Each study gets its own evidence bucket, preventing cross-study contamination.
         """
         structured_ru_studies = self._extract_ru_clinical_studies_from_original_json()
+        case_id = self.case_id or ""
+        base_unknowns = list(unknowns)
+        study_top_k = max(18, settings.ddkit_final_candidates_k * 2)
+
+        clinical_unknowns: List[DossierUnknown] = []
+        studies: List[DossierClinicalStudy] = []
+        seen_nct: Set[str] = set()
+        failed_nct: List[str] = []
+        failed_nct_set: Set[str] = set()
+        restored_study_count = 0
+
+        clinical_progress = self._checkpoint_state.get("clinical_progress") or {}
+        if clinical_progress and not (self._checkpoint_state.get("completed_stages") or {}).get("clinical_studies"):
+            studies = self._restore_model_list(
+                clinical_progress.get("studies"),
+                DossierClinicalStudy,
+            )
+            clinical_unknowns = self._restore_model_list(
+                clinical_progress.get("unknowns"),
+                DossierUnknown,
+            )
+            for study in studies:
+                if study.study_id and study.study_id.value is not None:
+                    seen_nct.add(str(study.study_id.value).strip().upper())
+            restored_study_count = len(studies)
+            failed_nct = [
+                str(value).strip().upper()
+                for value in (clinical_progress.get("failed_nct") or [])
+                if str(value).strip()
+            ]
+            failed_nct_set = set(failed_nct)
+            if studies or failed_nct or clinical_unknowns:
+                logger.info(
+                    "clinical_resume_checkpoint inn=%s restored_studies=%d restored_failed=%d restored_unknowns=%d",
+                    self.inn,
+                    len(studies),
+                    len(failed_nct),
+                    len(clinical_unknowns),
+                )
 
         # Step 1: Pre-scan corpus for NCT IDs
         corpus_nct_ids = _extract_nct_ids_from_corpus(self.documents_dir)
@@ -3963,7 +4251,7 @@ class DossierReportGenerator:
             clinical_doc_kinds = list(_CTGOV_DOC_KINDS) + list(_ENRICHMENT_ONLY_DOC_KINDS)
             retrieved = self._retrieve(
                 f"Clinical studies for {self.inn}: NCT IDs, trial registry identifiers",
-                clinical_doc_kinds, top_k=30,
+                clinical_doc_kinds, top_k=study_top_k,
             )
             # Scan retrieved text for NCT IDs
             for item in retrieved:
@@ -3976,7 +4264,7 @@ class DossierReportGenerator:
                     len(corpus_nct_ids), sorted(corpus_nct_ids)[:10],
                 )
 
-        if not corpus_nct_ids:
+        if not corpus_nct_ids and not studies:
             if structured_ru_studies:
                 logger.info(
                     "clinical_structured_ru_only inn=%s studies=%d",
@@ -3992,34 +4280,46 @@ class DossierReportGenerator:
 
         # Step 2: Per-study retrieval and assembly
         sorted_nct_ids = sorted(corpus_nct_ids)  # deterministic order
-        studies: List[DossierClinicalStudy] = []
-        seen_nct: set = set()
-        failed_nct: List[str] = []
 
         for nct_id in sorted_nct_ids:
             nct_upper = nct_id.upper()
-            if nct_upper in seen_nct:
+            if nct_upper in seen_nct or nct_upper in failed_nct_set:
                 continue
 
-            retrieved = self._retrieve_clinical_evidence_for_study(nct_id, top_k=30)
+            retrieved = self._retrieve_clinical_evidence_for_study(nct_id, top_k=study_top_k)
             if not retrieved:
                 failed_nct.append(nct_id)
+                failed_nct_set.add(nct_upper)
+                self._save_clinical_progress_checkpoint(
+                    case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+                )
                 logger.info("clinical_per_study_no_evidence nct=%s inn=%s", nct_id, self.inn)
                 continue
 
-            study = self._assemble_single_clinical_study(nct_id, retrieved, unknowns)
+            study = self._assemble_single_clinical_study(nct_id, retrieved, clinical_unknowns)
             if study is None:
                 failed_nct.append(nct_id)
+                failed_nct_set.add(nct_upper)
+                self._save_clinical_progress_checkpoint(
+                    case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+                )
                 logger.info("clinical_per_study_assembly_failed nct=%s inn=%s", nct_id, self.inn)
                 continue
 
             # Validate: must have study_id (enforced by construction, but verify)
             if not _is_valid_clinical_card(study):
                 failed_nct.append(nct_id)
+                failed_nct_set.add(nct_upper)
+                self._save_clinical_progress_checkpoint(
+                    case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+                )
                 continue
 
             seen_nct.add(nct_upper)
             studies.append(study)
+            self._save_clinical_progress_checkpoint(
+                case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+            )
             logger.info(
                 "clinical_per_study_assembled nct=%s inn=%s phase=%s status=%s",
                 nct_id, self.inn,
@@ -4029,13 +4329,13 @@ class DossierReportGenerator:
 
         # Step 3: Log summary
         logger.info(
-            "clinical_per_study_summary inn=%s candidates=%d assembled=%d failed=%d",
-            self.inn, len(sorted_nct_ids), len(studies), len(failed_nct),
+            "clinical_per_study_summary inn=%s candidates=%d assembled=%d failed=%d resumed=%d",
+            self.inn, len(sorted_nct_ids), len(studies), len(failed_nct), restored_study_count,
         )
 
         if failed_nct:
             self._add_unknown(
-                unknowns, "clinical_studies[*].per_study_failed",
+                clinical_unknowns, "clinical_studies[*].per_study_failed",
                 "NO_EVIDENCE_IN_CORPUS",
                 f"{len(failed_nct)} NCT ID(s) found in corpus but could not assemble study cards: "
                 f"{', '.join(failed_nct[:5])}{'...' if len(failed_nct) > 5 else ''}. "
@@ -4045,7 +4345,7 @@ class DossierReportGenerator:
 
         if not studies and not structured_ru_studies:
             self._add_unknown(
-                unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
+                clinical_unknowns, "clinical_studies[*]", "NO_EVIDENCE_IN_CORPUS",
                 f"Found {len(corpus_nct_ids)} NCT IDs but could not assemble any study cards.",
             )
 
@@ -4071,7 +4371,7 @@ class DossierReportGenerator:
                         missing_for_field.append(str(study_id))
                 if missing_for_field:
                     self._add_unknown(
-                        unknowns,
+                        clinical_unknowns,
                         f"clinical_studies[*].{field_name}",
                         "NO_EVIDENCE_IN_CORPUS",
                         f"{len(missing_for_field)} clinical study card(s) still lack an evidence-wrapped "
@@ -4079,6 +4379,8 @@ class DossierReportGenerator:
                         f"{'...' if len(missing_for_field) > 5 else ''}.",
                         f"Ensure CTGov {evidence_hint} is attached and preserved in the indexed study payload.",
                     )
+
+        unknowns.extend(clinical_unknowns)
 
         merged_studies: List[DossierClinicalStudy] = []
         seen_ids: Set[str] = set()
@@ -4132,7 +4434,7 @@ class DossierReportGenerator:
             "one-sentence summary, country coverage, "
             "expiry dates per country (only if explicitly stated)."
         )
-        retrieved = self._retrieve(question, patent_doc_kinds, top_k=60)
+        retrieved = self._retrieve(question, patent_doc_kinds, top_k=24)
         if not retrieved:
             self._add_unknown(
                 unknowns, "patent_families[*]", "NO_EVIDENCE_IN_CORPUS",
@@ -4441,7 +4743,7 @@ class DossierReportGenerator:
             f"For {self.inn}: extract synthesis/manufacturing steps from patent or monograph text. "
             "For each step: step number, description, starting materials/reagents, intermediates, yield."
         )
-        retrieved = self._retrieve(question, patent_doc_kinds, top_k=60)
+        retrieved = self._retrieve(question, patent_doc_kinds, top_k=24)
         if not retrieved:
             reason = "PATENT_DISCOVERY_GAP" if use_epar_fallback else "NO_EVIDENCE_IN_CORPUS"
             msg = (
@@ -4598,8 +4900,12 @@ class DossierReportGenerator:
         start_ts = time.time()
         case_id = case_id or self.case_id or ""
         logger.info("DossierReportGenerator: starting for INN=%r case_id=%s", self.inn, case_id)
-
-        unknowns: List[DossierUnknown] = []
+        checkpoint = self._load_checkpoint(case_id)
+        unknowns: List[DossierUnknown] = self._restore_model_list(
+            checkpoint.get("unknowns"),
+            DossierUnknown,
+        )
+        completed_stages = checkpoint.get("completed_stages", {}) or {}
 
         def _check_deadline(stage: str) -> None:
             if deadline is not None and time.time() > deadline:
@@ -4607,28 +4913,107 @@ class DossierReportGenerator:
 
         # ── A: Passport ──────────────────────────────────────────────────────
         _check_deadline("passport")
-        passport = self._generate_passport(unknowns)
+        passport = None
+        if completed_stages.get("passport"):
+            passport = self._restore_model(checkpoint.get("passport"), DossierPassport)
+            if passport is not None:
+                logger.info("passport resumed from checkpoint")
+        if passport is None:
+            passport = self._generate_passport(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="passport",
+                stage_payload=passport.model_dump(),
+            )
         logger.info("passport done (%.1fs)", time.time() - start_ts)
 
         # ── B: Registrations ─────────────────────────────────────────────────
         _check_deadline("registrations")
-        registrations = self._generate_registrations(unknowns)
+        registrations = []
+        if completed_stages.get("registrations"):
+            registrations = self._restore_model_list(
+                checkpoint.get("registrations"),
+                DossierRegistration,
+            )
+            if registrations:
+                logger.info("registrations resumed from checkpoint count=%d", len(registrations))
+        if not registrations and not completed_stages.get("registrations"):
+            registrations = self._generate_registrations(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="registrations",
+                stage_payload=[item.model_dump() for item in registrations],
+            )
         self._sync_passport_registered_where(passport, registrations)
+        self._save_checkpoint(
+            case_id,
+            unknowns,
+            stage_name="passport",
+            stage_payload=passport.model_dump(),
+        )
         logger.info("registrations done (%.1fs)", time.time() - start_ts)
 
         # ── C: Clinical studies ───────────────────────────────────────────────
         _check_deadline("clinical_studies")
-        clinical_studies = self._generate_clinical_studies(unknowns)
+        clinical_studies = []
+        if completed_stages.get("clinical_studies"):
+            clinical_studies = self._restore_model_list(
+                checkpoint.get("clinical_studies"),
+                DossierClinicalStudy,
+            )
+            if clinical_studies:
+                logger.info("clinical_studies resumed from checkpoint count=%d", len(clinical_studies))
+        if not clinical_studies and not completed_stages.get("clinical_studies"):
+            clinical_studies = self._generate_clinical_studies(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="clinical_studies",
+                stage_payload=[item.model_dump() for item in clinical_studies],
+                clear_clinical_progress=True,
+            )
         logger.info("clinical_studies done (%.1fs)", time.time() - start_ts)
 
         # ── D: Patent families ────────────────────────────────────────────────
         _check_deadline("patent_families")
-        patent_families = self._generate_patent_families(unknowns)
+        patent_families = []
+        if completed_stages.get("patent_families"):
+            patent_families = self._restore_model_list(
+                checkpoint.get("patent_families"),
+                DossierPatentFamily,
+            )
+            if patent_families:
+                logger.info("patent_families resumed from checkpoint count=%d", len(patent_families))
+        if not patent_families and not completed_stages.get("patent_families"):
+            patent_families = self._generate_patent_families(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="patent_families",
+                stage_payload=[item.model_dump() for item in patent_families],
+            )
         logger.info("patent_families done (%.1fs)", time.time() - start_ts)
 
         # ── E: Synthesis steps ────────────────────────────────────────────────
         _check_deadline("synthesis_steps")
-        synthesis_steps = self._generate_synthesis_steps(unknowns)
+        synthesis_steps = []
+        if completed_stages.get("synthesis_steps"):
+            synthesis_steps = self._restore_model_list(
+                checkpoint.get("synthesis_steps"),
+                DossierSynthesisStep,
+            )
+            if synthesis_steps:
+                logger.info("synthesis_steps resumed from checkpoint count=%d", len(synthesis_steps))
+        if not synthesis_steps and not completed_stages.get("synthesis_steps"):
+            synthesis_steps = self._generate_synthesis_steps(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="synthesis_steps",
+                stage_payload=[item.model_dump() for item in synthesis_steps],
+            )
         logger.info("synthesis_steps done (%.1fs)", time.time() - start_ts)
 
         # ── F: Assemble report ────────────────────────────────────────────────
@@ -4783,5 +5168,36 @@ class DossierReportGenerator:
             run_id,
             report.dossier_quality_v2.decision_readiness if report.dossier_quality_v2 else "N/A",
         )
+
+        if self.checkpoint_path is not None:
+            final_state = dict(self._checkpoint_state) if self._checkpoint_state else {}
+            final_state.update(
+                {
+                    "schema_version": 1,
+                    "case_id": case_id,
+                    "inn": self.inn,
+                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "completed_stages": {
+                        "passport": True,
+                        "registrations": True,
+                        "clinical_studies": True,
+                        "patent_families": True,
+                        "synthesis_steps": True,
+                    },
+                    "passport": passport.model_dump(),
+                    "registrations": [item.model_dump() for item in registrations],
+                    "clinical_studies": [item.model_dump() for item in clinical_studies],
+                    "patent_families": [item.model_dump() for item in patent_families],
+                    "synthesis_steps": [item.model_dump() for item in synthesis_steps],
+                    "unknowns": [item.model_dump() for item in unknowns],
+                    "evidence_registry": [
+                        item.model_dump() for item in self._evidence_registry.values()
+                    ],
+                    "report_id": report_id,
+                    "run_id": run_id,
+                }
+            )
+            final_state.pop("clinical_progress", None)
+            self._write_checkpoint(final_state)
 
         return report
