@@ -500,7 +500,8 @@ def _ev_list(llm_list: List[_EvidencedValueLLM],
 
 # ── Sprint 12: Clinical study ID validation ──────────────────────────────────
 
-_NCT_PATTERN = re.compile(r"NCT\d{7,8}", re.IGNORECASE)
+_NCT_PATTERN = re.compile(r"NCT\d{8}\b", re.IGNORECASE)
+_NCT_EXACT_PATTERN = re.compile(r"^NCT\d{8}$", re.IGNORECASE)
 
 # Doc kinds that can only enrich existing studies, NOT create standalone cards
 _ENRICHMENT_ONLY_DOC_KINDS = {"scientific_pmc", "scientific_pdf", "publication", "preprint"}
@@ -522,7 +523,7 @@ def _is_valid_clinical_card(study: "DossierClinicalStudy") -> bool:
     val = str(study.study_id.value).strip()
     if not val:
         return False
-    return True
+    return bool(_NCT_EXACT_PATTERN.fullmatch(val))
 
 
 def _extract_nct_ids_from_corpus(documents_dir: Path) -> Set[str]:
@@ -742,6 +743,7 @@ class DossierReportGenerator:
         self._retrieve_call_limit = int(
             getattr(settings, "ddkit_max_retrieve_calls_per_dossier", 0) or 0
         )
+        self._source_verdicts: Dict[str, str] = {}
 
     @staticmethod
     def _clone_results(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1143,6 +1145,64 @@ class DossierReportGenerator:
             suggested_next_action=next_action,
         ))
 
+    def _source_verdict(self, *keys: str) -> str:
+        for key in keys:
+            value = str((self._source_verdicts or {}).get(key, "") or "").strip()
+            if value:
+                return value
+        return ""
+
+    def _source_verdict_unavailable(self, *keys: str) -> bool:
+        return self._source_verdict(*keys) in {
+            "INFRA_UNAVAILABLE",
+            "NOT_CONFIGURED",
+            "SOURCE_TIMEOUT",
+            "EXTERNAL_SERVICE_UNAVAILABLE",
+            "UPSTREAM_ERROR",
+        }
+
+    def _registration_source_unavailable_reason(self, region: str) -> str:
+        region_upper = (region or "").upper()
+        if region_upper == "RU" and self._source_verdict_unavailable("grls"):
+            return self._source_verdict("grls")
+        if region_upper == "EAEU":
+            if self._source_verdict_unavailable("eaeu", "ru_eaeu"):
+                return self._source_verdict("eaeu", "ru_eaeu")
+            # RU regulatory infra is part of the same contour for our EAEU attach flow.
+            if self._source_verdict_unavailable("grls"):
+                return self._source_verdict("grls")
+        return ""
+
+    def _append_registration_service_unavailable(
+        self,
+        region: str,
+        registrations: List[DossierRegistration],
+        unknowns: List[DossierUnknown],
+    ) -> bool:
+        verdict = self._registration_source_unavailable_reason(region)
+        if not verdict:
+            return False
+
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        registrations.append(
+            DossierRegistration(
+                region=region,
+                status=EvidencedValue(
+                    value=f"{region} registration lookup unavailable as of {today}",
+                    evidence_refs=[],
+                ),
+            )
+        )
+        self._add_unknown(
+            unknowns,
+            f"registrations[{region}].*",
+            "EXTERNAL_SERVICE_UNAVAILABLE",
+            f"{region} registration lookup could not be completed for {self.inn} as of {today} "
+            f"(source_verdict={verdict}).",
+            f"Restore {region} regulatory source availability and re-run dossier generation.",
+        )
+        return True
+
     @staticmethod
     def _sanitize_evidenced_value(
         ev: Optional[EvidencedValue],
@@ -1235,6 +1295,78 @@ class DossierReportGenerator:
             conclusion = None
         efficacy = _ev_list(result.efficacy_keypoints, alias_map)
         return conclusion, efficacy
+
+    def _extract_clinical_conclusion_from_results_text(
+        self,
+        nct_id: str,
+        retrieved: List[Dict[str, Any]],
+    ) -> Tuple[Optional[EvidencedValue], List[EvidencedValue]]:
+        if not retrieved:
+            return None, []
+
+        nct_upper = (nct_id or "").strip().upper()
+        keywords = (
+            "significant", "improv", "reduc", "increase", "decrease", "endpoint",
+            "response", "remission", "bleeding", "stroke", "safety", "efficacy",
+            "hazard ratio", "odds ratio", "risk ratio", "noninferior", "superior",
+            "primary outcome", "secondary outcome", "pfs", "os", "orr",
+        )
+        numeric_re = re.compile(
+            r"\b\d+(?:\.\d+)?\s*(?:%|mg|g|months?|days?|weeks?|years?|patients?|subjects?)\b",
+            re.IGNORECASE,
+        )
+
+        for item in retrieved:
+            raw_text = str(item.get("text", "") or "")
+            text = re.sub(r"\s+", " ", raw_text).strip()
+            if len(text) < 40:
+                continue
+
+            title_blob = " ".join(
+                str(part) for part in [item.get("doc_title", ""), item.get("source_url", "")]
+                if str(part).strip()
+            ).upper()
+            if nct_upper and nct_upper not in title_blob and nct_upper not in text.upper():
+                continue
+
+            sentences = [
+                segment.strip(" \t\r\n;")
+                for segment in re.split(r"(?<=[.!?])\s+", text)
+                if segment.strip()
+            ]
+            picked: List[str] = []
+            for sentence in sentences:
+                sentence_lower = sentence.lower()
+                if len(sentence) < 25:
+                    continue
+                if any(keyword in sentence_lower for keyword in keywords) or numeric_re.search(sentence):
+                    picked.append(sentence)
+                if len(picked) >= 2:
+                    break
+
+            if not picked:
+                text_lower = text.lower()
+                if any(keyword in text_lower for keyword in keywords) or numeric_re.search(text):
+                    picked.append(text[:320].rstrip())
+
+            if not picked:
+                continue
+
+            snippet = " ".join(picked)
+            if len(snippet) > 420:
+                snippet = snippet[:417].rstrip() + "..."
+            evidence = _build_evidence(
+                str(item.get("doc_id") or ""),
+                item.get("page"),
+                raw_text or snippet,
+                str(item.get("doc_title") or item.get("doc_id") or nct_id),
+                source_url=str(item.get("source_url") or ""),
+                doc_kind=str(item.get("doc_kind") or ""),
+            )
+            self._evidence_registry[evidence.evidence_id] = evidence
+            return EvidencedValue(value=snippet, evidence_refs=[evidence.evidence_id]), []
+
+        return None, []
 
     def _extract_fda_approval_date_llm(self) -> Optional[EvidencedValue]:
         """LLM-based FDA approval date extractor over approval-related docs.
@@ -3482,6 +3614,8 @@ class DossierReportGenerator:
 
             retrieved = self._retrieve(question, doc_kinds, top_k=20)
             if not retrieved:
+                if region in ("RU", "EAEU") and self._append_registration_service_unavailable(region, registrations, unknowns):
+                    continue
                 # For RU/EAEU: suzetrigine (2025 US-only approval) has no public
                 # registration in Russia or EAEU.  Rather than leaving an empty
                 # gap the dossier explicitly states "not registered".
@@ -3608,6 +3742,9 @@ class DossierReportGenerator:
                 # No RU registration from LLM at all — create a minimal stub
                 # so the deterministic status isn't silently lost.
                 pass  # Don't create a stub without reg_number — would be misleading
+
+        if not any(r.region.upper() == "EAEU" for r in registrations):
+            registrations.extend(self._derive_eaeu_registrations_from_ru_route_markers(registrations))
 
         # WSx.3+4: EAEU truth contract.
         # If EAEU region was populated by the LLM from eaeu_registration docs, skip unknowns.
@@ -3827,6 +3964,69 @@ class DossierReportGenerator:
         )
         return merged[: max(top_k, 24)]
 
+    _EAEU_ROUTE_REG_NO_RE = re.compile(r"(?:РГ|ГП)-[A-Z]{2}", re.IGNORECASE)
+
+    @classmethod
+    def _looks_like_eaeu_route_reg_no(cls, value: str) -> bool:
+        return bool(cls._EAEU_ROUTE_REG_NO_RE.search(str(value or "").upper()))
+
+    def _derive_eaeu_registrations_from_ru_route_markers(
+        self,
+        registrations: List[DossierRegistration],
+    ) -> List[DossierRegistration]:
+        derived: List[DossierRegistration] = []
+        seen_keys: Set[str] = set()
+        for reg in registrations:
+            if (reg.region or "").upper() != "RU":
+                continue
+            identifiers = [ev for ev in (reg.identifiers or []) if ev and ev.value]
+            marker_ids = [
+                ev for ev in identifiers
+                if self._looks_like_eaeu_route_reg_no(str(ev.value))
+            ]
+            if not marker_ids:
+                continue
+            key = "|".join(sorted(str(ev.value).strip().upper() for ev in marker_ids))
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            status = reg.status
+            status_value = str(status.value).strip() if status and status.value is not None else ""
+            if self._registration_status_role(status_value) == "unknown":
+                marker_refs: List[str] = []
+                for marker in marker_ids:
+                    marker_refs.extend(marker.evidence_refs)
+                status = EvidencedValue(
+                    value="Authorised (EAEU-route registration number recorded in GRLS)",
+                    evidence_refs=list(dict.fromkeys(marker_refs or reg.evidence_refs[:1])),
+                )
+
+            evidence_refs: List[str] = list(reg.evidence_refs)
+            if status:
+                evidence_refs.extend(status.evidence_refs)
+            for ev in marker_ids:
+                evidence_refs.extend(ev.evidence_refs)
+
+            derived.append(
+                DossierRegistration(
+                    region="EAEU",
+                    status=status,
+                    forms_strengths=list(reg.forms_strengths or []),
+                    mah=reg.mah,
+                    identifiers=list(marker_ids),
+                    evidence_refs=list(dict.fromkeys(evidence_refs)),
+                )
+            )
+
+        if derived:
+            logger.info(
+                "eaeu_registrations_derived_from_grls inn=%s count=%d",
+                self.inn,
+                len(derived),
+            )
+        return derived
+
     def _assemble_single_clinical_study(
         self,
         nct_id: str,
@@ -3931,10 +4131,27 @@ class DossierReportGenerator:
         if not ev_refs:
             return None
 
-        # Force study_id to the known NCT ID (deterministic, not LLM-dependent)
-        if study_id_ev is None or not study_id_ev.value:
-            # Use the known NCT ID with whatever evidence refs we have
-            study_id_ev = EvidencedValue(value=nct_id, evidence_refs=ev_refs[:1])
+        canonical_study_refs = (
+            list(study_id_ev.evidence_refs)
+            if study_id_ev and study_id_ev.evidence_refs
+            else list(ev_refs[:1])
+        )
+        extracted_study_id = (
+            str(study_id_ev.value).strip().upper()
+            if study_id_ev and study_id_ev.value is not None
+            else ""
+        )
+        if extracted_study_id and extracted_study_id != nct_upper:
+            logger.warning(
+                "clinical_study_id_corrected inn=%s extracted=%s canonical=%s",
+                self.inn,
+                extracted_study_id,
+                nct_upper,
+            )
+        study_id_ev = EvidencedValue(
+            value=nct_id,
+            evidence_refs=list(dict.fromkeys(canonical_study_refs or ev_refs[:1])),
+        )
 
         study = DossierClinicalStudy(
             title=title, study_id=study_id_ev, phase=phase, study_type=study_type,
@@ -3948,6 +4165,11 @@ class DossierReportGenerator:
                 nct_id,
                 (scoped_results + other_results)[:40],
             )
+            if patched_conclusion is None:
+                patched_conclusion, patched_efficacy = self._extract_clinical_conclusion_from_results_text(
+                    nct_id,
+                    (scoped_results + other_results)[:40],
+                )
             if patched_conclusion is not None:
                 study.conclusion = patched_conclusion
                 study.evidence_refs = list(set(study.evidence_refs + patched_conclusion.evidence_refs))
@@ -3981,13 +4203,18 @@ class DossierReportGenerator:
         # contacts/locations fields are more consistently present here than in
         # the narrow `fields=protocolSection` projection.
         url = f"https://clinicaltrials.gov/api/v2/studies/{nct_id}?format=json"
-        try:
-            req = urllib.request.Request(url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except Exception as exc:
-            logger.debug("ctgov_api_fetch nct=%s error=%s", nct_id, exc)
-            return None
+        last_exc: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except Exception as exc:
+                last_exc = exc
+                if attempt < 2:
+                    time.sleep(0.4 * (attempt + 1))
+        logger.debug("ctgov_api_fetch nct=%s error=%s", nct_id, last_exc)
+        return None
 
     @staticmethod
     def _extract_ctgov_location_countries(data: Dict[str, Any]) -> List[str]:
@@ -4134,6 +4361,79 @@ class DossierReportGenerator:
             )
         self._ctgov_countries_cache[nct_key] = list(extracted)
         return list(extracted)
+
+    def _ensure_ctgov_api_evidence(self, nct_id: str) -> List[str]:
+        ev_id = f"ctgov_api_{nct_id}"
+        if ev_id not in self._evidence_registry:
+            self._evidence_registry[ev_id] = DossierEvidence(
+                evidence_id=ev_id,
+                doc_id=f"ctgov_api:{nct_id}",
+                page=None,
+                snippet=f"ClinicalTrials.gov API v2 metadata for {nct_id}",
+                title=f"CTGov API: {nct_id}",
+                source_url=f"https://clinicaltrials.gov/study/{nct_id}",
+                doc_kind="ctgov_api",
+            )
+        return [ev_id]
+
+    def _build_ctgov_api_fallback_study(self, nct_id: str) -> Optional[DossierClinicalStudy]:
+        data = self._fetch_ctgov_study(nct_id)
+        if not data:
+            return None
+
+        protocol = data.get("protocolSection", {})
+        design = protocol.get("designModule", {})
+        status_mod = protocol.get("statusModule", {})
+        ident = protocol.get("identificationModule", {})
+        refs = self._ensure_ctgov_api_evidence(nct_id)
+
+        title_value = ident.get("officialTitle") or ident.get("briefTitle") or None
+        phases = design.get("phases") or []
+        phase_value = None
+        if phases:
+            phase_value = phases[-1].replace("PHASE", "Phase ").replace("_", " ").strip()
+
+        study_type_value = None
+        raw_type = design.get("studyType", "")
+        if raw_type:
+            study_type_value = raw_type.capitalize()
+            alloc = design.get("designInfo", {}).get("allocation", "")
+            if alloc and alloc not in ("NA", "N_A"):
+                study_type_value = f"{study_type_value} ({alloc.replace('_', ' ').title()})"
+
+        status_value = status_mod.get("overallStatus") or None
+        enrolled_value = None
+        enroll_info = design.get("enrollmentInfo", {})
+        if enroll_info.get("count") is not None:
+            enrolled_value = str(enroll_info.get("count"))
+
+        countries = [
+            EvidencedValue(value=item, evidence_refs=refs)
+            for item in self._extract_ctgov_location_countries(data)
+        ]
+        if not countries:
+            countries = self._extract_ctgov_countries_from_corpus(nct_id)
+
+        evidence_refs: List[str] = list(refs)
+        for country_ev in countries:
+            evidence_refs.extend(country_ev.evidence_refs)
+
+        fallback = DossierClinicalStudy(
+            title=EvidencedValue(value=title_value, evidence_refs=refs) if title_value else None,
+            study_id=EvidencedValue(value=nct_id, evidence_refs=refs),
+            phase=EvidencedValue(value=phase_value, evidence_refs=refs) if phase_value else None,
+            study_type=EvidencedValue(value=study_type_value, evidence_refs=refs) if study_type_value else None,
+            n_enrolled=EvidencedValue(value=enrolled_value, evidence_refs=refs) if enrolled_value else None,
+            countries=countries,
+            comparator=None,
+            regimen_dosing=None,
+            efficacy_keypoints=[],
+            conclusion=None,
+            status=EvidencedValue(value=status_value, evidence_refs=refs) if status_value else None,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+        )
+        logger.info("clinical_per_study_ctgov_fallback_built nct=%s inn=%s", nct_id, self.inn)
+        return fallback
 
     def _enrich_clinical_from_ctgov_api(
         self, studies: List[DossierClinicalStudy]
@@ -4507,6 +4807,15 @@ class DossierReportGenerator:
 
             retrieved = self._retrieve_clinical_evidence_for_study(nct_id, top_k=study_top_k)
             if not retrieved:
+                fallback_study = self._build_ctgov_api_fallback_study(nct_id)
+                if fallback_study is not None and _is_valid_clinical_card(fallback_study):
+                    seen_nct.add(nct_upper)
+                    studies.append(fallback_study)
+                    self._save_clinical_progress_checkpoint(
+                        case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+                    )
+                    logger.info("clinical_per_study_api_only nct=%s inn=%s", nct_id, self.inn)
+                    continue
                 failed_nct.append(nct_id)
                 failed_nct_set.add(nct_upper)
                 self._save_clinical_progress_checkpoint(
@@ -4517,6 +4826,15 @@ class DossierReportGenerator:
 
             study = self._assemble_single_clinical_study(nct_id, retrieved, clinical_unknowns)
             if study is None:
+                fallback_study = self._build_ctgov_api_fallback_study(nct_id)
+                if fallback_study is not None and _is_valid_clinical_card(fallback_study):
+                    seen_nct.add(nct_upper)
+                    studies.append(fallback_study)
+                    self._save_clinical_progress_checkpoint(
+                        case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+                    )
+                    logger.info("clinical_per_study_llm_fallback_to_ctgov nct=%s inn=%s", nct_id, self.inn)
+                    continue
                 failed_nct.append(nct_id)
                 failed_nct_set.add(nct_upper)
                 self._save_clinical_progress_checkpoint(
@@ -4527,6 +4845,15 @@ class DossierReportGenerator:
 
             # Validate: must have study_id (enforced by construction, but verify)
             if not _is_valid_clinical_card(study):
+                fallback_study = self._build_ctgov_api_fallback_study(nct_id)
+                if fallback_study is not None and _is_valid_clinical_card(fallback_study):
+                    seen_nct.add(nct_upper)
+                    studies.append(fallback_study)
+                    self._save_clinical_progress_checkpoint(
+                        case_id, base_unknowns, studies, failed_nct, clinical_unknowns
+                    )
+                    logger.info("clinical_per_study_invalid_corrected_by_ctgov nct=%s inn=%s", nct_id, self.inn)
+                    continue
                 failed_nct.append(nct_id)
                 failed_nct_set.add(nct_upper)
                 self._save_clinical_progress_checkpoint(
@@ -5187,6 +5514,7 @@ class DossierReportGenerator:
         """
         start_ts = time.time()
         case_id = case_id or self.case_id or ""
+        self._source_verdicts = dict(source_verdicts or {})
         logger.info("DossierReportGenerator: starting for INN=%r case_id=%s", self.inn, case_id)
         checkpoint = self._load_checkpoint(case_id)
         unknowns: List[DossierUnknown] = self._restore_model_list(
