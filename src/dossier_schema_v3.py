@@ -1668,17 +1668,12 @@ def compute_dossier_quality_v2(
         1 for c in report.product_contexts
         if getattr(c, "context_strength", None) == "weak_signal"
     )
-    evidence_only_ctx = ctx_count - reg_confirmed_ctx
     if ctx_count <= 1:
         context_integrity = "GREEN"
-    elif all(r.context_id for r in report.registrations):
-        context_integrity = "GREEN"
-    elif evidence_only_ctx > 0 and reg_confirmed_ctx <= 1:
-        # Has evidence signals for other forms but only 1 registration → still GREEN
-        # (evidence-based contexts are informational, not conflicting)
-        context_integrity = "GREEN"
+    elif ctx_count <= 3:
+        context_integrity = "YELLOW"
     else:
-        context_integrity = "YELLOW" if ctx_count <= 3 else "RED"
+        context_integrity = "RED"
 
     # WS2-P0: Registrations readiness — must check status, mah, identifiers,
     # AND primary_docs.  primary_docs alone is NOT sufficient for GREEN.
@@ -1782,6 +1777,25 @@ def compute_dossier_quality_v2(
         "context_integrity": context_integrity,
     }
 
+    # Chemistry completeness — even with strong registrations/clinical coverage, a
+    # missing chemistry identity block should keep decision-readiness cautious.
+    chemistry_missing_fields = []
+    for field_name in ("chemical_formula", "smiles", "inchi_key", "molecular_weight"):
+        ev = getattr(report.passport, field_name, None)
+        if not (ev and ev.value):
+            chemistry_missing_fields.append(field_name)
+
+    # Synthesis route integrity — distinguish true API route evidence from
+    # formulation/manufacturing-only process snippets.
+    synthesis_api_steps = sum(
+        1 for step in report.synthesis_steps
+        if (getattr(step, "kind", "") or "").strip().lower() == "api_synthesis"
+    )
+    synthesis_non_api_steps = sum(
+        1 for step in report.synthesis_steps
+        if (getattr(step, "kind", "") or "").strip().lower() in {"formulation_process", "manufacturing_process", "unknown"}
+    )
+
     # Critical unknowns
     critical_unknowns: List[Dict[str, Any]] = []
     if legal_unknowns > 0:
@@ -1795,6 +1809,18 @@ def compute_dossier_quality_v2(
             "reason_code": "NO_DOCUMENT_IN_CORPUS",
             "count": no_doc_unknowns,
             "impact": "registrations may be incomplete",
+        })
+    if chemistry_missing_fields:
+        critical_unknowns.append({
+            "reason_code": "CHEMISTRY_IDENTITY_INCOMPLETE",
+            "count": len(chemistry_missing_fields),
+            "impact": "passport chemistry identity is incomplete",
+        })
+    if synthesis_non_api_steps > 0 and synthesis_api_steps == 0:
+        critical_unknowns.append({
+            "reason_code": "API_SYNTHESIS_ROUTE_NOT_VERIFIED",
+            "count": synthesis_non_api_steps,
+            "impact": "synthesis coverage reflects formulation/manufacturing evidence, not a verified API route",
         })
     # WS5-P0: Flag clinical meta-field gaps as critical unknown
     no_ev_unknowns = reason_dist.get("NO_EVIDENCE_IN_CORPUS", 0)
@@ -1839,6 +1865,16 @@ def compute_dossier_quality_v2(
         notes.append(
             "patent_families=[] — no minimally valid patent families in corpus. "
             "For off-patent drugs this is expected; for on-patent drugs check EPO OPS/patent sources."
+        )
+    if chemistry_missing_fields:
+        notes.append(
+            "chemistry identity missing: "
+            + ", ".join(chemistry_missing_fields)
+            + ". Attach structured chemistry sources before treating passport completeness as closed."
+        )
+    if synthesis_non_api_steps > 0 and synthesis_api_steps == 0:
+        notes.append(
+            "synthesis_steps are formulation/manufacturing-oriented; no verified API synthesis step is present in the corpus."
         )
     if n_studies > 0 and clinical_cov < 0.5:
         notes.append(f"clinical_field_completeness={round(clinical_cov*100,1)}% — many meta-fields (status/countries/conclusion) are empty")

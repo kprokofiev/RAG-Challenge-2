@@ -11,6 +11,7 @@ turns into human-readable answers.
 
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import logging
 import os
@@ -20,6 +21,17 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+_ONGOING_STATUSES = {
+    "RECRUITING",
+    "ACTIVE_NOT_RECRUITING",
+    "NOT_YET_RECRUITING",
+    "ENROLLING_BY_INVITATION",
+}
+_PATENT_EXPIRY_REGION_PREFIXES = {
+    "US": ("US:", "USA:", "UNITED STATES:"),
+    "EU": ("EP:", "EU:", "EPO:", "EUROPE:"),
+}
 
 
 # ── Models ──────────────────────────────────────────────────────────────────
@@ -199,6 +211,81 @@ def _build_clinical_claims(
     return claims
 
 
+def _build_ongoing_trials_claims(
+    dossier: Dict[str, Any],
+    evidence_pack,
+    resolved_scope,
+) -> List[Claim]:
+    """Build claims strictly for ongoing trials, not the whole historical inventory."""
+    claims: List[Claim] = []
+    studies = dossier.get("clinical_studies", [])
+    status_counts: Counter[str] = Counter()
+    fallback_refs: List[str] = []
+
+    for study in studies:
+        title = _ev_value(study.get("title"))
+        phase = _ev_value(study.get("phase"))
+        n_enrolled = _ev_value(study.get("n_enrolled"))
+        status = (_ev_value(study.get("status")) or "").strip()
+        status_upper = status.upper()
+        conclusion = _ev_value(study.get("conclusion"))
+        is_ongoing = _ev_bool(study.get("is_ongoing"))
+        refs = _collect_evidence_refs(
+            study.get("title"),
+            study.get("phase"),
+            study.get("status"),
+            study.get("is_ongoing"),
+            study.get("n_enrolled"),
+            study.get("conclusion"),
+            study.get("evidence_refs"),
+        )
+
+        if is_ongoing is True or status_upper in _ONGOING_STATUSES:
+            text_parts = []
+            if title:
+                text_parts.append(title[:100])
+            if phase:
+                text_parts.append(f"Phase {phase}")
+            if n_enrolled:
+                text_parts.append(f"N={n_enrolled}")
+            if status:
+                text_parts.append(f"Status: {status}")
+            if conclusion:
+                text_parts.append(f"Studying: {conclusion[:150]}")
+
+            claims.append(Claim(
+                claim_id=_claim_id(f"ongoing_{title or status or 'study'}"),
+                text=" | ".join(text_parts) if text_parts else "Ongoing trial identified",
+                semantic_role="ongoing_trial",
+                support_level="strong" if refs else "moderate",
+                support_fields=["clinical_studies.is_ongoing", "clinical_studies.status"],
+                evidence_refs=refs,
+            ))
+        else:
+            status_counts[status_upper or "UNKNOWN"] += 1
+            fallback_refs.extend(refs[:2])
+
+    if claims:
+        return claims
+
+    refs = list(dict.fromkeys(fallback_refs))
+    status_summary = ", ".join(
+        f"{status.title()} ({count})" for status, count in status_counts.most_common(3)
+    ) or "no status breakdown available"
+    claims.append(Claim(
+        claim_id=_claim_id("ongoing_none_identified"),
+        text=(
+            "No ongoing clinical trials were identified in the current dossier; "
+            f"indexed registry studies are mainly {status_summary}."
+        ),
+        semantic_role="ongoing_none_identified",
+        support_level="strong" if refs else "moderate",
+        support_fields=["clinical_studies.status", "clinical_studies.is_ongoing"],
+        evidence_refs=refs,
+    ))
+    return claims
+
+
 def _build_chemistry_claims(
     dossier: Dict[str, Any],
     evidence_pack,
@@ -235,6 +322,161 @@ def _build_chemistry_claims(
                 support_fields=[f"passport.{key}"],
                 evidence_refs=[],
             ))
+
+    return claims
+
+
+def _build_patent_expiry_claims(
+    dossier: Dict[str, Any],
+    evidence_pack,
+    resolved_scope,
+) -> List[Claim]:
+    """Build expiry claims only for jurisdictions explicitly asked by the question."""
+    claims: List[Claim] = []
+    families = dossier.get("patent_families", [])
+    target_regions = {"US", "EU"}
+
+    for fam in families:
+        fam_id = fam.get("family_id", "unknown")
+        rep_pub = _ev_value(fam.get("representative_pub")) or fam_id
+        legal_status = _ev_value(fam.get("legal_status_snapshot"))
+        expiry_hits = _extract_patent_expiry_hits(fam.get("expiry_by_country", []), target_regions)
+        if not expiry_hits:
+            continue
+
+        expiry_texts = [hit["value"] for hit in expiry_hits if hit.get("value")]
+        refs = _collect_evidence_refs(
+            fam.get("representative_pub"),
+            fam.get("legal_status_snapshot"),
+            fam.get("evidence_refs"),
+            [hit.get("refs", []) for hit in expiry_hits],
+        )
+
+        text_parts = [rep_pub]
+        if legal_status:
+            text_parts.append(f"status: {legal_status}")
+        if expiry_texts:
+            text_parts.append(f"expiry: {'; '.join(expiry_texts[:3])}")
+
+        claims.append(Claim(
+            claim_id=_claim_id(f"pat_expiry_{fam_id}"),
+            text=" | ".join(text_parts),
+            semantic_role="patent_expiry",
+            support_level="strong" if refs else "moderate",
+            support_fields=["patent_families.expiry_by_country"],
+            evidence_refs=refs,
+        ))
+
+    if not claims:
+        claims.append(Claim(
+            claim_id=_claim_id("pat_expiry_missing"),
+            text="No explicit US/EU patent expiry entries were identified in the dossier.",
+            semantic_role="patent_expiry_missing",
+            support_level="unsupported",
+            support_fields=["patent_families.expiry_by_country"],
+            evidence_refs=[],
+        ))
+
+    return claims
+
+
+def _build_synthesis_overview_claims(
+    dossier: Dict[str, Any],
+    evidence_pack,
+    resolved_scope,
+) -> List[Claim]:
+    """
+    Separate true API-route evidence from formulation/manufacturing steps.
+
+    This prevents drug-product preparation snippets from being presented as a
+    verified API synthesis route.
+    """
+    claims: List[Claim] = []
+    steps = dossier.get("synthesis_steps", [])
+    families = dossier.get("patent_families", [])
+
+    api_steps = []
+    non_api_steps = []
+    for step in steps:
+        if _normalize_step_kind(step) == "api_synthesis":
+            api_steps.append(step)
+        else:
+            non_api_steps.append(step)
+
+    process_families = []
+    for fam in families:
+        tech_focus = (_ev_value(fam.get("technical_focus")) or "").strip().lower()
+        process_rel = (_ev_value(fam.get("process_relevance")) or "").strip().lower()
+        if tech_focus in {"process_manufacturing", "intermediate_synthesis"} or process_rel in {"moderate", "strong"}:
+            process_families.append(fam)
+
+    for idx, step in enumerate(api_steps[:3], 1):
+        desc = _ev_value(step.get("description"))
+        refs = _collect_evidence_refs(
+            step.get("description"),
+            step.get("reagents"),
+            step.get("intermediates"),
+            step.get("evidence_refs"),
+        )
+        if desc:
+            claims.append(Claim(
+                claim_id=_claim_id(f"api_synth_step_{idx}_{desc[:40]}"),
+                text=f"API synthesis step {idx}: {desc[:220]}",
+                semantic_role="api_synthesis_step",
+                support_level="strong" if refs else "moderate",
+                support_fields=["synthesis_steps.description"],
+                evidence_refs=refs,
+            ))
+
+    for fam in process_families[:2]:
+        rep_pub = _ev_value(fam.get("representative_pub")) or fam.get("family_id", "unknown")
+        tech_focus = _ev_value(fam.get("technical_focus"))
+        process_rel = _ev_value(fam.get("process_relevance"))
+        refs = _collect_evidence_refs(
+            fam.get("representative_pub"),
+            fam.get("technical_focus"),
+            fam.get("process_relevance"),
+            fam.get("evidence_refs"),
+        )
+        claims.append(Claim(
+            claim_id=_claim_id(f"process_family_{rep_pub}"),
+            text=(
+                f"Process-relevant patent family identified: {rep_pub}"
+                + (f" | focus: {tech_focus}" if tech_focus else "")
+                + (f" | process relevance: {process_rel}" if process_rel else "")
+            ),
+            semantic_role="process_relevant_patent",
+            support_level="strong" if refs else "moderate",
+            support_fields=["patent_families.process_relevance", "patent_families.technical_focus"],
+            evidence_refs=refs,
+        ))
+
+    if non_api_steps:
+        refs = _collect_evidence_refs(
+            [step.get("description") for step in non_api_steps[:3]],
+            [step.get("evidence_refs") for step in non_api_steps[:3]],
+        )
+        claims.append(Claim(
+            claim_id=_claim_id("non_api_synthesis_evidence"),
+            text=(
+                "Extracted stepwise evidence currently describes formulation/manufacturing operations, "
+                "not a directly verified API synthesis route."
+            ),
+            semantic_role="non_api_process_only",
+            support_level="strong" if refs else "moderate",
+            support_fields=["synthesis_steps.kind", "synthesis_steps.description"],
+            evidence_refs=refs,
+        ))
+
+    if not claims:
+        claims.append(Claim(
+            claim_id=_claim_id("synthesis_no_evidence"),
+            text="No process or synthesis evidence was identified in the dossier.",
+            semantic_role="synthesis_unknown",
+            support_level="unsupported",
+            support_fields=["synthesis_steps", "patent_families.process_relevance"],
+            evidence_refs=[],
+        ))
 
     return claims
 
@@ -383,6 +625,106 @@ def _ev_refs(ev: Any) -> List[str]:
     return []
 
 
+def _ev_bool(ev: Any) -> Optional[bool]:
+    """Extract a boolean value from EvidencedValue-ish payloads."""
+    if ev is None:
+        return None
+    value = ev.get("value") if isinstance(ev, dict) else ev
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "1"}:
+            return True
+        if lowered in {"false", "no", "0"}:
+            return False
+    return None
+
+
+def _collect_evidence_refs(*items: Any) -> List[str]:
+    """Collect and deduplicate evidence refs from nested dossier structures."""
+    refs: List[str] = []
+
+    def _visit(item: Any) -> None:
+        if item is None:
+            return
+        if isinstance(item, dict):
+            refs.extend(item.get("evidence_refs", []))
+            evidence_id = item.get("evidence_id")
+            if evidence_id:
+                refs.append(evidence_id)
+            return
+        if isinstance(item, list):
+            for sub in item:
+                _visit(sub)
+            return
+        if isinstance(item, str) and item.startswith(("ev_", "ctgov_api_")):
+            refs.append(item)
+
+    for item in items:
+        _visit(item)
+    return list(dict.fromkeys(refs))
+
+
+def _classify_patent_expiry_region(expiry_value: Optional[str]) -> Optional[str]:
+    text = (expiry_value or "").strip().upper()
+    for region, prefixes in _PATENT_EXPIRY_REGION_PREFIXES.items():
+        if any(text.startswith(prefix) for prefix in prefixes):
+            return region
+    return None
+
+
+def _extract_patent_expiry_hits(expiry_list: Any, target_regions: Optional[set] = None) -> List[Dict[str, Any]]:
+    hits: List[Dict[str, Any]] = []
+    for item in expiry_list or []:
+        value = _ev_value(item)
+        region = _classify_patent_expiry_region(value)
+        if not region:
+            continue
+        if target_regions and region not in target_regions:
+            continue
+        hits.append({
+            "region": region,
+            "value": value,
+            "refs": _collect_evidence_refs(item),
+        })
+    return hits
+
+
+def _normalize_step_kind(step: Dict[str, Any]) -> str:
+    """Use stored step kind when present, else infer a safer non-API classification from text."""
+    kind = (step.get("kind") or "unknown").strip().lower()
+    if kind and kind != "unknown":
+        return kind
+
+    text = (_ev_value(step.get("description")) or "").strip().lower()
+    formulation_markers = (
+        "sterile water",
+        "propylene glycol",
+        "batch volume",
+        "sterile injection",
+        "steriliz",
+        "formulation",
+        "solution",
+        "suspension",
+        "tablet",
+    )
+    api_markers = (
+        "intermediate",
+        "cycliz",
+        "coupl",
+        "react",
+        "condens",
+        "protected",
+        "deprotected",
+    )
+    if any(marker in text for marker in formulation_markers):
+        return "formulation_process"
+    if any(marker in text for marker in api_markers):
+        return "api_synthesis"
+    return "unknown"
+
+
 def _claim_id(seed: str) -> str:
     """Generate deterministic claim ID."""
     h = hashlib.md5(seed.encode()).hexdigest()[:8]
@@ -486,14 +828,22 @@ class ClaimBuilder:
         5. Compute confidence.
         6. Derive business implications and next actions.
         """
-        q_type = routed_question.question_type
-        builder_fn = _CLAIM_BUILDERS.get(q_type, _build_generic_claims)
+        builder_fn = self._select_builder(routed_question)
 
         # Build claims
         claims = builder_fn(dossier, evidence_pack, resolved_scope)
 
         # Collect relevant unknowns
         unknowns = self._collect_relevant_unknowns(dossier, routed_question)
+        unknowns.extend(
+            self._derive_question_unknowns(
+                routed_question=routed_question,
+                dossier=dossier,
+                claims=claims,
+                resolved_scope=resolved_scope,
+            )
+        )
+        unknowns = self._dedupe_unknowns(unknowns)
 
         # Detect conflicts
         conflicts = self._detect_conflicts(claims)
@@ -528,6 +878,18 @@ class ClaimBuilder:
             recommended_next_actions=next_actions,
         )
 
+    @staticmethod
+    def _select_builder(routed_question):
+        """Question-specific overrides where generic question_type logic is too broad."""
+        qid = routed_question.question_id
+        if qid == "q_ongoing_trials":
+            return _build_ongoing_trials_claims
+        if qid == "q_patent_expiry":
+            return _build_patent_expiry_claims
+        if qid == "q_synthesis_overview":
+            return _build_synthesis_overview_claims
+        return _CLAIM_BUILDERS.get(routed_question.question_type, _build_generic_claims)
+
     def _collect_relevant_unknowns(
         self, dossier: Dict[str, Any], routed_question
     ) -> List[Dict[str, Any]]:
@@ -547,6 +909,73 @@ class ClaimBuilder:
                 relevant.append(u)
 
         return relevant
+
+    def _derive_question_unknowns(
+        self,
+        routed_question,
+        dossier: Dict[str, Any],
+        claims: List[Claim],
+        resolved_scope,
+    ) -> List[Dict[str, Any]]:
+        """Add question-scoped unknowns that are not explicit dossier fields."""
+        qid = routed_question.question_id
+        derived: List[Dict[str, Any]] = []
+
+        if qid == "q_patent_expiry":
+            covered_regions = set()
+            for fam in dossier.get("patent_families", []):
+                for hit in _extract_patent_expiry_hits(fam.get("expiry_by_country", []), {"US", "EU"}):
+                    covered_regions.add(hit["region"])
+            for region in sorted({"US", "EU"} - covered_regions):
+                derived.append({
+                    "field_path": f"patent_families.expiry_by_country.{region}",
+                    "reason_code": "NO_EVIDENCE_IN_CORPUS",
+                    "message": f"No explicit {region} patent expiry evidence was identified in the current dossier.",
+                    "suggested_next_action": f"Attach authoritative {region} patent expiry evidence before treating {region} expiry as verified.",
+                })
+
+        if qid == "q_synthesis_overview":
+            api_steps = [
+                step for step in (dossier.get("synthesis_steps") or [])
+                if _normalize_step_kind(step) == "api_synthesis"
+            ]
+            if not api_steps:
+                derived.append({
+                    "field_path": "synthesis_steps.api_route",
+                    "reason_code": "NO_EVIDENCE_IN_CORPUS",
+                    "message": (
+                        "Current process evidence is formulation/manufacturing-oriented; "
+                        "a verified API synthesis route is not directly evidenced in the corpus."
+                    ),
+                    "suggested_next_action": "Attach process-chemistry/API synthesis patents or CMC sources before treating synthesis as closed.",
+                })
+
+        if routed_question.question_type == "data_quality":
+            for idx, warning in enumerate(resolved_scope.scope_warnings or [], 1):
+                derived.append({
+                    "field_path": f"scope.warning_{idx}",
+                    "reason_code": "SCOPE_WARNING",
+                    "message": warning,
+                    "suggested_next_action": "Tighten product-context gating before using this answer for external executive delivery.",
+                })
+
+        return derived
+
+    @staticmethod
+    def _dedupe_unknowns(unknowns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        deduped: List[Dict[str, Any]] = []
+        seen = set()
+        for item in unknowns:
+            key = (
+                item.get("field_path"),
+                item.get("reason_code"),
+                item.get("message"),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped
 
     def _detect_conflicts(self, claims: List[Claim]) -> List[Dict[str, Any]]:
         """Detect conflicting claims (e.g., different status for same jurisdiction)."""
@@ -646,6 +1075,17 @@ class ClaimBuilder:
                 implications.append(f"{len(blocking)} patent families with blocking coverage identified")
             if unknowns:
                 implications.append("Patent landscape incomplete — FTO assessment may need additional data")
+
+        elif q_type == "clinical_evidence":
+            ongoing = [c for c in claims if c.semantic_role == "ongoing_trial"]
+            if ongoing:
+                implications.append(f"{len(ongoing)} ongoing clinical trial(s) remain active in the current corpus.")
+            elif routed_question.question_id == "q_ongoing_trials":
+                implications.append("No ongoing clinical trials were identified in the current corpus snapshot.")
+
+        elif q_type == "synthesis_manufacturing":
+            if any(c.semantic_role == "non_api_process_only" for c in claims):
+                implications.append("Current process evidence reflects formulation/manufacturing steps more than verified API route chemistry.")
 
         elif q_type == "data_quality":
             readiness = next((c for c in claims if c.semantic_role == "quality_readiness"), None)
