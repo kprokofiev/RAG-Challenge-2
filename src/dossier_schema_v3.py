@@ -23,6 +23,12 @@ import time
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field, validator
 
+from src.registration_truth import (
+    VERDICT_CONFIRMED,
+    VERDICT_PARTIAL,
+    infer_registration_verdict,
+)
+
 # ── Reason codes for unknowns ────────────────────────────────────────────────
 # Used in DossierUnknown.reason_code.  Keep list exhaustive & typed so
 # downstream consumers can build UI / filters on these codes.
@@ -252,6 +258,10 @@ class DossierRegistration(BaseModel):
     region: str = Field(description="Region/country code, e.g. 'RU', 'EU', 'US', 'EAEU'")
     context_id: Optional[str] = Field(
         None, description="Sprint 7.5: link to ProductContext.context_id"
+    )
+    verdict: str = Field(
+        "unknown",
+        description="Normalized registration verdict: confirmed | partial | unknown"
     )
     status: Optional[EvidencedValue] = Field(None, description="Registered / cancelled / expired")
     forms_strengths: List[EvidencedValue] = Field(
@@ -681,7 +691,11 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
 
     # Synthesis coverage
     synth_pct = round(
-        sum(1 for ss in report.synthesis_steps if ss.evidence_refs) / max(len(report.synthesis_steps), 1) * 100,
+        sum(
+            1
+            for ss in report.synthesis_steps
+            if ss.evidence_refs and (getattr(ss, "kind", "") or "").strip().lower() == "api_synthesis"
+        ) / max(len(report.synthesis_steps), 1) * 100,
         1
     ) if report.synthesis_steps else 0.0
 
@@ -1095,7 +1109,7 @@ def build_product_contexts(
     deduplicates evidence contexts that map to same form/route family.
     """
     _TIER1_DOC_KINDS = {"smpc", "label", "epar", "grls_card", "grls", "ru_instruction",
-                        "us_fda", "approval_letter", "pil", "assessment_report"}
+                        "us_fda", "approval_letter", "pil", "assessment_report", "eu_regulatory_summary"}
 
     ctx_map: Dict[str, ProductContext] = {}
 
@@ -1168,6 +1182,13 @@ def build_product_contexts(
                 if inferred_route:
                     break
 
+            verdict = getattr(reg, "verdict", None) or infer_registration_verdict(
+                status=reg.status,
+                mah=reg.mah,
+                identifiers=reg.identifiers,
+                forms_strengths=reg.forms_strengths,
+            )
+
             ctx_map[ctx] = ProductContext(
                 context_id=ctx,
                 label=label,
@@ -1179,7 +1200,7 @@ def build_product_contexts(
                 identifiers=reg_ids,
                 primary_docs=primary_docs,
                 evidence_refs=list(reg.evidence_refs),
-                context_strength="registration_confirmed",
+                context_strength="registration_confirmed" if verdict == VERDICT_CONFIRMED else "evidence_supported",
                 context_origin=origin,
             )
         else:
@@ -1641,10 +1662,26 @@ def compute_dossier_quality_v2(
     legal_unknowns = reason_dist.get("LEGAL_STATUS_NOT_AVAILABLE", 0)
     no_doc_unknowns = reason_dist.get("NO_DOCUMENT_IN_CORPUS", 0)
 
+    positive_regions = {
+        (r.region or "").upper().strip()
+        for r in report.registrations
+        if (getattr(r, "verdict", None) or infer_registration_verdict(
+            status=r.status,
+            mah=r.mah,
+            identifiers=r.identifiers,
+            forms_strengths=r.forms_strengths,
+        )) == VERDICT_CONFIRMED
+    }
+
     # Patents legal readiness
     total_families = len(report.patent_families)
     families_with_expiry = sum(1 for f in report.patent_families if f.expiry_by_country)
     patents_legal_pct = (families_with_expiry / total_families) if total_families > 0 else 0.0
+    us_expiry_covered = any(
+        any("US:" in str(ev.value or "").upper() for ev in (f.expiry_by_country or []))
+        for f in report.patent_families
+    )
+    us_expiry_expected = "US" in positive_regions
 
     if patents_legal_pct >= 0.7 and legal_unknowns == 0:
         patents_legal = "GREEN"
@@ -1652,6 +1689,8 @@ def compute_dossier_quality_v2(
         patents_legal = "YELLOW"
     else:
         patents_legal = "RED"
+    if us_expiry_expected and not us_expiry_covered and patents_legal == "GREEN":
+        patents_legal = "YELLOW"
 
     # Context integrity (Sprint 13 WS2: use context_strength field)
     ctx_count = len(report.product_contexts)
@@ -1678,22 +1717,18 @@ def compute_dossier_quality_v2(
     # WS2-P0: Registrations readiness — must check status, mah, identifiers,
     # AND primary_docs.  primary_docs alone is NOT sufficient for GREEN.
     # A registration without status/mah is essentially unverified.
-    def _reg_field_ok(ev_val) -> bool:
-        return ev_val is not None and ev_val.value is not None and bool(ev_val.evidence_refs)
-
-    regs_complete = 0  # has status + mah + identifiers + primary_docs
-    regs_partial = 0   # has some but not all
+    regs_complete = 0
+    regs_partial = 0
     for r in report.registrations:
-        has_status = _reg_field_ok(r.status)
-        has_mah = _reg_field_ok(r.mah)
-        has_ids = bool(r.identifiers) and any(
-            i.value is not None and bool(i.evidence_refs) for i in r.identifiers
+        verdict = getattr(r, "verdict", None) or infer_registration_verdict(
+            status=r.status,
+            mah=r.mah,
+            identifiers=r.identifiers,
+            forms_strengths=r.forms_strengths,
         )
-        has_docs = bool(r.primary_docs)
-        filled = sum([has_status, has_mah, has_ids, has_docs])
-        if filled >= 3:  # at least status + mah + one of (ids, docs)
+        if verdict == VERDICT_CONFIRMED:
             regs_complete += 1
-        elif filled >= 1:
+        elif verdict == VERDICT_PARTIAL:
             regs_partial += 1
 
     total_regs = len(report.registrations)
@@ -1769,14 +1804,6 @@ def compute_dossier_quality_v2(
     else:
         patents_discovery_gate = "YELLOW"
 
-    decision_readiness = {
-        "registrations": registrations_gate,
-        "clinical": clinical_gate,
-        "patents_discovery": patents_discovery_gate,
-        "patents_legal": patents_legal,
-        "context_integrity": context_integrity,
-    }
-
     # Chemistry completeness — even with strong registrations/clinical coverage, a
     # missing chemistry identity block should keep decision-readiness cautious.
     chemistry_missing_fields = []
@@ -1796,6 +1823,21 @@ def compute_dossier_quality_v2(
         if (getattr(step, "kind", "") or "").strip().lower() in {"formulation_process", "manufacturing_process", "unknown"}
     )
 
+    synthesis_gate = "RED"
+    if synthesis_api_steps > 0:
+        synthesis_gate = "GREEN"
+    elif synthesis_non_api_steps > 0:
+        synthesis_gate = "YELLOW"
+
+    decision_readiness = {
+        "registrations": registrations_gate,
+        "clinical": clinical_gate,
+        "patents_discovery": patents_discovery_gate,
+        "patents_legal": patents_legal,
+        "synthesis": synthesis_gate,
+        "context_integrity": context_integrity,
+    }
+
     # Critical unknowns
     critical_unknowns: List[Dict[str, Any]] = []
     if legal_unknowns > 0:
@@ -1803,6 +1845,12 @@ def compute_dossier_quality_v2(
             "reason_code": "LEGAL_STATUS_NOT_AVAILABLE",
             "count": legal_unknowns,
             "impact": f"patents_legal={patents_legal}",
+        })
+    if us_expiry_expected and not us_expiry_covered:
+        critical_unknowns.append({
+            "reason_code": "US_PATENT_EXPIRY_NOT_VERIFIED",
+            "count": 1,
+            "impact": "US patent expiry evidence is missing for a dossier with positive US registration",
         })
     if no_doc_unknowns > 0:
         critical_unknowns.append({
@@ -1860,6 +1908,8 @@ def compute_dossier_quality_v2(
             notes.append(f"Multiple product contexts detected: {ctx_count}")
     if patents_legal_pct < 1.0 and total_families > 0:
         notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
+    if us_expiry_expected and not us_expiry_covered:
+        notes.append("US patent expiry evidence is still missing; do not treat US/EU expiry as fully verified.")
     if total_families == 0:
         # Sprint 12 WS3: Explicit note when patent_families is empty
         notes.append(

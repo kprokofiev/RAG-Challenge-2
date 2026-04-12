@@ -19,6 +19,12 @@ import time
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+from src.registration_truth import (
+    VERDICT_CONFIRMED,
+    VERDICT_PARTIAL,
+    infer_registration_verdict,
+    registration_status_role,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +89,17 @@ def _build_registration_claims(
 
         identifiers = reg.get("identifiers", [])
         id_strs = [_ev_value(i) for i in identifiers if _ev_value(i)]
+        verdict = str(
+            reg.get("verdict")
+            or infer_registration_verdict(
+                status=status_ev,
+                mah=mah_ev,
+                identifiers=identifiers,
+                forms_strengths=reg.get("forms_strengths"),
+            )
+        ).strip().lower()
 
-        if status_val:
+        if verdict == VERDICT_CONFIRMED and status_val:
             text = f"{region}: {status_val}"
             if mah_val:
                 text += f" (MAH: {mah_val})"
@@ -99,6 +114,41 @@ def _build_registration_claims(
                 jurisdiction=region,
                 semantic_role=semantic_role,
                 support_level=support,
+                support_fields=[f"registrations.{region}.status"],
+                evidence_refs=status_refs,
+            ))
+        elif verdict == VERDICT_PARTIAL:
+            parts = [f"{region}: Partial registration evidence"]
+            if mah_val:
+                parts.append(f"MAH: {mah_val}")
+            if id_strs:
+                parts.append(f"IDs: {', '.join(id_strs[:3])}")
+            form_values = [_ev_value(item) for item in (reg.get("forms_strengths") or []) if _ev_value(item)]
+            if form_values:
+                parts.append(f"forms: {', '.join(form_values[:3])}")
+            evidence_refs = _collect_evidence_refs(
+                status_ev,
+                mah_ev,
+                identifiers,
+                reg.get("forms_strengths"),
+                reg.get("evidence_refs"),
+            )
+            claims.append(Claim(
+                claim_id=_claim_id(f"reg_{region}_partial"),
+                text=" | ".join(parts),
+                jurisdiction=region,
+                semantic_role="registration_partial",
+                support_level="strong" if evidence_refs else "moderate",
+                support_fields=[f"registrations.{region}.verdict", f"registrations.{region}.identifiers"],
+                evidence_refs=evidence_refs,
+            ))
+        elif status_val and registration_status_role(status_val) == "negative":
+            claims.append(Claim(
+                claim_id=_claim_id(f"reg_{region}_negative"),
+                text=f"{region}: {status_val}",
+                jurisdiction=region,
+                semantic_role="registration_negative",
+                support_level="strong" if status_refs else "moderate",
                 support_fields=[f"registrations.{region}.status"],
                 evidence_refs=status_refs,
             ))
@@ -451,6 +501,24 @@ def _build_synthesis_overview_claims(
             evidence_refs=refs,
         ))
 
+    if not api_steps and process_families:
+        refs = _collect_evidence_refs(
+            [fam.get("representative_pub") for fam in process_families[:3]],
+            [fam.get("technical_focus") for fam in process_families[:3]],
+            [fam.get("process_relevance") for fam in process_families[:3]],
+        )
+        claims.append(Claim(
+            claim_id=_claim_id("api_route_not_verified"),
+            text=(
+                "Process-relevant patents are present, but a directly verified API synthesis route "
+                "was not assembled from the current corpus."
+            ),
+            semantic_role="api_synthesis_not_verified",
+            support_level="strong" if refs else "moderate",
+            support_fields=["synthesis_steps.kind", "patent_families.process_relevance"],
+            evidence_refs=refs,
+        ))
+
     if non_api_steps:
         refs = _collect_evidence_refs(
             [step.get("description") for step in non_api_steps[:3]],
@@ -759,6 +827,14 @@ def _classify_registration_status(status_val: str) -> str:
     "No public registration record verified" must not be counted as
     "registered in jurisdiction X".
     """
+    role = registration_status_role(status_val)
+    if role == "negative":
+        return "registration_negative"
+    if role == "positive":
+        return "registration_positive"
+    if role == "unknown":
+        return "registration_unknown"
+
     s = (status_val or "").strip().lower()
     if not s:
         return "registration_unknown"
@@ -1048,24 +1124,32 @@ class ClaimBuilder:
 
         if q_type == "registration_status":
             positive = [c for c in claims if c.semantic_role == "registration_positive"]
+            partial = [c for c in claims if c.semantic_role == "registration_partial"]
             negative = [c for c in claims if c.semantic_role == "registration_negative"]
             missing = [c for c in claims if c.semantic_role == "registration_unknown" or c.support_level == "unsupported"]
 
             if positive:
-                regions = [c.jurisdiction for c in positive if c.jurisdiction]
+                regions = sorted({c.jurisdiction for c in positive if c.jurisdiction})
                 implications.append(
                     f"Product is registered in {len(regions)} jurisdiction(s): {', '.join(regions)}"
                 )
 
+            if partial:
+                regions = sorted({c.jurisdiction for c in partial if c.jurisdiction})
+                if regions:
+                    implications.append(
+                        f"Partial registration grounding remains for: {', '.join(regions)}"
+                    )
+
             if negative:
-                regions = [c.jurisdiction for c in negative if c.jurisdiction]
+                regions = sorted({c.jurisdiction for c in negative if c.jurisdiction})
                 if regions:
                     implications.append(
                         f"No public registration record verified for: {', '.join(regions)}"
                     )
 
             if missing:
-                regions = [c.jurisdiction for c in missing if c.jurisdiction]
+                regions = sorted({c.jurisdiction for c in missing if c.jurisdiction})
                 if regions:
                     implications.append(f"Registration status unknown for: {', '.join(regions)}")
 
