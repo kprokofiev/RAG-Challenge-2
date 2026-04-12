@@ -47,10 +47,10 @@ class LLMReranker:
     # Default model used when DDKIT_RERANK_MODEL env is not set (Sprint 3 §6).
     _DEFAULT_RERANK_MODEL = "gpt-5.4"
 
-    def __init__(self):
+    def __init__(self, model_override: str | None = None):
         self.llm = self.set_up_llm()
         # Model configurable via DDKIT_RERANK_MODEL env (Sprint 3 §6)
-        self.rerank_model = os.getenv("DDKIT_RERANK_MODEL", self._DEFAULT_RERANK_MODEL)
+        self.rerank_model = model_override or os.getenv("DDKIT_RERANK_MODEL", self._DEFAULT_RERANK_MODEL)
         self.system_prompt_rerank_single_block = prompts.RerankingPrompt.system_prompt_rerank_single_block
         self.system_prompt_rerank_multiple_blocks = prompts.RerankingPrompt.system_prompt_rerank_multiple_blocks
         self.schema_for_single_block = prompts.RetrievalRankingSingleBlock

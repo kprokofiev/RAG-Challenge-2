@@ -1507,7 +1507,7 @@ def _postmerge_evidence_into_registration(
             # Do NOT propagate "injectable" from a boilerplate mention if dosage forms
             # are clearly oral (tablet/capsule) — this was the source of the EU/RU
             # product_context showing route=injectable for film-coated tablets.
-            if ev_ctx.route and not best_match.route:
+            if ev_ctx.route and not best_match.route and ev_region:
                 ev_route_fam = _normalize_route_family(ev_ctx.route)
                 # Check if any registration form implies a DIFFERENT route family
                 forms_imply_different = False
@@ -1707,7 +1707,10 @@ def compute_dossier_quality_v2(
         1 for c in report.product_contexts
         if getattr(c, "context_strength", None) == "weak_signal"
     )
-    if ctx_count <= 1:
+    passport_scope = str(getattr(getattr(report, "passport", None), "passport_scope", "") or "").strip().lower()
+    if passport_scope == "single_context":
+        context_integrity = "GREEN" if ctx_count <= 2 else "YELLOW"
+    elif ctx_count <= 1:
         context_integrity = "GREEN"
     elif ctx_count <= 3:
         context_integrity = "YELLOW"
