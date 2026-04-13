@@ -108,15 +108,24 @@ class WorkerSettings(BaseSettings):
     ddkit_sections_plan_version: str = Field("unknown", env="DDKIT_SECTIONS_PLAN_VERSION")
 
     # Sprint-3: evidence K parameters (per-section adaptive defaults can be overridden globally)
-    ddkit_dense_k: int = Field(24, env="DDKIT_DENSE_K")
-    ddkit_sparse_k: int = Field(24, env="DDKIT_SPARSE_K")
-    ddkit_rerank_sample_k: int = Field(24, env="DDKIT_RERANK_SAMPLE_K")
-    ddkit_final_candidates_k: int = Field(10, env="DDKIT_FINAL_CANDIDATES_K")
+    ddkit_dense_k: int = Field(40, env="DDKIT_DENSE_K")
+    ddkit_sparse_k: int = Field(40, env="DDKIT_SPARSE_K")
+    ddkit_rerank_sample_k: int = Field(60, env="DDKIT_RERANK_SAMPLE_K")
+    ddkit_final_candidates_k: int = Field(16, env="DDKIT_FINAL_CANDIDATES_K")
     # Hard guardrail: once the dossier crosses this number of non-cached retrieve calls,
     # downstream stages should prefer honest unknowns over unbounded token spend.
     ddkit_max_retrieve_calls_per_dossier: int = Field(
-        180,
+        320,
         env="DDKIT_MAX_RETRIEVE_CALLS_PER_DOSSIER",
+    )
+    ddkit_clinical_study_top_k: int = Field(32, env="DDKIT_CLINICAL_STUDY_TOP_K")
+    ddkit_clinical_study_candidate_k: int = Field(
+        60,
+        env="DDKIT_CLINICAL_STUDY_CANDIDATE_K",
+    )
+    ddkit_clinical_study_context_k: int = Field(
+        36,
+        env="DDKIT_CLINICAL_STUDY_CONTEXT_K",
     )
 
     # Sprint-8: per-stage timeout budgets (seconds).

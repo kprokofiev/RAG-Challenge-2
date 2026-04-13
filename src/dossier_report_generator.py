@@ -1219,11 +1219,11 @@ class DossierReportGenerator:
             1,
             min(
                 len(candidates),
-                int(os.getenv("DDKIT_SYNTHESIS_RERANK_BATCH_SIZE", "8") or 8),
+                int(os.getenv("DDKIT_SYNTHESIS_RERANK_BATCH_SIZE", "12") or 12),
             ),
         )
         llm_weight = float(os.getenv("DDKIT_SYNTHESIS_RERANK_WEIGHT", "0.85") or 0.85)
-        keep_top_k = max(1, int(os.getenv("DDKIT_SYNTHESIS_RERANK_TOP_K", "12") or 12))
+        keep_top_k = max(1, int(os.getenv("DDKIT_SYNTHESIS_RERANK_TOP_K", "20") or 20))
         rerank_query = (
             f"Verified API synthesis route for {self.inn}: reaction sequence, intermediates, reagents, yields, examples. "
             "Strongly prefer process patents and intermediate-preparation steps. "
@@ -1525,8 +1525,8 @@ class DossierReportGenerator:
             return []
 
         model_name = os.getenv("DDKIT_SYNTHESIS_EXTRACT_MODEL", "gpt-5.4-mini")
-        max_chunks = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_MAX", "8") or 8))
-        max_steps = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_STEPS", "3") or 3))
+        max_chunks = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_MAX", "16") or 16))
+        max_steps = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_STEPS", "6") or 6))
         instruction = (
             f"{_SYNTHESIS_INSTRUCTION}\n\n"
             "You will receive ONE patent chunk at a time.\n"
@@ -4698,8 +4698,19 @@ class DossierReportGenerator:
         if not combined:
             return None
 
-        candidates_map = self._candidates_map(combined[:40])
-        context = self._context_str(combined[:24])
+        candidate_cap = max(
+            24,
+            int(getattr(settings, "ddkit_clinical_study_candidate_k", 60) or 60),
+        )
+        context_cap = max(
+            18,
+            min(
+                candidate_cap,
+                int(getattr(settings, "ddkit_clinical_study_context_k", 36) or 36),
+            ),
+        )
+        candidates_map = self._candidates_map(combined[:candidate_cap])
+        context = self._context_str(combined[:context_cap])
         alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         # Single-study extraction prompt
@@ -5359,7 +5370,11 @@ class DossierReportGenerator:
         structured_ru_studies = self._extract_ru_clinical_studies_from_original_json()
         case_id = self.case_id or ""
         base_unknowns = list(unknowns)
-        study_top_k = max(18, settings.ddkit_final_candidates_k * 2)
+        study_top_k = max(
+            24,
+            int(getattr(settings, "ddkit_clinical_study_top_k", 32) or 32),
+            settings.ddkit_final_candidates_k * 2,
+        )
 
         clinical_unknowns: List[DossierUnknown] = []
         studies: List[DossierClinicalStudy] = []
@@ -5969,13 +5984,25 @@ class DossierReportGenerator:
             supplemental = self._retrieve(
                 question,
                 doc_kinds,
-                top_k=36 if preferred_doc_ids and source_label == "patent_corpus" else 24,
+                top_k=48 if preferred_doc_ids and source_label == "patent_corpus" else 32,
             )
             if preferred_doc_ids and source_label == "patent_corpus" and supplemental:
                 preferred = [item for item in supplemental if str(item.get("doc_id") or "") in preferred_doc_ids]
                 if preferred:
-                    supplemental = preferred
-            retrieved = self._merge_candidate_lists(retrieved, supplemental, limit=24) if retrieved or supplemental else []
+                    non_preferred_cap = max(
+                        0,
+                        int(os.getenv("DDKIT_SYNTHESIS_NON_PREFERRED_MAX", "16") or 16),
+                    )
+                    non_preferred = [
+                        item for item in supplemental if str(item.get("doc_id") or "") not in preferred_doc_ids
+                    ]
+                    supplemental = preferred + non_preferred[:non_preferred_cap]
+            merge_limit = 36 if preferred_doc_ids and source_label == "patent_corpus" else 24
+            retrieved = self._merge_candidate_lists(
+                retrieved,
+                supplemental,
+                limit=merge_limit,
+            ) if retrieved or supplemental else []
             if not retrieved:
                 logger.info("synthesis_source_empty inn=%s source=%s", self.inn, source_label)
                 return "no_docs", []
