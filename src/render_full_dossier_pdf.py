@@ -192,6 +192,20 @@ def _ev_list(items: Any) -> List[str]:
     return values
 
 
+def _ev_refs(ev: Any) -> List[str]:
+    if isinstance(ev, dict):
+        refs = ev.get("evidence_refs")
+        if isinstance(refs, list):
+            return [str(ref) for ref in refs if str(ref or "").strip()]
+        return []
+    if isinstance(ev, list):
+        refs: List[str] = []
+        for item in ev:
+            refs.extend(_ev_refs(item))
+        return refs
+    return []
+
+
 def _unique(items: List[str]) -> List[str]:
     seen = set()
     ordered: List[str] = []
