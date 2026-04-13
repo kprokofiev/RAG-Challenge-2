@@ -35,6 +35,8 @@ from src.dossier_schema_v3 import (
     EvidencedValue,
     DossierPassport,
     DossierRegistration,
+    DossierCommercialMetric,
+    DossierCommercialSignal,
     DossierClinicalStudy,
     DossierPatentFamily,
     DossierSynthesisStep,
@@ -524,6 +526,9 @@ _JSON_DOC_KINDS = {
     "patent_family_summary", "patent_legal_events", "patent_expiry_us", "patent_discovery_us",
     "ru_patent_fips", "grls", "eaeu_document", "eaeu_registration", "ru_clinical_permission",
 }
+
+_COMMERCIAL_SIGNAL_PREFIX = "COMMERCIAL_SIGNAL"
+_COMMERCIAL_METRIC_PREFIX = "COMMERCIAL_METRIC"
 
 
 def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
@@ -1090,6 +1095,155 @@ class DossierReportGenerator:
                     "text": text,
                     "type": chunk.get("type", "content"),
                 }
+
+    @staticmethod
+    def _parse_pipe_kv_record(line: str, expected_prefix: str) -> Dict[str, str]:
+        parts = [part.strip() for part in line.split("|")]
+        if not parts:
+            return {}
+        prefix = parts[0].strip().upper()
+        if prefix != expected_prefix:
+            return {}
+        record: Dict[str, str] = {}
+        for part in parts[1:]:
+            key, sep, value = part.partition("=")
+            if not sep:
+                continue
+            key = key.strip().lower()
+            value = value.strip()
+            if key:
+                record[key] = value
+        return record
+
+    def _commercial_doc_kinds(self) -> set[str]:
+        raw = settings.ddkit_commercial_signal_doc_kinds or ""
+        return {
+            item.strip().lower()
+            for item in raw.split(",")
+            if item.strip()
+        }
+
+    def _generate_commercial_signals(
+        self,
+        unknowns: List[DossierUnknown],
+    ) -> List[DossierCommercialSignal]:
+        allowed_doc_kinds = self._commercial_doc_kinds()
+        if not allowed_doc_kinds:
+            return []
+
+        signals: Dict[Tuple[str, str], DossierCommercialSignal] = {}
+        signal_order: List[Tuple[str, str]] = []
+
+        for chunk in self._iter_parsed_doc_chunks(set(), allowed_doc_kinds=allowed_doc_kinds):
+            text = str(chunk.get("text") or "")
+            if not text:
+                continue
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                signal_record = self._parse_pipe_kv_record(line, _COMMERCIAL_SIGNAL_PREFIX)
+                if signal_record:
+                    region = str(signal_record.get("region") or "GLOBAL").strip().upper()
+                    category = str(signal_record.get("category") or "other").strip().lower()
+                    summary = str(signal_record.get("summary") or "").strip()
+                    if not summary:
+                        continue
+                    verdict = str(signal_record.get("verdict") or "unknown").strip().lower()
+                    evidence = _build_evidence(
+                        str(chunk.get("doc_id") or ""),
+                        chunk.get("page"),
+                        line,
+                        chunk.get("doc_title"),
+                        chunk.get("source_url"),
+                        doc_kind=chunk.get("doc_kind"),
+                    )
+                    self._evidence_registry[evidence.evidence_id] = evidence
+                    key = (region, category)
+                    signal = signals.get(key)
+                    if signal is None:
+                        signal = DossierCommercialSignal(
+                            signal_id=f"commercial_{region.lower()}_{category}",
+                            region=region,
+                            category=category,
+                            verdict=verdict or "unknown",
+                            summary=EvidencedValue(
+                                value=summary,
+                                evidence_refs=[evidence.evidence_id],
+                            ),
+                            metrics=[],
+                            evidence_refs=[evidence.evidence_id],
+                        )
+                        signals[key] = signal
+                        signal_order.append(key)
+                    else:
+                        signal.verdict = verdict or signal.verdict
+                        signal.evidence_refs = list(
+                            dict.fromkeys(signal.evidence_refs + [evidence.evidence_id])
+                        )
+                        if not signal.summary.value:
+                            signal.summary = EvidencedValue(
+                                value=summary,
+                                evidence_refs=[evidence.evidence_id],
+                            )
+
+                metric_record = self._parse_pipe_kv_record(line, _COMMERCIAL_METRIC_PREFIX)
+                if metric_record:
+                    region = str(metric_record.get("region") or "GLOBAL").strip().upper()
+                    category = str(metric_record.get("category") or "other").strip().lower()
+                    metric_name = str(metric_record.get("name") or "").strip().lower()
+                    metric_value = str(metric_record.get("value") or "").strip()
+                    if not metric_name or not metric_value:
+                        continue
+                    evidence = _build_evidence(
+                        str(chunk.get("doc_id") or ""),
+                        chunk.get("page"),
+                        line,
+                        chunk.get("doc_title"),
+                        chunk.get("source_url"),
+                        doc_kind=chunk.get("doc_kind"),
+                    )
+                    self._evidence_registry[evidence.evidence_id] = evidence
+                    key = (region, category)
+                    signal = signals.get(key)
+                    if signal is None:
+                        signal = DossierCommercialSignal(
+                            signal_id=f"commercial_{region.lower()}_{category}",
+                            region=region,
+                            category=category,
+                            verdict="partial",
+                            summary=EvidencedValue(
+                                value=f"{region} {category.replace('_', ' ')} signal is present in commercial support docs.",
+                                evidence_refs=[evidence.evidence_id],
+                            ),
+                            metrics=[],
+                            evidence_refs=[evidence.evidence_id],
+                        )
+                        signals[key] = signal
+                        signal_order.append(key)
+                    signal.metrics.append(
+                        DossierCommercialMetric(
+                            name=metric_name,
+                            value=EvidencedValue(
+                                value=metric_value,
+                                evidence_refs=[evidence.evidence_id],
+                            ),
+                        )
+                    )
+                    signal.evidence_refs = list(
+                        dict.fromkeys(signal.evidence_refs + [evidence.evidence_id])
+                    )
+
+        ordered_signals = [signals[key] for key in signal_order][: settings.ddkit_commercial_signal_max]
+        if ordered_signals:
+            logger.info(
+                "commercial_signals_extracted inn=%s count=%d doc_kinds=%s",
+                self.inn,
+                len(ordered_signals),
+                sorted(allowed_doc_kinds),
+            )
+        return ordered_signals
 
     def _synthesis_chunk_score(self, item: Dict[str, Any]) -> int:
         title_lower = str(item.get("doc_title") or "").lower()
@@ -6164,6 +6318,7 @@ class DossierReportGenerator:
             ("clinical_studies", "Clinical Studies", len(report.clinical_studies)),
             ("patent_families", "Patent Families", len(report.patent_families)),
             ("synthesis_steps", "Synthesis Steps", len(report.synthesis_steps)),
+            ("commercial_signals", "Commercial Signals", len(report.commercial_signals)),
         ]
         manifest: List[Dict[str, Any]] = []
         for section_id, title, item_count in section_specs:
@@ -6200,6 +6355,7 @@ class DossierReportGenerator:
             "clinical_studies": 1 if report.clinical_studies else 0,
             "patent_families": 1 if report.patent_families else 0,
             "synthesis_steps": 1 if report.synthesis_steps else 0,
+            "commercial_signals": 1 if report.commercial_signals else 0,
         }
         expected_by_kind = {key: 1 for key in section_counts}
         included_total = sum(section_counts.values())
@@ -6364,7 +6520,27 @@ class DossierReportGenerator:
             )
         logger.info("synthesis_steps done (%.1fs)", time.time() - start_ts)
 
-        # ── F: Assemble report ────────────────────────────────────────────────
+        # ── F: Commercial signals ───────────────────────────────────────────
+        _check_deadline("commercial_signals")
+        commercial_signals = []
+        if completed_stages.get("commercial_signals"):
+            commercial_signals = self._restore_model_list(
+                checkpoint.get("commercial_signals"),
+                DossierCommercialSignal,
+            )
+            if commercial_signals:
+                logger.info("commercial_signals resumed from checkpoint count=%d", len(commercial_signals))
+        if not commercial_signals and not completed_stages.get("commercial_signals"):
+            commercial_signals = self._generate_commercial_signals(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="commercial_signals",
+                stage_payload=[item.model_dump() for item in commercial_signals],
+            )
+        logger.info("commercial_signals done (%.1fs)", time.time() - start_ts)
+
+        # ── G: Assemble report ────────────────────────────────────────────────
         import uuid as _uuid
 
         report_id = f"dossier_{case_id}_{int(time.time())}"
@@ -6414,6 +6590,7 @@ class DossierReportGenerator:
             clinical_studies=clinical_studies,
             patent_families=patent_families,
             synthesis_steps=synthesis_steps,
+            commercial_signals=commercial_signals,
             unknowns=unknowns,
             evidence_registry=evidence_list,
             sections=legacy_sections,
@@ -6496,6 +6673,7 @@ class DossierReportGenerator:
                 {"name": "clinical_studies", "status": _stage_status(len(clinical_studies)), "count": len(clinical_studies)},
                 {"name": "patent_families", "status": _stage_status(len(patent_families)), "count": len(patent_families)},
                 {"name": "synthesis_steps", "status": _stage_status(len(synthesis_steps)), "count": len(synthesis_steps)},
+                {"name": "commercial_signals", "status": _stage_status(len(commercial_signals)), "count": len(commercial_signals)},
                 {"name": "total", "elapsed_s": round(elapsed, 1), "run_verdict": _run_verdict},
             ],
             docs_attached=0,
@@ -6508,11 +6686,11 @@ class DossierReportGenerator:
 
         logger.info(
             "DossierReport v3.0 assembled: contexts=%d registrations=%d "
-            "clinical=%d patents=%d synthesis=%d unknowns=%d evidence=%d elapsed=%.1fs "
+            "clinical=%d patents=%d synthesis=%d commercial=%d unknowns=%d evidence=%d elapsed=%.1fs "
             "run_id=%s quality_v2_gates=%s",
             len(product_contexts),
             len(registrations), len(clinical_studies), len(patent_families),
-            len(synthesis_steps), len(unknowns), len(evidence_list), elapsed,
+            len(synthesis_steps), len(commercial_signals), len(unknowns), len(evidence_list), elapsed,
             run_id,
             report.dossier_quality_v2.decision_readiness if report.dossier_quality_v2 else "N/A",
         )
@@ -6527,19 +6705,21 @@ class DossierReportGenerator:
                     "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "completed_stages": {
                         "passport": True,
-                        "registrations": True,
-                        "clinical_studies": True,
-                        "patent_families": True,
-                        "synthesis_steps": True,
-                    },
-                    "passport": passport.model_dump(),
-                    "registrations": [item.model_dump() for item in registrations],
-                    "clinical_studies": [item.model_dump() for item in clinical_studies],
-                    "patent_families": [item.model_dump() for item in patent_families],
-                    "synthesis_steps": [item.model_dump() for item in synthesis_steps],
-                    "unknowns": [item.model_dump() for item in unknowns],
-                    "evidence_registry": [
-                        item.model_dump() for item in self._evidence_registry.values()
+                    "registrations": True,
+                    "clinical_studies": True,
+                    "patent_families": True,
+                    "synthesis_steps": True,
+                    "commercial_signals": True,
+                },
+                "passport": passport.model_dump(),
+                "registrations": [item.model_dump() for item in registrations],
+                "clinical_studies": [item.model_dump() for item in clinical_studies],
+                "patent_families": [item.model_dump() for item in patent_families],
+                "synthesis_steps": [item.model_dump() for item in synthesis_steps],
+                "commercial_signals": [item.model_dump() for item in commercial_signals],
+                "unknowns": [item.model_dump() for item in unknowns],
+                "evidence_registry": [
+                    item.model_dump() for item in self._evidence_registry.values()
                     ],
                     "report_id": report_id,
                     "run_id": run_id,

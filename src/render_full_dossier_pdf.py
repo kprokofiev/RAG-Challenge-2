@@ -63,6 +63,10 @@ _REGION_DOC_KINDS = {
     "epi": "EU",
     "eaeu_document": "EAEU",
     "eaeu_registration": "EAEU",
+    "ru_commercial_summary": "RU",
+    "ru_formulary_summary": "RU",
+    "ru_procurement_summary": "RU",
+    "ru_policy_act": "RU",
     "label": "US",
     "approval_letter": "US",
     "us_fda": "US",
@@ -401,6 +405,19 @@ def _collect_synthesis_sources(
     return titles
 
 
+def _collect_commercial_sources(
+    dossier: Dict[str, Any],
+    evidence_by_id: Dict[str, Dict[str, Any]],
+) -> List[str]:
+    titles: List[str] = []
+    for signal in dossier.get("commercial_signals", []) or []:
+        if not isinstance(signal, dict):
+            continue
+        _extend_unique(titles, _titles_from_evidence_refs(evidence_by_id, signal.get("evidence_refs")))
+        _extend_unique(titles, _titles_from_evidence_refs(evidence_by_id, _ev_refs(signal.get("summary"))))
+    return titles
+
+
 def _append_bullets(story: List[Any], lines: List[str], styles, style_name: str = "DossierBullet", max_items: Optional[int] = None):
     subset = lines[:max_items] if max_items else lines
     for line in subset:
@@ -638,6 +655,59 @@ def _format_step_line(step: Dict[str, Any]) -> str:
     return f"Шаг {step_number} ({kind}): " + "; ".join(parts)
 
 
+def _commercial_summary_lines(signals: List[Dict[str, Any]]) -> List[str]:
+    if not signals:
+        return ["Коммерческие open-data / policy сигналы в структурированном досье не выделены."]
+    by_region = Counter()
+    by_category = Counter()
+    confirmed = 0
+    partial = 0
+    for signal in signals:
+        region = _normalize_region(signal.get("region")) or "GLOBAL"
+        category = str(signal.get("category") or "other").strip().lower()
+        verdict = str(signal.get("verdict") or "unknown").strip().lower()
+        by_region[region] += 1
+        by_category[category] += 1
+        if verdict == "confirmed":
+            confirmed += 1
+        elif verdict == "partial":
+            partial += 1
+    lines = [f"В досье выделено {len(signals)} коммерческих сигналов."]
+    if confirmed or partial:
+        bits = []
+        if confirmed:
+            bits.append(f"confirmed: {confirmed}")
+        if partial:
+            bits.append(f"partial: {partial}")
+        lines.append("По статусу сигналов: " + ", ".join(bits) + ".")
+    if by_region:
+        lines.append("По географиям: " + ", ".join(f"{_region_label(region)}: {count}" for region, count in by_region.most_common(5)) + ".")
+    if by_category:
+        lines.append("По категориям: " + ", ".join(f"{name}: {count}" for name, count in by_category.most_common(5)) + ".")
+    return lines
+
+
+def _format_commercial_signal_line(signal: Dict[str, Any]) -> str:
+    region = _region_label(_normalize_region(signal.get("region")) or "GLOBAL")
+    category = str(signal.get("category") or "other").strip().lower().replace("_", " ")
+    verdict = str(signal.get("verdict") or "unknown").strip().lower()
+    summary = _ev_val(signal.get("summary"))
+    metrics = []
+    for metric in signal.get("metrics", []) or []:
+        if not isinstance(metric, dict):
+            continue
+        name = str(metric.get("name") or "").strip()
+        value = _ev_val(metric.get("value"))
+        if name and value != "—":
+            metrics.append(f"{name}={value}")
+    parts = [f"{region} / {category} / {verdict}"]
+    if summary != "—":
+        parts.append(summary[:220])
+    if metrics:
+        parts.append("метрики: " + ", ".join(metrics[:6]))
+    return "; ".join(parts)
+
+
 def _render_cover_page(story: List[Any], styles, dossier: Dict[str, Any], source_buckets: Dict[str, List[str]]):
     passport = dossier.get("passport", {}) or {}
     inn = passport.get("inn", "Unknown INN")
@@ -702,6 +772,20 @@ def _render_clinical_page(story: List[Any], styles, dossier: Dict[str, Any], sou
         _append_bullets(story, [_format_study_line(study) for study in studies], styles, max_items=10)
     else:
         story.append(Paragraph("Структурированных study cards в корпусе нет.", styles["Body"]))
+    _append_sources(story, styles, source_titles)
+
+
+def _render_commercial_page(story: List[Any], styles, dossier: Dict[str, Any], source_titles: List[str]):
+    signals = [item for item in (dossier.get("commercial_signals", []) or []) if isinstance(item, dict)]
+    story.append(PageBreak())
+    story.append(Paragraph("Коммерческий слой", styles["QuestionHead"]))
+    story.append(Paragraph("Сводка", styles["SectionHead"]))
+    _append_bullets(story, _commercial_summary_lines(signals), styles, max_items=6)
+    story.append(Paragraph("Сигналы", styles["SectionHead"]))
+    if signals:
+        _append_bullets(story, [_format_commercial_signal_line(signal) for signal in signals], styles, max_items=12)
+    else:
+        story.append(Paragraph("Коммерческие сигналы в structured dossier отсутствуют.", styles["Body"]))
     _append_sources(story, styles, source_titles)
 
 
@@ -780,12 +864,14 @@ def render_full_dossier_pdf(dossier: Dict[str, Any], output_path: str) -> str:
     evidence_by_id, evidence_by_doc_id = _make_evidence_maps(dossier)
     source_buckets = _collect_front_page_sources(dossier, evidence_by_id)
     registration_sources = _collect_registration_sources(dossier, evidence_by_id)
+    commercial_sources = _collect_commercial_sources(dossier, evidence_by_id)
     clinical_sources = _collect_clinical_sources(dossier, evidence_by_id)
     patent_sources = _collect_patent_sources(dossier, evidence_by_id, evidence_by_doc_id)
     synthesis_sources = _collect_synthesis_sources(dossier, evidence_by_id, evidence_by_doc_id)
 
     _render_cover_page(story, styles, dossier, source_buckets)
     _render_registrations_page(story, styles, dossier, registration_sources)
+    _render_commercial_page(story, styles, dossier, commercial_sources)
     _render_clinical_page(story, styles, dossier, clinical_sources)
     _render_patents_page(story, styles, dossier, patent_sources)
     _render_synthesis_page(story, styles, dossier, synthesis_sources)

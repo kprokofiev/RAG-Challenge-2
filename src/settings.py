@@ -155,6 +155,14 @@ class WorkerSettings(BaseSettings):
         36,
         env="DDKIT_SYNTHESIS_PATENT_CORPUS_MERGE_K",
     )
+    ddkit_commercial_signal_doc_kinds: str = Field(
+        "ru_commercial_summary,ru_formulary_summary,ru_procurement_summary,ru_policy_act,formulary,pricing,payer_policy",
+        env="DDKIT_COMMERCIAL_SIGNAL_DOC_KINDS",
+    )
+    ddkit_commercial_signal_max: int = Field(
+        16,
+        env="DDKIT_COMMERCIAL_SIGNAL_MAX",
+    )
 
     # Sprint-8: per-stage timeout budgets (seconds).
     # These define maximum wall-clock time for each pipeline stage.

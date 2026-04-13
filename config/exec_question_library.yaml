@@ -5,7 +5,7 @@
 # Free-text routing is out of scope for Sprint 22.
 
 version: "1.0"
-updated_at: "2026-04-06"
+updated_at: "2026-04-13"
 
 questions:
 
@@ -183,6 +183,7 @@ questions:
     required_confidence: medium
     required_sections:
       - registrations
+      - commercial_signals
       - patent_families
       - clinical_studies
       - passport
@@ -190,6 +191,7 @@ questions:
       - dossier_quality_v2
     must_have_fields:
       - registrations[*].status
+      - commercial_signals[*].summary
       - patent_families[*].expiry_by_country
       - clinical_studies[*].phase
     fallback_policy: allow_answer_with_unknowns

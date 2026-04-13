@@ -2,7 +2,7 @@
 Dossier Report Schema v3.0 (Sprint 7.5 additions)
 ===================================================
 Sprint 4 — structured dossier: passport + registrations + clinical_studies +
-patent_families + synthesis_steps + unknowns + evidence_registry.
+patent_families + synthesis_steps + commercial_signals + unknowns + evidence_registry.
 
 Sprint 7.5 additions:
   - product_contexts[] — multi-product context separation
@@ -283,6 +283,42 @@ class DossierRegistration(BaseModel):
     )
 
 
+# ── Commercial signals ───────────────────────────────────────────────────────
+
+class DossierCommercialMetric(BaseModel):
+    """Named metric used by a commercial signal."""
+    name: str = Field(description="Machine-readable metric name")
+    value: EvidencedValue = Field(description="Evidence-backed metric value")
+
+
+class DossierCommercialSignal(BaseModel):
+    """
+    Structured commercial / access signal derived from open-data, official acts,
+    or normalized support summaries.
+    """
+    signal_id: str = Field(description="Deterministic signal identifier")
+    region: str = Field(description="Region code, e.g. RU, EAEU, EU, US, GLOBAL")
+    category: str = Field(
+        description=(
+            "Commercial category, e.g. formulary_presence | coverage_access | "
+            "procurement | outlook"
+        )
+    )
+    verdict: str = Field(
+        "unknown",
+        description="Normalized commercial verdict: confirmed | partial | unknown"
+    )
+    summary: EvidencedValue = Field(description="Human-readable commercial summary with evidence")
+    metrics: List[DossierCommercialMetric] = Field(
+        default_factory=list,
+        description="Named supporting metrics extracted from commercial support docs"
+    )
+    evidence_refs: List[str] = Field(
+        default_factory=list,
+        description="All evidence_ids backing this commercial signal"
+    )
+
+
 # ── Clinical Study Card ───────────────────────────────────────────────────────
 
 class DossierClinicalStudy(BaseModel):
@@ -471,6 +507,7 @@ class DossierReport(BaseModel):
     clinical_studies: List[DossierClinicalStudy] = Field(default_factory=list)
     patent_families: List[DossierPatentFamily] = Field(default_factory=list)
     synthesis_steps: List[DossierSynthesisStep] = Field(default_factory=list)
+    commercial_signals: List[DossierCommercialSignal] = Field(default_factory=list)
 
     # Evidence & gaps
     unknowns: List[DossierUnknown] = Field(
@@ -709,6 +746,21 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     else:
         synth_pct = 50.0
 
+    # Commercial coverage: count signals with evidence-backed summaries and at
+    # least one supporting metric as stronger completion than a bare placeholder.
+    if report.commercial_signals:
+        signal_scores = []
+        for signal in report.commercial_signals:
+            filled = 0
+            if signal.summary and signal.summary.value and signal.summary.evidence_refs:
+                filled += 1
+            if signal.metrics and any(metric.value and metric.value.value for metric in signal.metrics):
+                filled += 1
+            signal_scores.append(filled / 2)
+        commercial_pct = round(sum(signal_scores) / len(signal_scores) * 100, 1)
+    else:
+        commercial_pct = 0.0
+
     # ── Chemistry block (S6-T4) ───────────────────────────────────────────────
     chemistry_filled = any([
         _ev_filled(pp.chemical_formula),
@@ -813,6 +865,8 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         "patents_pct": patent_pct,
         "patent_families_total": len(report.patent_families),
         "synthesis_pct": synth_pct,
+        "commercial_pct": commercial_pct,
+        "commercial_signals_total": len(report.commercial_signals),
         "chemistry_filled": chemistry_filled,
         "evidence_coverage_pct": evidence_coverage_pct,
         "evidence_completeness_pct": evidence_completeness_pct,
@@ -1665,6 +1719,7 @@ def compute_dossier_quality_v2(
         "clinical": round(q.get("clinical_pct", 0) / 100, 2),
         "patents": round(q.get("patents_pct", 0) / 100, 2),
         "synthesis": round(q.get("synthesis_pct", 0) / 100, 2),
+        "commercial": round(q.get("commercial_pct", 0) / 100, 2),
     }
 
     # Decision readiness gates
@@ -1858,12 +1913,28 @@ def compute_dossier_quality_v2(
     elif synthesis_api_steps > 0 or synthesis_non_api_steps > 0:
         synthesis_gate = "YELLOW"
 
+    commercial_confirmed = sum(
+        1 for signal in report.commercial_signals
+        if (getattr(signal, "verdict", "") or "").strip().lower() == "confirmed"
+    )
+    commercial_partial = sum(
+        1 for signal in report.commercial_signals
+        if (getattr(signal, "verdict", "") or "").strip().lower() == "partial"
+    )
+    if commercial_confirmed >= 2:
+        commercial_gate = "GREEN"
+    elif commercial_confirmed > 0 or commercial_partial > 0:
+        commercial_gate = "YELLOW"
+    else:
+        commercial_gate = "RED"
+
     decision_readiness = {
         "registrations": registrations_gate,
         "clinical": clinical_gate,
         "patents_discovery": patents_discovery_gate,
         "patents_legal": patents_legal,
         "synthesis": synthesis_gate,
+        "commercial": commercial_gate,
         "context_integrity": context_integrity,
     }
 
@@ -1939,6 +2010,12 @@ def compute_dossier_quality_v2(
         notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
     if synthesis_api_steps == 1 and synthesis_gate != "RED":
         notes.append("single verified API synthesis step only; route corroboration remains limited")
+    if report.commercial_signals and commercial_gate != "GREEN":
+        notes.append(
+            f"commercial signals present but still partial: confirmed={commercial_confirmed}, partial={commercial_partial}"
+        )
+    if not report.commercial_signals:
+        notes.append("commercial open-data support is absent from the current corpus.")
     if passport_scope == "single_context" and context_integrity == "GREEN" and ctx_count > 1:
         notes.append(f"{ctx_count} regional contexts converge to a single product-context route")
     if us_expiry_expected and not us_expiry_covered:

@@ -591,6 +591,170 @@ def _build_generic_claims(
     return claims
 
 
+def _build_commercial_claims(
+    dossier: Dict[str, Any],
+    evidence_pack,
+    resolved_scope,
+) -> List[Claim]:
+    """Build commercial / BD claims from structured dossier + commercial signals."""
+    claims: List[Claim] = []
+
+    registrations = dossier.get("registrations", []) or []
+    positive_regions: List[str] = []
+    partial_regions: List[str] = []
+    reg_refs: List[str] = []
+    for reg in registrations:
+        region = str(reg.get("region") or "").strip().upper()
+        verdict = str(
+            reg.get("verdict")
+            or infer_registration_verdict(
+                status=reg.get("status"),
+                mah=reg.get("mah"),
+                identifiers=reg.get("identifiers"),
+                forms_strengths=reg.get("forms_strengths"),
+            )
+        ).strip().lower()
+        if verdict == VERDICT_CONFIRMED and region:
+            positive_regions.append(region)
+            reg_refs.extend(_collect_evidence_refs(reg))
+        elif verdict == VERDICT_PARTIAL and region:
+            partial_regions.append(region)
+            reg_refs.extend(_collect_evidence_refs(reg))
+
+    if positive_regions:
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_registration_footprint"),
+            text=f"Confirmed registration footprint spans {', '.join(sorted(set(positive_regions)))}.",
+            semantic_role="commercial_registration_footprint",
+            support_level="strong" if reg_refs else "moderate",
+            support_fields=["registrations"],
+            evidence_refs=list(dict.fromkeys(reg_refs)),
+        ))
+    elif partial_regions:
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_registration_partial"),
+            text=f"Commercial registration grounding remains partial in {', '.join(sorted(set(partial_regions)))}.",
+            semantic_role="commercial_registration_partial",
+            support_level="moderate",
+            support_fields=["registrations"],
+            evidence_refs=list(dict.fromkeys(reg_refs)),
+        ))
+
+    signals = dossier.get("commercial_signals", []) or []
+    procurement_present = False
+    for signal in signals:
+        region = str(signal.get("region") or "GLOBAL").strip().upper()
+        category = str(signal.get("category") or "other").strip().lower()
+        verdict = str(signal.get("verdict") or "unknown").strip().lower()
+        summary_ev = signal.get("summary")
+        summary_val = _ev_value(summary_ev)
+        refs = _collect_evidence_refs(summary_ev, signal.get("metrics"), signal.get("evidence_refs"))
+        if category == "procurement" and verdict in {"confirmed", "partial"}:
+            procurement_present = True
+        if summary_val:
+            semantic_role = f"commercial_{category}"
+            support = "strong" if refs else ("moderate" if verdict in {"confirmed", "partial"} else "weak")
+            claims.append(Claim(
+                claim_id=_claim_id(f"commercial_{region}_{category}"),
+                text=f"{region} {category.replace('_', ' ')}: {summary_val}",
+                jurisdiction=region,
+                semantic_role=semantic_role,
+                support_level=support,
+                support_fields=[f"commercial_signals[{region}:{category}].summary"],
+                evidence_refs=refs,
+            ))
+
+    patent_families = dossier.get("patent_families", []) or []
+    expiry_points: List[str] = []
+    patent_refs: List[str] = []
+    for family in patent_families:
+        expiry_points.extend(
+            [_ev_value(item) for item in (family.get("expiry_by_country") or []) if _ev_value(item)]
+        )
+        patent_refs.extend(_collect_evidence_refs(family))
+    expiry_points = list(dict.fromkeys(expiry_points))
+    if expiry_points:
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_ip_window"),
+            text=f"Patent expiry evidence in the current corpus includes: {'; '.join(expiry_points[:4])}.",
+            semantic_role="commercial_ip_window",
+            support_level="strong" if patent_refs else "moderate",
+            support_fields=["patent_families[*].expiry_by_country"],
+            evidence_refs=list(dict.fromkeys(patent_refs)),
+        ))
+
+    studies = dossier.get("clinical_studies", []) or []
+    status_counter = Counter()
+    phase_counter = Counter()
+    clinical_refs: List[str] = []
+    for study in studies:
+        status = normalize_clinical_status(_ev_value(study.get("status")) or "") or _ev_value(study.get("status"))
+        if status:
+            status_counter[status] += 1
+        phase = _ev_value(study.get("phase"))
+        if phase and phase != "—":
+            phase_counter[phase] += 1
+        clinical_refs.extend(_collect_evidence_refs(study))
+    if studies:
+        status_bits = []
+        for key in ("RECRUITING", "ACTIVE_NOT_RECRUITING", "NOT_YET_RECRUITING", "COMPLETED", "TERMINATED"):
+            if status_counter.get(key):
+                status_bits.append(f"{key}: {status_counter[key]}")
+        phase_bits = [f"{name}: {count}" for name, count in phase_counter.most_common(3)]
+        summary_parts = [f"{len(studies)} study cards in the current dossier"]
+        if status_bits:
+            summary_parts.append("statuses " + ", ".join(status_bits))
+        if phase_bits:
+            summary_parts.append("phase mix " + ", ".join(phase_bits))
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_clinical_maturity"),
+            text="Clinical maturity: " + "; ".join(summary_parts) + ".",
+            semantic_role="commercial_clinical_maturity",
+            support_level="strong" if clinical_refs else "moderate",
+            support_fields=["clinical_studies"],
+            evidence_refs=list(dict.fromkeys(clinical_refs)),
+        ))
+
+    quality = dossier.get("dossier_quality_v2") or {}
+    readiness = quality.get("decision_readiness") or {}
+    readiness_bits = [
+        f"{key}={value}"
+        for key, value in readiness.items()
+        if key in {"registrations", "patents_legal", "clinical", "synthesis", "commercial", "context_integrity"}
+    ]
+    if readiness_bits:
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_readiness"),
+            text=f"Decision-readiness gates for commercial use: {'; '.join(readiness_bits)}.",
+            semantic_role="commercial_readiness",
+            support_level="moderate",
+            support_fields=["dossier_quality_v2.decision_readiness"],
+            evidence_refs=[],
+        ))
+
+    if not procurement_present:
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_procurement_gap"),
+            text="Procurement / tender evidence is not yet populated in the current commercial support layer.",
+            semantic_role="commercial_procurement_gap",
+            support_level="weak",
+            support_fields=["commercial_signals[*].category"],
+            evidence_refs=[],
+        ))
+
+    if not claims:
+        claims.append(Claim(
+            claim_id=_claim_id("commercial_no_evidence"),
+            text="No structured commercial evidence was identified in the dossier.",
+            semantic_role="commercial_unknown",
+            support_level="unsupported",
+            support_fields=["commercial_signals", "registrations", "patent_families", "clinical_studies"],
+            evidence_refs=[],
+        ))
+
+    return claims
+
+
 def _build_data_quality_claims(
     dossier: Dict[str, Any],
     evidence_pack,
@@ -691,7 +855,7 @@ _CLAIM_BUILDERS = {
     "clinical_evidence": _build_clinical_claims,
     "chemistry_identity": _build_chemistry_claims,
     "synthesis_manufacturing": _build_generic_claims,
-    "commercial_assessment": _build_generic_claims,
+    "commercial_assessment": _build_commercial_claims,
     "data_quality": _build_data_quality_claims,
 }
 
@@ -881,6 +1045,12 @@ def _classify_registration_status(status_val: str) -> str:
         "authorized",
         "valid",
         "active",
+        "fda approval",
+        "approval letter referenced",
+        "approval letter",
+        "действует",
+        "разрешен",
+        "разрешён",
     )
 
     if any(marker in s for marker in negative_markers):
@@ -1184,6 +1354,21 @@ class ClaimBuilder:
             if any(c.semantic_role == "non_api_process_only" for c in claims):
                 implications.append("Current process evidence reflects formulation/manufacturing steps more than verified API route chemistry.")
 
+        elif q_type == "commercial_assessment":
+            footprint = next((c for c in claims if c.semantic_role == "commercial_registration_footprint"), None)
+            procurement_gap = next((c for c in claims if c.semantic_role == "commercial_procurement_gap"), None)
+            readiness = next((c for c in claims if c.semantic_role == "commercial_readiness"), None)
+            formulary = [c for c in claims if c.semantic_role in {"commercial_formulary_presence", "commercial_policy_presence"}]
+
+            if footprint:
+                implications.append(footprint.text)
+            if formulary:
+                implications.append("RU commercial/open-data support is present for formulary/policy visibility.")
+            if readiness:
+                implications.append(readiness.text)
+            if procurement_gap:
+                implications.append("Procurement/tender concentration is still thin, so the business view remains stronger on registration/IP than on real purchasing flow.")
+
         elif q_type == "data_quality":
             readiness = next((c for c in claims if c.semantic_role == "quality_readiness"), None)
             coverage = next((c for c in claims if c.semantic_role == "quality_coverage"), None)
@@ -1223,5 +1408,12 @@ class ClaimBuilder:
             action = u.get("suggested_next_action")
             if action:
                 actions.append(action)
+
+        q_type = getattr(routed_question, "question_type", "")
+        if q_type == "commercial_assessment":
+            if not any("procurement" in action.lower() for action in actions):
+                actions.append("Add procurement/tender evidence if a go-to-market or pricing recommendation is needed.")
+            if not any("commercial open-data" in action.lower() for action in actions):
+                actions.append("Refresh RU commercial open-data support docs (ESKLP/export/policy snapshot) before external delivery if the snapshot date changes.")
 
         return actions
