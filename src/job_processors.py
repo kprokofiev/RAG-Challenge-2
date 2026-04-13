@@ -530,6 +530,7 @@ class DocParseIndexProcessor:
                     "patent_legal_events",
                     "patent_pdf",
                     "pubchem",
+                    "ru_instruction",
                     "ru_patent_pdf",
                     "scientific_pmc",
                     "us_fda",
