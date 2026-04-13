@@ -1389,8 +1389,16 @@ class DossierReportGenerator:
             lines.append(line)
         return alias_map, "\n".join(lines)
 
-    def _call_llm(self, instruction: str, context: str, question: str,
-                   candidates_str: str, schema_class) -> Optional[Any]:
+    def _call_llm_with_model(
+        self,
+        instruction: str,
+        context: str,
+        question: str,
+        candidates_str: str,
+        schema_class,
+        *,
+        model_override: Optional[str] = None,
+    ) -> Optional[Any]:
         """Call LLM with structured output schema; returns parsed Pydantic object or None.
 
         Retries up to 3 times with exponential backoff on rate-limit (429) errors.
@@ -1412,7 +1420,7 @@ class DossierReportGenerator:
         for attempt in range(max_retries + 1):
             try:
                 result_dict = self.api.send_message(
-                    model=self.answering_model,
+                    model=model_override or self.answering_model,
                     system_content=system_prompt,
                     human_content=user_prompt,
                     is_structured=True,
@@ -1443,6 +1451,149 @@ class DossierReportGenerator:
                     ) from exc
                 logger.warning("LLM call failed for question=%r: %s", question[:60], exc)
                 return None
+
+    def _call_llm(self, instruction: str, context: str, question: str,
+                   candidates_str: str, schema_class) -> Optional[Any]:
+        return self._call_llm_with_model(
+            instruction,
+            context,
+            question,
+            candidates_str,
+            schema_class,
+        )
+
+    def _materialize_synthesis_steps(
+        self,
+        raw_steps: List[_SynthesisStepLLM],
+        alias_map: Dict[str, Dict[str, Any]],
+        unknowns: List[DossierUnknown],
+        *,
+        add_missing_alias_unknowns: bool = True,
+    ) -> Tuple[List[DossierSynthesisStep], bool]:
+        steps: List[DossierSynthesisStep] = []
+        non_api_detected = False
+        am = alias_map
+        for step_llm in raw_steps or []:
+            if step_llm.description is None:
+                continue
+            desc = _ev_to_evidenced_value(step_llm.description, am)
+            if desc is None or not desc.evidence_refs:
+                if add_missing_alias_unknowns:
+                    self._add_unknown(
+                        unknowns,
+                        f"synthesis_steps[{step_llm.step_number}].description",
+                        "NO_EVIDENCE_IN_CORPUS",
+                        "Synthesis step description lacked linked evidence_id.",
+                    )
+                continue
+
+            reagents = _ev_list(step_llm.reagents, am)
+            intermediates = _ev_list(step_llm.intermediates, am)
+            ev_refs = list(desc.evidence_refs)
+            for ev in reagents + intermediates:
+                ev_refs.extend(ev.evidence_refs)
+
+            key_docs = list(
+                {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
+            )
+            kind = classify_synthesis_kind(str(desc.value or ""))
+            if kind != "api_synthesis":
+                non_api_detected = True
+                continue
+            steps.append(
+                DossierSynthesisStep(
+                    step_number=step_llm.step_number or (len(steps) + 1),
+                    kind=kind,
+                    description=desc,
+                    reagents=reagents,
+                    intermediates=intermediates,
+                    source_patent_refs=key_docs,
+                    evidence_refs=list(set(ev_refs)),
+                )
+            )
+        return steps, non_api_detected
+
+    def _extract_synthesis_steps_chunkwise(
+        self,
+        question: str,
+        retrieved: List[Dict[str, Any]],
+        unknowns: List[DossierUnknown],
+        *,
+        source_label: str,
+    ) -> List[DossierSynthesisStep]:
+        if not retrieved:
+            return []
+
+        model_name = os.getenv("DDKIT_SYNTHESIS_EXTRACT_MODEL", "gpt-5.4-mini")
+        max_chunks = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_MAX", "8") or 8))
+        max_steps = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_STEPS", "3") or 3))
+        instruction = (
+            f"{_SYNTHESIS_INSTRUCTION}\n\n"
+            "You will receive ONE patent chunk at a time.\n"
+            "- Extract AT MOST ONE concrete API-route or apixaban-intermediate step from that chunk.\n"
+            "- Prefer example/procedure paragraphs with explicit operations, reagents, and yields.\n"
+            "- Return empty steps if the chunk is only title, legal metadata, background, or formulation/manufacturing text.\n"
+            "- Translate Chinese faithfully into concise English."
+        )
+
+        collected: List[DossierSynthesisStep] = []
+        seen_keys: set[str] = set()
+        for item in retrieved[:max_chunks]:
+            candidates_map = self._candidates_map([item])
+            context = self._context_str([item])
+            alias_map, candidates_str = self._build_alias_map(candidates_map)
+            result = self._call_llm_with_model(
+                instruction,
+                context,
+                f"{question} Use only this single chunk and return at most one explicit step if present.",
+                candidates_str,
+                _SynthesisExtractLLM,
+                model_override=model_name,
+            )
+            if result is None or not result.steps:
+                continue
+
+            steps, _ = self._materialize_synthesis_steps(
+                result.steps[:1],
+                alias_map,
+                unknowns,
+                add_missing_alias_unknowns=False,
+            )
+            for step in steps:
+                desc_key = re.sub(r"\s+", " ", str(getattr(step.description, "value", "") or "").strip().lower())
+                doc_key = "|".join(sorted(str(doc_id) for doc_id in (step.source_patent_refs or [])))
+                dedupe_key = f"{doc_key}|{desc_key}"
+                if not desc_key or dedupe_key in seen_keys:
+                    continue
+                seen_keys.add(dedupe_key)
+                collected.append(step)
+                if len(collected) >= max_steps:
+                    break
+            if len(collected) >= max_steps:
+                break
+
+        for idx, step in enumerate(collected, 1):
+            step.step_number = idx
+
+        if collected:
+            logger.info(
+                "synthesis_chunkwise_fallback_success inn=%s source=%s model=%s chunks=%d steps=%d",
+                self.inn,
+                source_label,
+                model_name,
+                min(len(retrieved), max_chunks),
+                len(collected),
+            )
+        else:
+            logger.info(
+                "synthesis_chunkwise_fallback_empty inn=%s source=%s model=%s chunks=%d",
+                self.inn,
+                source_label,
+                model_name,
+                min(len(retrieved), max_chunks),
+            )
+
+        return collected
 
     def _context_str(self, retrieved: List[Dict[str, Any]]) -> str:
         parts = []
@@ -5846,6 +5997,14 @@ class DossierReportGenerator:
                 _SYNTHESIS_INSTRUCTION, context, question, candidates_str, _SynthesisExtractLLM
             )
             if result is None or not result.steps:
+                chunkwise_steps = self._extract_synthesis_steps_chunkwise(
+                    question,
+                    retrieved,
+                    unknowns,
+                    source_label=source_label,
+                )
+                if chunkwise_steps:
+                    return "ok", chunkwise_steps
                 logger.info(
                     "synthesis_source_no_steps inn=%s source=%s retrieved=%d",
                     self.inn,
@@ -5854,45 +6013,11 @@ class DossierReportGenerator:
                 )
                 return "no_steps", []
 
-            steps: List[DossierSynthesisStep] = []
-            non_api_detected = False
-            am = alias_map
-            for step_llm in result.steps:
-                if step_llm.description is None:
-                    continue
-                desc = _ev_to_evidenced_value(step_llm.description, am)
-                if desc is None or not desc.evidence_refs:
-                    self._add_unknown(
-                        unknowns, f"synthesis_steps[{step_llm.step_number}].description",
-                        "NO_EVIDENCE_IN_CORPUS",
-                        "Synthesis step description lacked linked evidence_id.",
-                    )
-                    continue
-
-                reagents = _ev_list(step_llm.reagents, am)
-                intermediates = _ev_list(step_llm.intermediates, am)
-                ev_refs = list(desc.evidence_refs)
-                for ev in reagents + intermediates:
-                    ev_refs.extend(ev.evidence_refs)
-
-                key_docs = list(
-                    {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
-                )
-                kind = classify_synthesis_kind(str(desc.value or ""))
-                if kind != "api_synthesis":
-                    non_api_detected = True
-                    continue
-                steps.append(
-                    DossierSynthesisStep(
-                        step_number=step_llm.step_number or (len(steps) + 1),
-                        kind=kind,
-                        description=desc,
-                        reagents=reagents,
-                        intermediates=intermediates,
-                        source_patent_refs=key_docs,
-                        evidence_refs=list(set(ev_refs)),
-                    )
-                )
+            steps, non_api_detected = self._materialize_synthesis_steps(
+                result.steps,
+                alias_map,
+                unknowns,
+            )
 
             if steps:
                 logger.info(
@@ -5903,6 +6028,14 @@ class DossierReportGenerator:
                 )
                 return "ok", steps
             if non_api_detected:
+                chunkwise_steps = self._extract_synthesis_steps_chunkwise(
+                    question,
+                    retrieved,
+                    unknowns,
+                    source_label=f"{source_label}_after_non_api",
+                )
+                if chunkwise_steps:
+                    return "ok", chunkwise_steps
                 logger.info(
                     "synthesis_source_non_api_only inn=%s source=%s retrieved=%d",
                     self.inn,
