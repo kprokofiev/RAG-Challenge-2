@@ -19,6 +19,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+from src.clinical_status import format_clinical_status, normalize_clinical_status
 from src.registration_truth import (
     VERDICT_CONFIRMED,
     VERDICT_PARTIAL,
@@ -276,8 +277,9 @@ def _build_ongoing_trials_claims(
         title = _ev_value(study.get("title"))
         phase = _ev_value(study.get("phase"))
         n_enrolled = _ev_value(study.get("n_enrolled"))
-        status = (_ev_value(study.get("status")) or "").strip()
+        status = normalize_clinical_status(_ev_value(study.get("status")) or "") or ""
         status_upper = status.upper()
+        status_label = format_clinical_status(status)
         conclusion = _ev_value(study.get("conclusion"))
         is_ongoing = _ev_bool(study.get("is_ongoing"))
         refs = _collect_evidence_refs(
@@ -298,8 +300,8 @@ def _build_ongoing_trials_claims(
                 text_parts.append(f"Phase {phase}")
             if n_enrolled:
                 text_parts.append(f"N={n_enrolled}")
-            if status:
-                text_parts.append(f"Status: {status}")
+            if status_label:
+                text_parts.append(f"Status: {status_label}")
             if conclusion:
                 text_parts.append(f"Studying: {conclusion[:150]}")
 
@@ -320,7 +322,7 @@ def _build_ongoing_trials_claims(
 
     refs = list(dict.fromkeys(fallback_refs))
     status_summary = ", ".join(
-        f"{status.title()} ({count})" for status, count in status_counts.most_common(3)
+        f"{format_clinical_status(status) or status} ({count})" for status, count in status_counts.most_common(3)
     ) or "no status breakdown available"
     claims.append(Claim(
         claim_id=_claim_id("ongoing_none_identified"),
@@ -460,6 +462,8 @@ def _build_synthesis_overview_claims(
         if tech_focus in {"process_manufacturing", "intermediate_synthesis"} or process_rel in {"moderate", "strong"}:
             process_families.append(fam)
 
+    route_is_corroborated = len(api_steps) >= 2 or len(process_families) >= 2
+
     for idx, step in enumerate(api_steps[:3], 1):
         desc = _ev_value(step.get("description"))
         refs = _collect_evidence_refs(
@@ -473,7 +477,7 @@ def _build_synthesis_overview_claims(
                 claim_id=_claim_id(f"api_synth_step_{idx}_{desc[:40]}"),
                 text=f"API synthesis step {idx}: {desc[:220]}",
                 semantic_role="api_synthesis_step",
-                support_level="strong" if refs else "moderate",
+                support_level="strong" if refs and route_is_corroborated else "moderate",
                 support_fields=["synthesis_steps.description"],
                 evidence_refs=refs,
             ))
@@ -498,6 +502,24 @@ def _build_synthesis_overview_claims(
             semantic_role="process_relevant_patent",
             support_level="strong" if refs else "moderate",
             support_fields=["patent_families.process_relevance", "patent_families.technical_focus"],
+            evidence_refs=refs,
+        ))
+
+    if api_steps and not route_is_corroborated:
+        refs = _collect_evidence_refs(
+            [step.get("description") for step in api_steps[:2]],
+            [step.get("evidence_refs") for step in api_steps[:2]],
+            [fam.get("representative_pub") for fam in process_families[:2]],
+        )
+        claims.append(Claim(
+            claim_id=_claim_id("api_route_partial"),
+            text=(
+                "A process/API route signal is present, but the assembled synthesis route remains only partially "
+                "verified because corroborating stepwise evidence is limited."
+            ),
+            semantic_role="api_synthesis_partial",
+            support_level="moderate" if refs else "weak",
+            support_fields=["synthesis_steps.kind", "patent_families.process_relevance"],
             evidence_refs=refs,
         ))
 
@@ -1024,15 +1046,6 @@ class ClaimBuilder:
                         "a verified API synthesis route is not directly evidenced in the corpus."
                     ),
                     "suggested_next_action": "Attach process-chemistry/API synthesis patents or CMC sources before treating synthesis as closed.",
-                })
-
-        if routed_question.question_type == "data_quality":
-            for idx, warning in enumerate(resolved_scope.scope_warnings or [], 1):
-                derived.append({
-                    "field_path": f"scope.warning_{idx}",
-                    "reason_code": "SCOPE_WARNING",
-                    "message": warning,
-                    "suggested_next_action": "Tighten product-context gating before using this answer for external executive delivery.",
                 })
 
         return derived

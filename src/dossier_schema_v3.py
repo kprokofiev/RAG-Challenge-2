@@ -689,15 +689,25 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     else:
         patent_pct = 0.0
 
-    # Synthesis coverage
-    synth_pct = round(
-        sum(
-            1
-            for ss in report.synthesis_steps
-            if ss.evidence_refs and (getattr(ss, "kind", "") or "").strip().lower() == "api_synthesis"
-        ) / max(len(report.synthesis_steps), 1) * 100,
-        1
-    ) if report.synthesis_steps else 0.0
+    # Synthesis coverage: one isolated API-route step should not score as "fully closed".
+    api_synth_steps = [
+        ss for ss in report.synthesis_steps
+        if ss.evidence_refs and (getattr(ss, "kind", "") or "").strip().lower() == "api_synthesis"
+    ]
+    api_synth_sources = {
+        str(doc_id).strip()
+        for ss in api_synth_steps
+        for doc_id in (getattr(ss, "source_patent_refs", None) or [])
+        if str(doc_id).strip()
+    }
+    if not api_synth_steps:
+        synth_pct = 0.0
+    elif len(api_synth_steps) >= 2 and len(api_synth_sources) >= 2:
+        synth_pct = 100.0
+    elif len(api_synth_steps) >= 2 or len(api_synth_sources) >= 2:
+        synth_pct = 75.0
+    else:
+        synth_pct = 50.0
 
     # ── Chemistry block (S6-T4) ───────────────────────────────────────────────
     chemistry_filled = any([
@@ -1708,8 +1718,16 @@ def compute_dossier_quality_v2(
         if getattr(c, "context_strength", None) == "weak_signal"
     )
     passport_scope = str(getattr(getattr(report, "passport", None), "passport_scope", "") or "").strip().lower()
+    route_families = {
+        str(getattr(c, "route", "") or "").strip().lower()
+        for c in report.product_contexts
+        if str(getattr(c, "route", "") or "").strip()
+    }
     if passport_scope == "single_context":
-        context_integrity = "GREEN" if ctx_count <= 2 else "YELLOW"
+        if weak_signal_ctx == 0 and len(route_families) <= 1 and reg_confirmed_ctx >= max(ctx_count, 1):
+            context_integrity = "GREEN"
+        else:
+            context_integrity = "YELLOW"
     elif ctx_count <= 1:
         context_integrity = "GREEN"
     elif ctx_count <= 3:
@@ -1827,9 +1845,17 @@ def compute_dossier_quality_v2(
     )
 
     synthesis_gate = "RED"
-    if synthesis_api_steps > 0:
+    synthesis_cov = coverage.get("synthesis", 0)
+    synthesis_api_sources = {
+        str(doc_id).strip()
+        for step in report.synthesis_steps
+        if (getattr(step, "kind", "") or "").strip().lower() == "api_synthesis"
+        for doc_id in (getattr(step, "source_patent_refs", None) or [])
+        if str(doc_id).strip()
+    }
+    if synthesis_api_steps >= 2 and (len(synthesis_api_sources) >= 2 or synthesis_cov >= 0.75):
         synthesis_gate = "GREEN"
-    elif synthesis_non_api_steps > 0:
+    elif synthesis_api_steps > 0 or synthesis_non_api_steps > 0:
         synthesis_gate = "YELLOW"
 
     decision_readiness = {
@@ -1911,6 +1937,10 @@ def compute_dossier_quality_v2(
             notes.append(f"Multiple product contexts detected: {ctx_count}")
     if patents_legal_pct < 1.0 and total_families > 0:
         notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
+    if synthesis_api_steps == 1 and synthesis_gate != "RED":
+        notes.append("single verified API synthesis step only; route corroboration remains limited")
+    if passport_scope == "single_context" and context_integrity == "GREEN" and ctx_count > 1:
+        notes.append(f"{ctx_count} regional contexts converge to a single product-context route")
     if us_expiry_expected and not us_expiry_covered:
         notes.append("US patent expiry evidence is still missing; do not treat US/EU expiry as fully verified.")
     if total_families == 0:

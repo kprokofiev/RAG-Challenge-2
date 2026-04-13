@@ -38,6 +38,7 @@ except ImportError:
     logger.warning("reportlab not installed — PDF rendering disabled")
 
 from pdf_fonts import FONT_BOLD, FONT_NORMAL, register_cyrillic_fonts
+from src.clinical_status import format_clinical_status, normalize_clinical_status
 from src.registration_truth import VERDICT_CONFIRMED, VERDICT_PARTIAL, infer_registration_verdict
 
 
@@ -58,6 +59,7 @@ _REGION_DOC_KINDS = {
     "pil": "EU",
     "assessment_report": "EU",
     "eu_regulatory_summary": "EU",
+    "registry_report": "EU",
     "epi": "EU",
     "eaeu_document": "EAEU",
     "eaeu_registration": "EAEU",
@@ -489,8 +491,8 @@ def _clinical_summary_lines(studies: List[Dict[str, Any]]) -> List[str]:
     ru_presence = 0
     conclusions = 0
     for study in studies:
-        status = _ev_val(study.get("status"))
-        if status != "—":
+        status = normalize_clinical_status(_ev_val(study.get("status")))
+        if status:
             status_counter[status] += 1
         phase = _ev_val(study.get("phase"))
         if phase != "—":
@@ -502,7 +504,10 @@ def _clinical_summary_lines(studies: List[Dict[str, Any]]) -> List[str]:
 
     lines = [f"В досье собрано {len(studies)} клинических карточек."]
     if status_counter:
-        top_statuses = ", ".join(f"{status}: {count}" for status, count in status_counter.most_common(4))
+        top_statuses = ", ".join(
+            f"{format_clinical_status(status) or status}: {count}"
+            for status, count in status_counter.most_common(4)
+        )
         lines.append(f"По статусам: {top_statuses}.")
     phases = _unique(phase_values)
     if phases:
@@ -517,7 +522,7 @@ def _clinical_summary_lines(studies: List[Dict[str, Any]]) -> List[str]:
 def _format_study_line(study: Dict[str, Any]) -> str:
     study_id = _ev_val(study.get("study_id"))
     title = _ev_val(study.get("title"))
-    status = _ev_val(study.get("status"))
+    status = format_clinical_status(_ev_val(study.get("status"))) or _ev_val(study.get("status"))
     phase = _ev_val(study.get("phase"))
     countries = ", ".join(_ev_list(study.get("countries"))[:4])
     conclusion = _ev_val(study.get("conclusion"))
@@ -672,7 +677,6 @@ def _render_registrations_page(story: List[Any], styles, dossier: Dict[str, Any]
         regions = _unique(
             [_region_label(_normalize_region(reg.get("region"))) for reg in registrations if reg.get("region")]
         )
-        regions = []
         if regions:
             story.append(Paragraph(f"Подтвержденные регионы: {', '.join(regions)}.", styles["Body"]))
         _append_bullets(

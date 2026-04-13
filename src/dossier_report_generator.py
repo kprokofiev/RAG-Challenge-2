@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field
 
 from src.api_requests import APIProcessor
+from src.clinical_status import normalize_clinical_status
 from src.dossier_schema_v3 import (
     DossierEvidence,
     DossierUnknown,
@@ -66,6 +67,18 @@ class RateLimitExhausted(Exception):
 
 
 _CHECKPOINT_UNSET = object()
+
+
+def _normalize_clinical_status_ev(ev: Optional[EvidencedValue]) -> Optional[EvidencedValue]:
+    if ev is None or ev.value in (None, ""):
+        return ev
+    normalized = normalize_clinical_status(str(ev.value))
+    if not normalized or normalized == ev.value:
+        return ev
+    return EvidencedValue(
+        value=normalized,
+        evidence_refs=list(dict.fromkeys(ev.evidence_refs or [])),
+    )
 
 
 # ── Authority-tiering policy (S6-T2) ───────────────��─────────────────────────
@@ -4597,7 +4610,7 @@ class DossierReportGenerator:
         comparator = _collect(_ev_to_evidenced_value(study_llm.comparator, am))
         regimen = _collect(_ev_to_evidenced_value(study_llm.regimen_dosing, am))
         conclusion = _collect(_ev_to_evidenced_value(study_llm.conclusion, am))
-        status = _collect(_ev_to_evidenced_value(study_llm.status, am))
+        status = _normalize_clinical_status_ev(_collect(_ev_to_evidenced_value(study_llm.status, am)))
         countries = _ev_list(study_llm.countries, am)
         efficacy = _ev_list(study_llm.efficacy_keypoints, am)
         for ev in countries + efficacy:
@@ -4876,7 +4889,7 @@ class DossierReportGenerator:
             if alloc and alloc not in ("NA", "N_A"):
                 study_type_value = f"{study_type_value} ({alloc.replace('_', ' ').title()})"
 
-        status_value = status_mod.get("overallStatus") or None
+        status_value = normalize_clinical_status(status_mod.get("overallStatus") or None)
         enrolled_value = None
         enroll_info = design.get("enrollmentInfo", {})
         if enroll_info.get("count") is not None:
@@ -4970,7 +4983,7 @@ class DossierReportGenerator:
                     study.phase = EvidencedValue(value=phase_str, evidence_refs=refs)
 
             if needs_status:
-                overall_status = status_mod.get("overallStatus", "")
+                overall_status = normalize_clinical_status(status_mod.get("overallStatus", "") or "")
                 if overall_status:
                     study.status = EvidencedValue(value=overall_status, evidence_refs=refs)
 
@@ -5010,7 +5023,7 @@ class DossierReportGenerator:
 
             # WS3.7: Deterministic screening signal flags from CTGov API
             # is_ongoing: actively recruiting or not yet completed
-            overall_status = status_mod.get("overallStatus", "")
+            overall_status = normalize_clinical_status(status_mod.get("overallStatus", "") or "")
             _ongoing_statuses = {"RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATION",
                                   "NOT_YET_RECRUITING", "AVAILABLE"}
             if overall_status:
@@ -5373,6 +5386,7 @@ class DossierReportGenerator:
         # Step 4: CTGov API enrichment — fill null phase/status/enrollment/countries
         if studies:
             self._enrich_clinical_from_ctgov_api(studies)
+            self._normalize_clinical_statuses(studies)
             self._backfill_clinical_flags_from_local_fields(studies)
             clinical_flag_specs = {
                 "is_ongoing": "overall CTGov status metadata",
@@ -5965,6 +5979,14 @@ class DossierReportGenerator:
             f"Synthesis steps could not be assembled for {self.inn} from patents or EPAR/assessment_report fallback.",
         )
         return []
+
+    def _normalize_clinical_statuses(
+        self,
+        studies: List[DossierClinicalStudy],
+    ) -> None:
+        """Canonicalize stored study statuses before summaries/exec generation."""
+        for study in studies:
+            study.status = _normalize_clinical_status_ev(study.status)
 
     def _build_fallback_sections_manifest(self, report: DossierReport) -> List[Dict[str, Any]]:
         """Honest non-null fallback when legacy DD sections[] payload is unavailable."""

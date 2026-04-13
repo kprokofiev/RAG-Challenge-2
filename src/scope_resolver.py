@@ -38,6 +38,24 @@ def _extract_registrations(dossier: Dict[str, Any]) -> List[Dict[str, Any]]:
     return dossier.get("registrations", [])
 
 
+def _route_families(contexts: List[Dict[str, Any]]) -> set[str]:
+    return {
+        str(ctx.get("route") or "").strip().lower()
+        for ctx in contexts
+        if str(ctx.get("route") or "").strip()
+    }
+
+
+def _is_converged_single_context(dossier: Dict[str, Any], contexts: List[Dict[str, Any]]) -> bool:
+    passport = dossier.get("passport") or {}
+    passport_scope = str(passport.get("passport_scope") or "").strip().lower()
+    if passport_scope != "single_context":
+        return False
+    if len(_route_families(contexts)) > 1:
+        return False
+    return all((ctx.get("context_strength") or "") != "weak_signal" for ctx in contexts)
+
+
 class ScopeResolver:
     """
     Rules-first scope resolver for WS2 exec Q&A.
@@ -76,10 +94,10 @@ class ScopeResolver:
 
         # Clinical / chemistry / synthesis → INN-level (all contexts)
         if q_type in ("clinical_evidence", "chemistry_identity", "synthesis_manufacturing", "data_quality"):
-            return self._inn_level_scope_with_contexts(contexts, required_jurisdictions)
+            return self._inn_level_scope_with_contexts(dossier, contexts, required_jurisdictions)
 
         # Default: INN-level
-        return self._inn_level_scope_with_contexts(contexts, required_jurisdictions)
+        return self._inn_level_scope_with_contexts(dossier, contexts, required_jurisdictions)
 
     def _multi_jurisdiction_scope(
         self,
@@ -179,19 +197,26 @@ class ScopeResolver:
 
     def _inn_level_scope_with_contexts(
         self,
+        dossier: Dict[str, Any],
         contexts: List[Dict],
         required_jurisdictions: set,
     ) -> ResolvedScope:
         """INN-level scope but include all contexts for evidence."""
-        all_ids = [ctx.get("context_id", "") for ctx in contexts]
+        converged = _is_converged_single_context(dossier, contexts)
+        selected_contexts = [
+            ctx for ctx in contexts
+            if ctx.get("context_id")
+            and (not converged or (ctx.get("context_strength") or "") != "weak_signal")
+        ]
+        all_ids = [ctx.get("context_id", "") for ctx in selected_contexts] or [ctx.get("context_id", "") for ctx in contexts]
         jurisdiction_map = {}
-        for ctx in contexts:
+        for ctx in selected_contexts or contexts:
             r = ctx.get("region", "")
             if r:
                 jurisdiction_map[r] = ctx.get("context_id", "")
 
         warnings = []
-        if len(contexts) > 3:
+        if not converged and len(contexts) > 3:
             warnings.append(
                 f"INN-level query spans {len(contexts)} product contexts — "
                 f"answer may aggregate across different formulations"
@@ -203,5 +228,9 @@ class ScopeResolver:
             excluded_context_ids=[],
             jurisdiction_map=jurisdiction_map,
             scope_warnings=warnings,
-            reason=f"INN-level scope with {len(all_ids)} contexts",
+            reason=(
+                f"INN-level scope with {len(all_ids)} contexts"
+                if not converged
+                else f"INN-level scope with {len(all_ids)} route-converged confirmed contexts"
+            ),
         )
