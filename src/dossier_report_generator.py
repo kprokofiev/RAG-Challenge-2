@@ -1219,11 +1219,11 @@ class DossierReportGenerator:
             1,
             min(
                 len(candidates),
-                int(os.getenv("DDKIT_SYNTHESIS_RERANK_BATCH_SIZE", "12") or 12),
+                settings.ddkit_synthesis_rerank_batch_size,
             ),
         )
         llm_weight = float(os.getenv("DDKIT_SYNTHESIS_RERANK_WEIGHT", "0.85") or 0.85)
-        keep_top_k = max(1, int(os.getenv("DDKIT_SYNTHESIS_RERANK_TOP_K", "20") or 20))
+        keep_top_k = max(1, settings.ddkit_synthesis_rerank_top_k)
         rerank_query = (
             f"Verified API synthesis route for {self.inn}: reaction sequence, intermediates, reagents, yields, examples. "
             "Strongly prefer process patents and intermediate-preparation steps. "
@@ -1525,8 +1525,8 @@ class DossierReportGenerator:
             return []
 
         model_name = os.getenv("DDKIT_SYNTHESIS_EXTRACT_MODEL", "gpt-5.4-mini")
-        max_chunks = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_MAX", "16") or 16))
-        max_steps = max(1, int(os.getenv("DDKIT_SYNTHESIS_CHUNKWISE_STEPS", "6") or 6))
+        max_chunks = max(1, settings.ddkit_synthesis_chunkwise_max)
+        max_steps = max(1, settings.ddkit_synthesis_chunkwise_steps)
         instruction = (
             f"{_SYNTHESIS_INSTRUCTION}\n\n"
             "You will receive ONE patent chunk at a time.\n"
@@ -5984,20 +5984,28 @@ class DossierReportGenerator:
             supplemental = self._retrieve(
                 question,
                 doc_kinds,
-                top_k=48 if preferred_doc_ids and source_label == "patent_corpus" else 32,
+                top_k=(
+                    settings.ddkit_synthesis_patent_corpus_top_k
+                    if preferred_doc_ids and source_label == "patent_corpus"
+                    else 32
+                ),
             )
             if preferred_doc_ids and source_label == "patent_corpus" and supplemental:
                 preferred = [item for item in supplemental if str(item.get("doc_id") or "") in preferred_doc_ids]
                 if preferred:
                     non_preferred_cap = max(
                         0,
-                        int(os.getenv("DDKIT_SYNTHESIS_NON_PREFERRED_MAX", "16") or 16),
+                        settings.ddkit_synthesis_non_preferred_max,
                     )
                     non_preferred = [
                         item for item in supplemental if str(item.get("doc_id") or "") not in preferred_doc_ids
                     ]
                     supplemental = preferred + non_preferred[:non_preferred_cap]
-            merge_limit = 36 if preferred_doc_ids and source_label == "patent_corpus" else 24
+            merge_limit = (
+                settings.ddkit_synthesis_patent_corpus_merge_k
+                if preferred_doc_ids and source_label == "patent_corpus"
+                else 24
+            )
             retrieved = self._merge_candidate_lists(
                 retrieved,
                 supplemental,

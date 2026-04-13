@@ -127,6 +127,34 @@ class WorkerSettings(BaseSettings):
         36,
         env="DDKIT_CLINICAL_STUDY_CONTEXT_K",
     )
+    ddkit_synthesis_rerank_batch_size: int = Field(
+        12,
+        env="DDKIT_SYNTHESIS_RERANK_BATCH_SIZE",
+    )
+    ddkit_synthesis_rerank_top_k: int = Field(
+        20,
+        env="DDKIT_SYNTHESIS_RERANK_TOP_K",
+    )
+    ddkit_synthesis_chunkwise_max: int = Field(
+        16,
+        env="DDKIT_SYNTHESIS_CHUNKWISE_MAX",
+    )
+    ddkit_synthesis_chunkwise_steps: int = Field(
+        6,
+        env="DDKIT_SYNTHESIS_CHUNKWISE_STEPS",
+    )
+    ddkit_synthesis_non_preferred_max: int = Field(
+        16,
+        env="DDKIT_SYNTHESIS_NON_PREFERRED_MAX",
+    )
+    ddkit_synthesis_patent_corpus_top_k: int = Field(
+        48,
+        env="DDKIT_SYNTHESIS_PATENT_CORPUS_TOP_K",
+    )
+    ddkit_synthesis_patent_corpus_merge_k: int = Field(
+        36,
+        env="DDKIT_SYNTHESIS_PATENT_CORPUS_MERGE_K",
+    )
 
     # Sprint-8: per-stage timeout budgets (seconds).
     # These define maximum wall-clock time for each pipeline stage.
