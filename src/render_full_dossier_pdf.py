@@ -38,6 +38,7 @@ except ImportError:
     logger.warning("reportlab not installed — PDF rendering disabled")
 
 from pdf_fonts import FONT_BOLD, FONT_NORMAL, register_cyrillic_fonts
+from src.registration_truth import VERDICT_CONFIRMED, VERDICT_PARTIAL, infer_registration_verdict
 
 
 _REGION_ORDER = ["RU", "EU", "US", "EAEU"]
@@ -56,6 +57,7 @@ _REGION_DOC_KINDS = {
     "epar": "EU",
     "pil": "EU",
     "assessment_report": "EU",
+    "eu_regulatory_summary": "EU",
     "epi": "EU",
     "eaeu_document": "EAEU",
     "eaeu_registration": "EAEU",
@@ -411,13 +413,55 @@ def _append_sources(story: List[Any], styles, titles: List[str], max_items: int 
     _append_bullets(story, _unique(titles), styles, style_name="DossierSource", max_items=max_items)
 
 
+def _registration_verdict(reg: Dict[str, Any]) -> str:
+    verdict = str(reg.get("verdict") or "").strip().lower()
+    if verdict:
+        return verdict
+    return infer_registration_verdict(
+        status=reg.get("status"),
+        mah=reg.get("mah"),
+        identifiers=reg.get("identifiers"),
+        forms_strengths=reg.get("forms_strengths"),
+    )
+
+
+def _registration_verdict_label(verdict: str) -> str:
+    mapping = {
+        VERDICT_CONFIRMED: "confirmed",
+        VERDICT_PARTIAL: "partial",
+        "unknown": "unknown",
+    }
+    return mapping.get(str(verdict or "").strip().lower(), "unknown")
+
+
+def _registration_summary_lines(registrations: List[Dict[str, Any]]) -> List[str]:
+    if not registrations:
+        return []
+    groups: Dict[str, List[str]] = {"confirmed": [], "partial": [], "unknown": []}
+    for reg in registrations:
+        region = _region_label(_normalize_region(reg.get("region")) or "—")
+        verdict = _registration_verdict_label(_registration_verdict(reg))
+        if region not in groups[verdict]:
+            groups[verdict].append(region)
+    lines: List[str] = []
+    if groups["confirmed"]:
+        lines.append(f"Confirmed: {', '.join(groups['confirmed'])}.")
+    if groups["partial"]:
+        lines.append(f"Partial: {', '.join(groups['partial'])}.")
+    if groups["unknown"]:
+        lines.append(f"Unknown: {', '.join(groups['unknown'])}.")
+    return lines
+
+
 def _format_reg_line(reg: Dict[str, Any]) -> str:
     region = _region_label(_normalize_region(reg.get("region")) or "—")
     parts = []
+    verdict = _registration_verdict_label(_registration_verdict(reg))
     status = _ev_val(reg.get("status"))
     mah = _ev_val(reg.get("mah"))
     identifiers = ", ".join(_ev_list(reg.get("identifiers"))[:3])
     forms = ", ".join(_ev_list(reg.get("forms_strengths"))[:3])
+    parts.append(f"verdict: {verdict}")
     if status != "—":
         parts.append(f"статус: {status}")
     if mah != "—":
@@ -623,9 +667,12 @@ def _render_registrations_page(story: List[Any], styles, dossier: Dict[str, Any]
     story.append(Paragraph("Текущие регистрации", styles["SectionHead"]))
 
     if registrations:
+        for line in _registration_summary_lines(registrations):
+            story.append(Paragraph(line, styles["Body"]))
         regions = _unique(
             [_region_label(_normalize_region(reg.get("region"))) for reg in registrations if reg.get("region")]
         )
+        regions = []
         if regions:
             story.append(Paragraph(f"Подтвержденные регионы: {', '.join(regions)}.", styles["Body"]))
         _append_bullets(

@@ -45,6 +45,12 @@ from src.dossier_schema_v3 import (
     compute_dossier_quality_v2,
 )
 from src.evidence_builder import EvidenceCandidatesBuilder
+from src.registration_truth import (
+    VERDICT_CONFIRMED,
+    infer_registration_verdict,
+    registration_status_role,
+)
+from src.reranking import LLMReranker
 from src.retrieval import HybridRetriever
 from src.settings import settings
 
@@ -376,23 +382,112 @@ CRITICAL RULES:
 """.strip()
 
 _SYNTHESIS_INSTRUCTION = """
-You are a pharmaceutical chemistry extraction system.
-Extract synthesis/manufacturing steps ONLY from patent text or official monograph sections
-(Examples, Preparations, Manufacturing Process).
+You are a pharmaceutical process-chemistry extraction system.
+Extract ONLY a verified API synthesis route or explicit apixaban-intermediate route
+from process patents / chemistry examples.
+
+The source text may be in English or Chinese. Translate Chinese process steps into
+concise English, but keep the chemistry faithful to the source.
 
 FOR EACH STEP, extract:
 1. step_number: sequential step index (1, 2, 3, ...)
-2. description: what happens in this step (reaction, purification, etc.)
-3. reagents: starting materials and reagents used
-4. intermediates: products/intermediates formed
+2. description: one concise process step in English
+3. reagents: starting materials / catalysts / reagents explicitly named
+4. intermediates: intermediates or products explicitly named
 
-CRITICAL RULES:
-- Each description MUST reference an evidence alias (E1, E2, ...) from candidates
-- Do NOT invent synthesis steps not in context
-- Do NOT add reagents or intermediates not explicitly mentioned
-- Focus on sections titled "Examples", "Preparations", "Synthesis", "Manufacturing Process"
-- If the patent only describes composition/use without synthesis, return empty steps
+STRICT INCLUSION RULES:
+- Keep only reaction/process chemistry steps, intermediate preparation, coupling,
+  cyclisation, chlorination, hydrogenation, extraction, purification, drying,
+  concentration, crystallisation, and other API-route operations.
+- Intermediate-preparation steps are ALLOWED when the patent explicitly frames them
+  as apixaban intermediates or immediate precursors in the apixaban route.
+- Each description MUST reference an evidence alias (E1, E2, ...) from candidates.
+- Do NOT invent missing chemistry, translate loosely, or merge unrelated patents into
+  a synthetic story that is not supported by the text.
+
+STRICT EXCLUSION RULES:
+- Exclude sterile-water preparation, buffer preparation, excipient blending,
+  injectable composition steps, dosage-form manufacturing, filling, sterilisation,
+  packaging, and device/container operations.
+- If the evidence is only formulation / manufacturing / composition-of-matter with
+  no route chemistry, return empty steps.
 """.strip()
+
+_SYNTHESIS_TITLE_POSITIVE_MARKERS = (
+    "synthesis method",
+    "preparation method",
+    "intermediate",
+    "continuous flow",
+    "process chemistry",
+    "process",
+    "合成方法",
+    "制备方法",
+    "中间体",
+    "连续流动",
+    "制备",
+    "合成",
+)
+
+_SYNTHESIS_TEXT_POSITIVE_MARKERS = (
+    "实施例",
+    "步骤",
+    "反应",
+    "合成",
+    "制备",
+    "中间体",
+    "收率",
+    "纯度",
+    "滴加",
+    "搅拌",
+    "回流",
+    "过滤",
+    "洗涤",
+    "浓缩",
+    "氮气",
+    "催化剂",
+    "化合物",
+    "反应式",
+    "example",
+    "step ",
+    "yield",
+    "reaction",
+    "prepared",
+    "preparation",
+    "intermediate",
+    "catalyst",
+    "reflux",
+    "filter",
+    "wash",
+    "dry",
+    "extract",
+    "under nitrogen",
+    "compound ",
+)
+
+_SYNTHESIS_NEGATIVE_MARKERS = (
+    "injectable",
+    "sterile",
+    "sterilization",
+    "propylene glycol",
+    "peg 35",
+    "water for injection",
+    "buffer",
+    "excipient",
+    "composition",
+    "dosage form",
+    "packaging",
+    "lyophil",
+    "注射",
+    "灭菌",
+    "丙二醇",
+    "注射用水",
+    "缓冲",
+    "辅料",
+    "组合物",
+    "处方",
+    "配方",
+    "制剂",
+)
 
 
 # ── Evidence registry helper ──────────────────────────────────────────────────
@@ -744,6 +839,7 @@ class DossierReportGenerator:
             getattr(settings, "ddkit_max_retrieve_calls_per_dossier", 0) or 0
         )
         self._source_verdicts: Dict[str, str] = {}
+        self._synthesis_reranker: Optional[LLMReranker] = None
 
     @staticmethod
     def _clone_results(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -937,6 +1033,213 @@ class DossierReportGenerator:
                 "data": data,
                 "content_hash": hashlib.sha256(raw_bytes).hexdigest(),
             }
+
+    def _iter_parsed_doc_chunks(
+        self,
+        allowed_doc_ids: Set[str],
+        allowed_doc_kinds: Optional[set[str]] = None,
+    ):
+        if not self.documents_dir.exists():
+            return
+        for doc_path in self.documents_dir.glob("*.json"):
+            try:
+                with open(doc_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+
+            meta = doc.get("metainfo", {}) or {}
+            doc_id = str(meta.get("doc_id", doc_path.stem) or doc_path.stem)
+            if allowed_doc_ids and doc_id not in allowed_doc_ids:
+                continue
+
+            doc_kind = str(meta.get("doc_kind", "") or "").lower()
+            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+                continue
+
+            if self.tenant_id and meta.get("tenant_id") not in (None, self.tenant_id):
+                continue
+            if self.case_id and meta.get("case_id") not in (None, self.case_id):
+                continue
+
+            content = doc.get("content", {}) or {}
+            raw_items = content.get("chunks") or content.get("pages") or []
+            for chunk in raw_items:
+                text = str(chunk.get("text", "") or "").strip()
+                if not text:
+                    continue
+                yield {
+                    "doc_id": doc_id,
+                    "doc_kind": doc_kind,
+                    "doc_title": meta.get("title") or doc_id,
+                    "source_url": meta.get("source_url") or "",
+                    "page": chunk.get("page", chunk.get("page_from", 0)),
+                    "text": text,
+                    "type": chunk.get("type", "content"),
+                }
+
+    def _synthesis_chunk_score(self, item: Dict[str, Any]) -> int:
+        title_lower = str(item.get("doc_title") or "").lower()
+        text = str(item.get("text") or "")
+        text_lower = text.lower()
+        page = int(item.get("page") or 0)
+
+        score = 0
+        for marker in _SYNTHESIS_TITLE_POSITIVE_MARKERS:
+            if marker in title_lower:
+                score += 8
+        for marker in _SYNTHESIS_TEXT_POSITIVE_MARKERS:
+            if marker in text_lower:
+                score += 2
+        for marker in _SYNTHESIS_NEGATIVE_MARKERS:
+            if marker in title_lower:
+                score -= 10
+            if marker in text_lower:
+                score -= 4
+
+        if "阿哌沙班" in text_lower or "apixaban" in text_lower:
+            score += 3
+        if "实施例" in text_lower or "example" in text_lower:
+            score += 6
+        if "步骤" in text_lower or re.search(r"\bstep\s*\d+\b", text_lower) or re.search(r"\bs\d+\b", text_lower):
+            score += 6
+        if ("收率" in text_lower or "yield" in text_lower or "纯度" in text_lower) and "%" in text:
+            score += 3
+        if any(token in text_lower for token in ("反应式", "reaction scheme", "japp-klingemann", "偶联", "coupling", "氢化", "hydrogenation")):
+            score += 4
+        if page > 1:
+            score += 1
+        if page == 1 and score < 12:
+            score -= 3
+        return score
+
+    def _collect_synthesis_preferred_chunks(
+        self,
+        preferred_doc_ids: Set[str],
+        allowed_doc_kinds: set[str],
+        *,
+        max_chunks: int = 18,
+        max_per_doc: int = 6,
+    ) -> List[Dict[str, Any]]:
+        if not preferred_doc_ids:
+            return []
+
+        scored_by_doc: Dict[str, List[Tuple[int, Dict[str, Any]]]] = {}
+        seen_texts: set[str] = set()
+
+        for item in self._iter_parsed_doc_chunks(preferred_doc_ids, allowed_doc_kinds) or []:
+            text = str(item.get("text") or "").strip()
+            if len(text) < 40:
+                continue
+            score = self._synthesis_chunk_score(item)
+            if score <= 0:
+                continue
+
+            normalized_text = re.sub(r"\s+", " ", text)
+            dedupe_key = hashlib.sha256(
+                f"{item.get('doc_id')}|{item.get('page')}|{normalized_text}".encode("utf-8")
+            ).hexdigest()
+            if dedupe_key in seen_texts:
+                continue
+            seen_texts.add(dedupe_key)
+
+            item_with_score = dict(item)
+            item_with_score["distance"] = round(min(0.99, max(0.01, score / 30.0)), 4)
+            item_with_score["_synthesis_priority"] = score
+            scored_by_doc.setdefault(str(item.get("doc_id") or ""), []).append((score, item_with_score))
+
+        selected: List[Dict[str, Any]] = []
+        for _doc_id, bucket in scored_by_doc.items():
+            bucket.sort(key=lambda pair: (pair[0], pair[1].get("page", 0)), reverse=True)
+            for _, payload in bucket[:max_per_doc]:
+                selected.append(payload)
+
+        selected.sort(
+            key=lambda item: (
+                item.get("_synthesis_priority", 0),
+                item.get("distance", 0),
+                item.get("page", 0),
+            ),
+            reverse=True,
+        )
+        return selected[:max_chunks]
+
+    @staticmethod
+    def _merge_candidate_lists(
+        *candidate_lists: List[Dict[str, Any]],
+        limit: int = 24,
+    ) -> List[Dict[str, Any]]:
+        merged: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for candidate_list in candidate_lists:
+            for item in candidate_list or []:
+                normalized_text = re.sub(r"\s+", " ", str(item.get("text") or ""))
+                key = hashlib.sha256(
+                    f"{item.get('doc_id')}|{item.get('page')}|{normalized_text}".encode("utf-8")
+                ).hexdigest()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(dict(item))
+        merged.sort(
+            key=lambda item: (
+                item.get("_synthesis_priority", 0),
+                item.get("distance", 0),
+            ),
+            reverse=True,
+        )
+        return merged[:limit]
+
+    def _rerank_synthesis_candidates(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        if len(candidates) <= 1:
+            return candidates
+
+        if self._synthesis_reranker is None:
+            model_name = os.getenv("DDKIT_SYNTHESIS_RERANK_MODEL", "gpt-5.4-mini")
+            self._synthesis_reranker = LLMReranker(model_override=model_name)
+
+        batch_size = max(
+            1,
+            min(
+                len(candidates),
+                int(os.getenv("DDKIT_SYNTHESIS_RERANK_BATCH_SIZE", "8") or 8),
+            ),
+        )
+        llm_weight = float(os.getenv("DDKIT_SYNTHESIS_RERANK_WEIGHT", "0.85") or 0.85)
+        keep_top_k = max(1, int(os.getenv("DDKIT_SYNTHESIS_RERANK_TOP_K", "12") or 12))
+        rerank_query = (
+            f"Verified API synthesis route for {self.inn}: reaction sequence, intermediates, reagents, yields, examples. "
+            "Strongly prefer process patents and intermediate-preparation steps. "
+            "Exclude formulation, sterile-water preparation, injectable manufacturing, excipients, and packaging."
+        )
+        try:
+            reranked = self._synthesis_reranker.rerank_documents(
+                query=rerank_query or query,
+                documents=candidates,
+                documents_batch_size=batch_size,
+                llm_weight=llm_weight,
+            )
+            logger.info(
+                "synthesis_llm_rerank_success inn=%s model=%s candidates=%d kept=%d",
+                self.inn,
+                getattr(self._synthesis_reranker, "rerank_model", "unknown"),
+                len(candidates),
+                min(len(reranked), keep_top_k),
+            )
+            return reranked[:keep_top_k]
+        except Exception as exc:
+            logger.warning(
+                "synthesis_llm_rerank_failed inn=%s model=%s candidates=%d: %s",
+                self.inn,
+                getattr(self._synthesis_reranker, "rerank_model", "unknown"),
+                len(candidates),
+                exc,
+            )
+            return candidates[:keep_top_k]
 
     def _retrieve(self, question: str, doc_kinds: List[str], top_k: int = 40) -> List[Dict[str, Any]]:
         """Retrieve top-K evidence candidates for a question with given doc_kind filter.
@@ -2590,6 +2893,165 @@ class DossierReportGenerator:
             )
         return registrations
 
+    def _extract_eu_registrations_from_original_json(self) -> List[DossierRegistration]:
+        registrations: List[DossierRegistration] = []
+
+        for item in self._iter_original_json_docs({"eu_regulatory_summary"}) or []:
+            data = item["data"] or {}
+            auth = data.get("eu_authorization") or {}
+            ema = data.get("ema_centralized") or {}
+            national_hits = data.get("national_hits") or []
+            if not auth and not ema and not national_hits:
+                continue
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_kind = item["doc_kind"]
+            doc_title = meta.get("title") or doc_id
+            source_url = meta.get("source_url") or ""
+            content_hash = item["content_hash"]
+
+            status_raw = str(auth.get("status") or ema.get("status") or "").strip()
+            if not status_raw:
+                for idx, hit in enumerate(national_hits):
+                    candidate = str(hit.get("authorization_status") or "").strip()
+                    if self._registration_status_role(candidate) == "positive":
+                        status_raw = candidate
+                        break
+
+            mah_raw = str(auth.get("mah") or "").strip()
+            if not mah_raw:
+                mah_counts: Dict[str, int] = {}
+                for hit in national_hits:
+                    holder = str(hit.get("mah") or "").strip()
+                    if holder:
+                        mah_counts[holder] = mah_counts.get(holder, 0) + 1
+                if mah_counts:
+                    mah_raw = max(mah_counts.items(), key=lambda item: item[1])[0]
+
+            identifiers: List[EvidencedValue] = []
+            for field_name, field_value in (
+                ("EU authorization number", auth.get("ma_number")),
+                ("EMA centralized number", ema.get("eu_number")),
+            ):
+                value = str(field_value or "").strip()
+                if not value:
+                    continue
+                identifiers.append(
+                    self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator=f"/{field_name}",
+                        field_name=field_name,
+                        value=value,
+                    )
+                )
+
+            forms_strengths: List[EvidencedValue] = []
+            seen_forms: set[str] = set()
+            for idx, hit in enumerate(national_hits):
+                product_name = str(hit.get("product_name") or "").strip()
+                dosage_form = str(hit.get("dosage_form") or "").strip()
+                strength = str(hit.get("strength") or "").strip()
+                route = str(hit.get("route") or "").strip()
+                parts = [part for part in [product_name, dosage_form, strength, route] if part]
+                if not parts:
+                    continue
+                key = " | ".join(parts)
+                if key in seen_forms:
+                    continue
+                seen_forms.add(key)
+                forms_strengths.append(
+                    self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator=f"/national_hits/{idx}",
+                        field_name="EU national presentation",
+                        value=key,
+                    )
+                )
+                if len(forms_strengths) >= 12:
+                    break
+
+            status = None
+            if status_raw:
+                status = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                    content_hash=content_hash,
+                    locator="/eu_authorization/status",
+                    field_name="EU status",
+                    value=status_raw,
+                )
+
+            mah = None
+            if mah_raw:
+                mah = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                    content_hash=content_hash,
+                    locator="/eu_authorization/mah",
+                    field_name="EU MAH",
+                    value=mah_raw,
+                )
+
+            evidence_refs: List[str] = []
+            if status:
+                evidence_refs.extend(status.evidence_refs)
+            if mah:
+                evidence_refs.extend(mah.evidence_refs)
+            for ev in identifiers + forms_strengths:
+                evidence_refs.extend(ev.evidence_refs)
+
+            if not any([status, mah, identifiers, forms_strengths]):
+                continue
+
+            reg = DossierRegistration(
+                region="EU",
+                status=status,
+                forms_strengths=forms_strengths,
+                mah=mah,
+                identifiers=identifiers,
+                evidence_refs=list(dict.fromkeys(evidence_refs)),
+            )
+            reg.verdict = infer_registration_verdict(
+                status=reg.status,
+                mah=reg.mah,
+                identifiers=reg.identifiers,
+                forms_strengths=reg.forms_strengths,
+            )
+            registrations.append(reg)
+
+        if registrations:
+            logger.info(
+                "eu_structured_registrations extracted=%d inn=%s",
+                len(registrations), self.inn,
+            )
+        return registrations
+
+    def _normalize_registration_verdicts(
+        self,
+        registrations: List[DossierRegistration],
+    ) -> List[DossierRegistration]:
+        for reg in registrations:
+            reg.verdict = infer_registration_verdict(
+                status=reg.status,
+                mah=reg.mah,
+                identifiers=reg.identifiers,
+                forms_strengths=reg.forms_strengths,
+            )
+        return registrations
+
     def _extract_ru_clinical_studies_from_original_json(self) -> List[DossierClinicalStudy]:
         studies: List[DossierClinicalStudy] = []
         seen_ids: set[str] = set()
@@ -3291,6 +3753,9 @@ class DossierReportGenerator:
     @staticmethod
     def _registration_status_role(status_value: Optional[str]) -> str:
         """Classify a registration status into positive / negative / unknown."""
+        role = registration_status_role(status_value)
+        if role in {"positive", "negative", "unknown"}:
+            return role
         s = (status_value or "").strip().lower()
         if not s:
             return "unknown"
@@ -3590,7 +4055,7 @@ class DossierReportGenerator:
         regions = [
             ("RU", ["grls_card", "grls", "ru_instruction"],
              "What are the GRLS registration numbers, trade names, MAH, drug forms, and status for this drug in Russia?"),
-            ("EU", ["epar", "smpc", "assessment_report", "pil"],
+            ("EU", ["eu_regulatory_summary", "epar", "smpc", "assessment_report", "pil"],
              "What are the EMA marketing authorization numbers, MAH, authorized forms, and status for this drug in the EU?"),
             ("US", ["label", "us_fda", "approval_letter", "anda_package"],
              "What are the FDA NDA/BLA numbers, applicant names, drug forms, and approval dates for this drug in the US?"),
@@ -3605,6 +4070,11 @@ class DossierReportGenerator:
                 structured_ru_regs = self._extract_ru_registrations_from_original_json()
                 if structured_ru_regs:
                     registrations.extend(structured_ru_regs)
+                    continue
+            if region == "EU":
+                structured_eu_regs = self._extract_eu_registrations_from_original_json()
+                if structured_eu_regs:
+                    registrations.extend(structured_eu_regs)
                     continue
             if region == "EAEU":
                 structured_eaeu_regs = self._extract_eaeu_registrations_from_original_json()
@@ -3824,11 +4294,16 @@ class DossierReportGenerator:
         # LLM may produce duplicate rows for the same region (e.g. 2 × "RU").
         # Sort descending by (identifiers count, evidence count) so the most
         # evidence-rich record wins; ties broken by original order.
+        registrations = self._normalize_registration_verdicts(registrations)
         seen_regions: dict = {}
         deduped: List[DossierRegistration] = []
         for reg in sorted(
             registrations,
-            key=lambda r: (len(r.identifiers), len(r.evidence_refs)),
+            key=lambda r: (
+                1 if getattr(r, "verdict", "") == VERDICT_CONFIRMED else 0,
+                len(r.identifiers),
+                len(r.evidence_refs),
+            ),
             reverse=True,
         ):
             r_key = reg.region.upper().strip()
@@ -5292,19 +5767,63 @@ class DossierReportGenerator:
         _PATENT_DOC_KINDS = ["patent_pdf", "ru_patent_pdf", "patent", "drug_monograph"]
         _EPAR_FALLBACK_KINDS = ["epar", "assessment_report"]
         question = (
-            f"For {self.inn}: extract synthesis/manufacturing steps from patent or monograph text. "
-            "For each step: step number, description, starting materials/reagents, intermediates, yield."
+            f"For {self.inn}: extract the verified API synthesis route from process-chemistry evidence. "
+            "Prioritize intermediates, reaction sequence, route claims, synthetic examples, and process chemistry. "
+            "Exclude formulation, sterile-water preparation, dosage-form manufacturing, and packaging steps. "
+            "For each retained step: step number, description, starting materials/reagents, intermediates, yield."
         )
         patent_corpus_present = self._has_patent_corpus()
+        preferred_doc_ids: Set[str] = set()
+        for fam in getattr(self, "_latest_patent_families", []) or []:
+            tech_focus = str(getattr(getattr(fam, "technical_focus", None), "value", "") or "").strip().lower()
+            process_rel = str(getattr(getattr(fam, "process_relevance", None), "value", "") or "").strip().lower()
+            what_blocks = str(getattr(getattr(fam, "what_blocks", None), "value", "") or "").strip().lower()
+            if tech_focus in {"process_manufacturing", "intermediate_synthesis"} or process_rel in {"moderate", "strong"} or what_blocks == "synthesis":
+                preferred_doc_ids.update(getattr(fam, "key_docs", []) or [])
 
         def _extract_from_doc_kinds(
             doc_kinds: List[str],
             source_label: str,
         ) -> Tuple[str, List[DossierSynthesisStep]]:
-            retrieved = self._retrieve(question, doc_kinds, top_k=24)
+            retrieved: List[Dict[str, Any]] = []
+            if preferred_doc_ids and source_label == "patent_corpus":
+                direct_chunks = self._collect_synthesis_preferred_chunks(
+                    preferred_doc_ids,
+                    {str(kind).lower() for kind in doc_kinds},
+                )
+                if direct_chunks:
+                    logger.info(
+                        "synthesis_direct_process_chunks inn=%s source=%s preferred_docs=%d chunks=%d",
+                        self.inn,
+                        source_label,
+                        len(preferred_doc_ids),
+                        len(direct_chunks),
+                    )
+                    retrieved = list(direct_chunks)
+
+            supplemental = self._retrieve(
+                question,
+                doc_kinds,
+                top_k=36 if preferred_doc_ids and source_label == "patent_corpus" else 24,
+            )
+            if preferred_doc_ids and source_label == "patent_corpus" and supplemental:
+                preferred = [item for item in supplemental if str(item.get("doc_id") or "") in preferred_doc_ids]
+                if preferred:
+                    supplemental = preferred
+            retrieved = self._merge_candidate_lists(retrieved, supplemental, limit=24) if retrieved or supplemental else []
             if not retrieved:
                 logger.info("synthesis_source_empty inn=%s source=%s", self.inn, source_label)
                 return "no_docs", []
+
+            if preferred_doc_ids and source_label == "patent_corpus":
+                retrieved = self._rerank_synthesis_candidates(question, retrieved)
+                logger.info(
+                    "synthesis_preferred_process_docs inn=%s source=%s preferred_docs=%d retrieved=%d",
+                    self.inn,
+                    source_label,
+                    len(preferred_doc_ids),
+                    len(retrieved),
+                )
 
             candidates_map = self._candidates_map(retrieved)
             context = self._context_str(retrieved)
@@ -5322,6 +5841,7 @@ class DossierReportGenerator:
                 return "no_steps", []
 
             steps: List[DossierSynthesisStep] = []
+            non_api_detected = False
             am = alias_map
             for step_llm in result.steps:
                 if step_llm.description is None:
@@ -5345,6 +5865,9 @@ class DossierReportGenerator:
                     {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
                 )
                 kind = classify_synthesis_kind(str(desc.value or ""))
+                if kind != "api_synthesis":
+                    non_api_detected = True
+                    continue
                 steps.append(
                     DossierSynthesisStep(
                         step_number=step_llm.step_number or (len(steps) + 1),
@@ -5365,6 +5888,14 @@ class DossierReportGenerator:
                     len(steps),
                 )
                 return "ok", steps
+            if non_api_detected:
+                logger.info(
+                    "synthesis_source_non_api_only inn=%s source=%s retrieved=%d",
+                    self.inn,
+                    source_label,
+                    len(retrieved),
+                )
+                return "no_api_steps", []
             return "no_steps", []
 
         primary_status, primary_steps = _extract_from_doc_kinds(_PATENT_DOC_KINDS, "patent_corpus")
@@ -5394,6 +5925,16 @@ class DossierReportGenerator:
                 "PATENT_DISCOVERY_GAP",
                 f"No synthesis-relevant passages found for {self.inn} in patent corpus or EPAR/assessment_report fallback.",
                 "Attach patent PDFs with full text (claims + examples) or assessment reports with chemistry sections to corpus.",
+            )
+            return []
+
+        if primary_status == "no_api_steps":
+            self._add_unknown(
+                unknowns,
+                "synthesis_steps[*]",
+                "NO_EVIDENCE_IN_CORPUS",
+                f"Process evidence for {self.inn} was present, but retrieved stepwise passages were formulation/manufacturing-oriented rather than a verified API synthesis route.",
+                "Attach process-chemistry/API synthesis patents or CMC sources; keep formulation/manufacturing evidence out of the API route block.",
             )
             return []
 
@@ -5610,6 +6151,7 @@ class DossierReportGenerator:
                 stage_name="patent_families",
                 stage_payload=[item.model_dump() for item in patent_families],
             )
+        self._latest_patent_families = patent_families
         logger.info("patent_families done (%.1fs)", time.time() - start_ts)
 
         # ── E: Synthesis steps ────────────────────────────────────────────────
