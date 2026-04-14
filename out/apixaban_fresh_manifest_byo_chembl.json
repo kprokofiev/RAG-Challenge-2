@@ -1,0 +1,174 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "documents": [
+    {
+      "doc_id": "377595fb-2c73-4ebe-856a-fd0ae0426269",
+      "doc_kind": "byo_document",
+      "title": "e3311773-bebe-4cce-85a5-349e9d3d0e3d.pdf",
+      "source_url": "byo://e3311773-bebe-4cce-85a5-349e9d3d0e3d.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/377595fb-2c73-4ebe-856a-fd0ae0426269/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0deb04f2-9e30-48d3-9bc5-f0e2db97dec1",
+      "doc_kind": "byo_document",
+      "title": "9a199917-d0c3-46e3-be2f-19cce5f041da.pdf",
+      "source_url": "byo://9a199917-d0c3-46e3-be2f-19cce5f041da.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0deb04f2-9e30-48d3-9bc5-f0e2db97dec1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2cede315-2e31-4b18-af42-2fd90b8b55f4",
+      "doc_kind": "byo_document",
+      "title": "0ef18cb0-ab29-45bd-855f-fb6c28982801.pdf",
+      "source_url": "byo://0ef18cb0-ab29-45bd-855f-fb6c28982801.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2cede315-2e31-4b18-af42-2fd90b8b55f4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e3257e7d-24ee-4d48-a7c0-f0e013c652d0",
+      "doc_kind": "byo_document",
+      "title": "4f9fc99a-39f2-4172-9aae-5600b50dec19.pdf",
+      "source_url": "byo://4f9fc99a-39f2-4172-9aae-5600b50dec19.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e3257e7d-24ee-4d48-a7c0-f0e013c652d0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "757f7df4-33c0-446a-bc12-2795460486ea",
+      "doc_kind": "byo_document",
+      "title": "0ce5c675-2137-4394-96f2-74aca595cbef.pdf",
+      "source_url": "byo://0ce5c675-2137-4394-96f2-74aca595cbef.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/757f7df4-33c0-446a-bc12-2795460486ea/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c705f811-77fe-412e-8fb3-75b512a3c29e",
+      "doc_kind": "byo_document",
+      "title": "53cec486-cfd4-4a4d-bbf5-b79368bd2e7b (1).pdf",
+      "source_url": "byo://53cec486-cfd4-4a4d-bbf5-b79368bd2e7b (1).pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c705f811-77fe-412e-8fb3-75b512a3c29e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "654a8ff9-4cd7-452b-9d9a-86b46037f5c4",
+      "doc_kind": "byo_document",
+      "title": "ae49cbd7-cd85-4bd8-9e73-c6360fbd8749.pdf",
+      "source_url": "byo://ae49cbd7-cd85-4bd8-9e73-c6360fbd8749.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/654a8ff9-4cd7-452b-9d9a-86b46037f5c4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d8813a84-6f45-46f4-b05e-7f0796d5a4be",
+      "doc_kind": "byo_document",
+      "title": "53c1e299-37f9-4fdd-8054-15c86359a438.pdf",
+      "source_url": "byo://53c1e299-37f9-4fdd-8054-15c86359a438.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d8813a84-6f45-46f4-b05e-7f0796d5a4be/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5e30cf0a-1703-492a-9ce7-9de50f3f4259",
+      "doc_kind": "byo_document",
+      "title": "b7a711c3-591e-435e-8967-f5b04ee16946.pdf",
+      "source_url": "byo://b7a711c3-591e-435e-8967-f5b04ee16946.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5e30cf0a-1703-492a-9ce7-9de50f3f4259/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b1f93fb4-9a69-4a64-b54e-6c32fc0971c0",
+      "doc_kind": "byo_document",
+      "title": "9bff5e10-424e-4410-a86c-e7c9a6435e05.pdf",
+      "source_url": "byo://9bff5e10-424e-4410-a86c-e7c9a6435e05.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b1f93fb4-9a69-4a64-b54e-6c32fc0971c0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e2acaba8-79a8-4e9e-9cce-ab160bdc1343",
+      "doc_kind": "byo_document",
+      "title": "85e3f0eb-be69-48a5-bbb5-953a7a6f159e.pdf",
+      "source_url": "byo://85e3f0eb-be69-48a5-bbb5-953a7a6f159e.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e2acaba8-79a8-4e9e-9cce-ab160bdc1343/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6a44315f-782a-409f-8fb3-affe9cf1e305",
+      "doc_kind": "byo_document",
+      "title": "c8462c70-6837-4383-b6c3-330b006bff22.pdf",
+      "source_url": "byo://c8462c70-6837-4383-b6c3-330b006bff22.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6a44315f-782a-409f-8fb3-affe9cf1e305/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4be80663-6509-40e5-8716-6262e6ba951b",
+      "doc_kind": "byo_document",
+      "title": "9ddee32a-317f-4795-890a-6c37ec711c59.pdf",
+      "source_url": "byo://9ddee32a-317f-4795-890a-6c37ec711c59.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4be80663-6509-40e5-8716-6262e6ba951b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f65844b0-6b42-4e02-8fbe-d28f12cac9e0",
+      "doc_kind": "byo_document",
+      "title": "6bd684fb-5e4a-46cb-be7c-ebbda5a713fd.pdf",
+      "source_url": "byo://6bd684fb-5e4a-46cb-be7c-ebbda5a713fd.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f65844b0-6b42-4e02-8fbe-d28f12cac9e0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5f3bb7df-b507-4c3d-8f9e-4d80e16f700c",
+      "doc_kind": "byo_document",
+      "title": "b0b54416-9809-438f-b659-0487840aba9c.pdf",
+      "source_url": "byo://b0b54416-9809-438f-b659-0487840aba9c.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5f3bb7df-b507-4c3d-8f9e-4d80e16f700c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "fb88bf4b-b06f-4b19-96bb-81049b63273a",
+      "doc_kind": "byo_document",
+      "title": "c766ca9b-9b7f-4141-b109-b64857d8dc0e.pdf",
+      "source_url": "byo://c766ca9b-9b7f-4141-b109-b64857d8dc0e.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/fb88bf4b-b06f-4b19-96bb-81049b63273a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6f37d122-eee7-4f73-b0de-e8c6a7e10fda",
+      "doc_kind": "byo_document",
+      "title": "6973a17f-c91f-40c6-b5a8-ed66125dfc26.pdf",
+      "source_url": "byo://6973a17f-c91f-40c6-b5a8-ed66125dfc26.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6f37d122-eee7-4f73-b0de-e8c6a7e10fda/rendered/document.pdf"
+    },
+    {
+      "doc_id": "64b39835-8fc7-49a4-8b5a-a5895ab495dc",
+      "doc_kind": "byo_document",
+      "title": "02c173b6-36c0-4a4e-8d00-fac0aec39b29.pdf",
+      "source_url": "byo://02c173b6-36c0-4a4e-8d00-fac0aec39b29.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/64b39835-8fc7-49a4-8b5a-a5895ab495dc/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0cdc7676-d219-477a-abfd-3ff123d832ce",
+      "doc_kind": "byo_document",
+      "title": "apixaban_ru_registrations_export_summary_grls.txt",
+      "source_url": "byo://apixaban_ru_registrations_export_summary_grls.txt",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0cdc7676-d219-477a-abfd-3ff123d832ce/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b64503ed-92bb-41e0-8edc-8b496d3544ee",
+      "doc_kind": "byo_document",
+      "title": "apixaban_eaeu_registrations_export_summary.txt",
+      "source_url": "byo://apixaban_eaeu_registrations_export_summary.txt",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b64503ed-92bb-41e0-8edc-8b496d3544ee/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c1fee924-6697-42f6-9533-4688e0f93f28",
+      "doc_kind": "byo_document",
+      "title": "apixaban_esklp_summary_eaeu.txt",
+      "source_url": "byo://apixaban_esklp_summary_eaeu.txt",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c1fee924-6697-42f6-9533-4688e0f93f28/rendered/document.pdf"
+    },
+    {
+      "doc_id": "bcb0063e-8e42-4a2b-8474-a8ab08c31112",
+      "doc_kind": "byo_document",
+      "title": "apixaban_pubchem_chemistry_summary.txt",
+      "source_url": "byo://apixaban_pubchem_chemistry_summary.txt",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/bcb0063e-8e42-4a2b-8474-a8ab08c31112/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d2d47223-7eb6-4595-bedb-6b2613293fff",
+      "doc_kind": "byo_document",
+      "title": "Распоряжение+Правительства+РФ+от+18.12.2025+N+3867.pdf",
+      "source_url": "byo://Распоряжение+Правительства+РФ+от+18.12.2025+N+3867.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d2d47223-7eb6-4595-bedb-6b2613293fff/rendered/document.pdf"
+    },
+    {
+      "doc_id": "57db29ac-3d63-4c35-b8c7-58e9cf86df61",
+      "doc_kind": "chembl",
+      "title": "ChEMBL chemistry: apixaban",
+      "source_url": "https://www.ebi.ac.uk/chembl/explore/compound/CHEMBL231779",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/57db29ac-3d63-4c35-b8c7-58e9cf86df61/rendered/document.pdf"
+    }
+  ]
+}

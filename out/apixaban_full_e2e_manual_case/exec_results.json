@@ -1,0 +1,3599 @@
+[
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_reg_4geo",
+    "answer": "## Is the product registered across US/EU/RU/EAEU?\n\n### Conclusion\n- EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]\n- EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]\n- US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]\n- RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]\n\n### Confidence: HIGH\nBased on 4 claims: 4 strong, 0 moderate, 0 weak, 0 unsupported. Answer mode: direct.\n\n### What Supports This\n- EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003] [refs: ev_e9b594e5_90_e6bf31b7578d, ev_e9b594e5_76_c667e169f35e, ev_e9b594e5_72_63363993f51f]\n- EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000] [refs: ev_42978e5f_1_43796832a963, ev_42978e5f_4_d50adeaf2fa6]\n- US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040] [refs: ev_72c96421_2_e1b029598684]\n- RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)] [refs: ev_d83efa9c_0_300e6ec1799c]\n\n### Where Uncertainty Remains\nNo significant uncertainties identified.\n\n### Why This Matters Commercially\n- Product is registered in 3 jurisdiction(s): EU, US, RU\n- Registration status unknown for: EAEU\n\n### Recommended Next Steps\nNo immediate actions required.\n\n---\n*Scope: mode=product_context | jurisdictions=EU,EAEU,US,RU*\n*Claims: 4 | Evidence refs: 10 | Unknowns: 0*",
+    "short_summary": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU. Confidence: high. 4 claims, 0 unknowns.",
+    "answer_frame": {
+      "question_id": "q_reg_4geo",
+      "question_text": "Is the product registered across US/EU/RU/EAEU?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_e84fb804",
+          "text": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]",
+          "jurisdiction": "EU",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.EU.status"
+          ],
+          "evidence_refs": [
+            "ev_e9b594e5_90_e6bf31b7578d",
+            "ev_e9b594e5_76_c667e169f35e",
+            "ev_e9b594e5_72_63363993f51f",
+            "ev_e9b594e5_83_34bd1c90b5d7",
+            "ev_e9b594e5_86_35a45337e85f",
+            "ev_e9b594e5_80_96cf58c11e63"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_c09ba8d3",
+          "text": "EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]",
+          "jurisdiction": "EAEU",
+          "semantic_role": "registration_unknown",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.EAEU.status"
+          ],
+          "evidence_refs": [
+            "ev_42978e5f_1_43796832a963",
+            "ev_42978e5f_4_d50adeaf2fa6"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_e4711f46",
+          "text": "US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]",
+          "jurisdiction": "US",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.US.status"
+          ],
+          "evidence_refs": [
+            "ev_72c96421_2_e1b029598684"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_21427aa0",
+          "text": "RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]",
+          "jurisdiction": "RU",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.RU.status"
+          ],
+          "evidence_refs": [
+            "ev_d83efa9c_0_300e6ec1799c"
+          ],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "high",
+        "strong_claims": 4,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 4,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct"
+      },
+      "business_implication": [
+        "Product is registered in 3 jurisdiction(s): EU, US, RU",
+        "Registration status unknown for: EAEU"
+      ],
+      "recommended_next_actions": []
+    },
+    "claims": [
+      {
+        "claim_id": "clm_e84fb804",
+        "text": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]",
+        "jurisdiction": "EU",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.EU.status"
+        ],
+        "evidence_refs": [
+          "ev_e9b594e5_90_e6bf31b7578d",
+          "ev_e9b594e5_76_c667e169f35e",
+          "ev_e9b594e5_72_63363993f51f",
+          "ev_e9b594e5_83_34bd1c90b5d7",
+          "ev_e9b594e5_86_35a45337e85f",
+          "ev_e9b594e5_80_96cf58c11e63"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_c09ba8d3",
+        "text": "EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]",
+        "jurisdiction": "EAEU",
+        "semantic_role": "registration_unknown",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.EAEU.status"
+        ],
+        "evidence_refs": [
+          "ev_42978e5f_1_43796832a963",
+          "ev_42978e5f_4_d50adeaf2fa6"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_e4711f46",
+        "text": "US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]",
+        "jurisdiction": "US",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.US.status"
+        ],
+        "evidence_refs": [
+          "ev_72c96421_2_e1b029598684"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_21427aa0",
+        "text": "RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]",
+        "jurisdiction": "RU",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.RU.status"
+        ],
+        "evidence_refs": [
+          "ev_d83efa9c_0_300e6ec1799c"
+        ],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "high",
+      "strong_claims": 4,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 4,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct",
+      "missing_fields": [],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "Section 'product_contexts' readiness is 'insufficient' per coverage ledger",
+        "Section 'registrations' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger",
+        "Section 'dossier_quality_v2' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 13
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_reg_status_detail",
+    "answer": "## What is the detailed registration status in each jurisdiction?\n\n### Conclusion\n- EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]\n- EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]\n- US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]\n- RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]\n\n### Confidence: HIGH\nBased on 4 claims: 4 strong, 0 moderate, 0 weak, 0 unsupported. Answer mode: direct.\n\n### What Supports This\n- EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003] [refs: ev_e9b594e5_90_e6bf31b7578d, ev_e9b594e5_76_c667e169f35e, ev_e9b594e5_72_63363993f51f]\n- EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000] [refs: ev_42978e5f_1_43796832a963, ev_42978e5f_4_d50adeaf2fa6]\n- US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040] [refs: ev_72c96421_2_e1b029598684]\n- RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)] [refs: ev_d83efa9c_0_300e6ec1799c]\n\n### Where Uncertainty Remains\nNo significant uncertainties identified.\n\n### Why This Matters Commercially\n- Product is registered in 3 jurisdiction(s): EU, US, RU\n- Registration status unknown for: EAEU\n\n### Recommended Next Steps\nNo immediate actions required.\n\n---\n*Scope: mode=product_context | jurisdictions=EU,EAEU,US,RU*\n*Claims: 4 | Evidence refs: 10 | Unknowns: 0*",
+    "short_summary": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU. Confidence: high. 4 claims, 0 unknowns.",
+    "answer_frame": {
+      "question_id": "q_reg_status_detail",
+      "question_text": "What is the detailed registration status in each jurisdiction?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_e84fb804",
+          "text": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]",
+          "jurisdiction": "EU",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.EU.status"
+          ],
+          "evidence_refs": [
+            "ev_e9b594e5_90_e6bf31b7578d",
+            "ev_e9b594e5_76_c667e169f35e",
+            "ev_e9b594e5_72_63363993f51f",
+            "ev_e9b594e5_83_34bd1c90b5d7",
+            "ev_e9b594e5_86_35a45337e85f",
+            "ev_e9b594e5_80_96cf58c11e63"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_c09ba8d3",
+          "text": "EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]",
+          "jurisdiction": "EAEU",
+          "semantic_role": "registration_unknown",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.EAEU.status"
+          ],
+          "evidence_refs": [
+            "ev_42978e5f_1_43796832a963",
+            "ev_42978e5f_4_d50adeaf2fa6"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_e4711f46",
+          "text": "US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]",
+          "jurisdiction": "US",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.US.status"
+          ],
+          "evidence_refs": [
+            "ev_72c96421_2_e1b029598684"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_21427aa0",
+          "text": "RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]",
+          "jurisdiction": "RU",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.RU.status"
+          ],
+          "evidence_refs": [
+            "ev_d83efa9c_0_300e6ec1799c"
+          ],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "high",
+        "strong_claims": 4,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 4,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct"
+      },
+      "business_implication": [
+        "Product is registered in 3 jurisdiction(s): EU, US, RU",
+        "Registration status unknown for: EAEU"
+      ],
+      "recommended_next_actions": []
+    },
+    "claims": [
+      {
+        "claim_id": "clm_e84fb804",
+        "text": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]",
+        "jurisdiction": "EU",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.EU.status"
+        ],
+        "evidence_refs": [
+          "ev_e9b594e5_90_e6bf31b7578d",
+          "ev_e9b594e5_76_c667e169f35e",
+          "ev_e9b594e5_72_63363993f51f",
+          "ev_e9b594e5_83_34bd1c90b5d7",
+          "ev_e9b594e5_86_35a45337e85f",
+          "ev_e9b594e5_80_96cf58c11e63"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_c09ba8d3",
+        "text": "EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]",
+        "jurisdiction": "EAEU",
+        "semantic_role": "registration_unknown",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.EAEU.status"
+        ],
+        "evidence_refs": [
+          "ev_42978e5f_1_43796832a963",
+          "ev_42978e5f_4_d50adeaf2fa6"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_e4711f46",
+        "text": "US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]",
+        "jurisdiction": "US",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.US.status"
+        ],
+        "evidence_refs": [
+          "ev_72c96421_2_e1b029598684"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_21427aa0",
+        "text": "RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]",
+        "jurisdiction": "RU",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.RU.status"
+        ],
+        "evidence_refs": [
+          "ev_d83efa9c_0_300e6ec1799c"
+        ],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "high",
+      "strong_claims": 4,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 4,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct",
+      "missing_fields": [],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "Section 'registrations' readiness is 'insufficient' per coverage ledger",
+        "Section 'product_contexts' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 13
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_mah_landscape",
+    "answer": "## Who are the MAH holders across geographies?\n\n### Conclusion\n- EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]\n- EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]\n- US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]\n- RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]\n\n### Confidence: MEDIUM\nBased on 4 claims: 4 strong, 0 moderate, 0 weak, 0 unsupported. Answer mode: direct.\n\n### What Supports This\n- EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003] [refs: ev_e9b594e5_90_e6bf31b7578d, ev_e9b594e5_76_c667e169f35e, ev_e9b594e5_72_63363993f51f]\n- EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000] [refs: ev_42978e5f_1_43796832a963, ev_42978e5f_4_d50adeaf2fa6]\n- US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040] [refs: ev_72c96421_2_e1b029598684]\n- RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)] [refs: ev_d83efa9c_0_300e6ec1799c]\n\n### Where Uncertainty Remains\n- **passport.chemical_formula**: Field passport.chemical_formula could not be extracted with evidence from available documents.\n- **passport.smiles**: Field passport.smiles could not be extracted with evidence from available documents.\n- **passport.inchi_key**: Field passport.inchi_key could not be extracted with evidence from available documents.\n- **passport.molecular_weight**: Field passport.molecular_weight could not be extracted with evidence from available documents.\n- **passport.chemistry**: No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.\n\n### Why This Matters Commercially\n- Product is registered in 3 jurisdiction(s): EU, US, RU\n- Registration status unknown for: EAEU\n\n### Recommended Next Steps\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n\n---\n*Scope: mode=product_context | jurisdictions=EU,EAEU,US,RU*\n*Claims: 4 | Evidence refs: 10 | Unknowns: 5*",
+    "short_summary": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU. Confidence: medium. 4 claims, 5 unknowns.",
+    "answer_frame": {
+      "question_id": "q_mah_landscape",
+      "question_text": "Who are the MAH holders across geographies?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_e84fb804",
+          "text": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]",
+          "jurisdiction": "EU",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.EU.status"
+          ],
+          "evidence_refs": [
+            "ev_e9b594e5_90_e6bf31b7578d",
+            "ev_e9b594e5_76_c667e169f35e",
+            "ev_e9b594e5_72_63363993f51f",
+            "ev_e9b594e5_83_34bd1c90b5d7",
+            "ev_e9b594e5_86_35a45337e85f",
+            "ev_e9b594e5_80_96cf58c11e63"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_c09ba8d3",
+          "text": "EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]",
+          "jurisdiction": "EAEU",
+          "semantic_role": "registration_unknown",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.EAEU.status"
+          ],
+          "evidence_refs": [
+            "ev_42978e5f_1_43796832a963",
+            "ev_42978e5f_4_d50adeaf2fa6"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_e4711f46",
+          "text": "US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]",
+          "jurisdiction": "US",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.US.status"
+          ],
+          "evidence_refs": [
+            "ev_72c96421_2_e1b029598684"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_21427aa0",
+          "text": "RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]",
+          "jurisdiction": "RU",
+          "semantic_role": "registration_positive",
+          "support_level": "strong",
+          "support_fields": [
+            "registrations.RU.status"
+          ],
+          "evidence_refs": [
+            "ev_d83efa9c_0_300e6ec1799c"
+          ],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [
+        {
+          "field_path": "passport.chemical_formula",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.chemical_formula could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.smiles",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.smiles could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.inchi_key",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.inchi_key could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.molecular_weight",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.molecular_weight could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.chemistry",
+          "reason_code": "NO_DOCUMENT_IN_CORPUS",
+          "message": "No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        }
+      ],
+      "conflicts": [],
+      "confidence": {
+        "overall": "medium",
+        "strong_claims": 4,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 4,
+        "relevant_unknowns": 5,
+        "answer_mode": "direct"
+      },
+      "business_implication": [
+        "Product is registered in 3 jurisdiction(s): EU, US, RU",
+        "Registration status unknown for: EAEU"
+      ],
+      "recommended_next_actions": [
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_e84fb804",
+        "text": "EU: Marketing authorisation granted (centralised EU authorisation) (MAH: Accord Healthcare S.L.U.) [EU/1/20/1458/001, EU/1/20/1458/002, EU/1/20/1458/003]",
+        "jurisdiction": "EU",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.EU.status"
+        ],
+        "evidence_refs": [
+          "ev_e9b594e5_90_e6bf31b7578d",
+          "ev_e9b594e5_76_c667e169f35e",
+          "ev_e9b594e5_72_63363993f51f",
+          "ev_e9b594e5_83_34bd1c90b5d7",
+          "ev_e9b594e5_86_35a45337e85f",
+          "ev_e9b594e5_80_96cf58c11e63"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_c09ba8d3",
+        "text": "EAEU: Действует (MAH: ОНКОТАРГЕТ (РОССИЯ)) [ЛП- N(003842)-(РГ-RU), ЛП- N(003276)-(РГ-RU), 21.20.10.131-000020-1-00066-0000000000000]",
+        "jurisdiction": "EAEU",
+        "semantic_role": "registration_unknown",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.EAEU.status"
+        ],
+        "evidence_refs": [
+          "ev_42978e5f_1_43796832a963",
+          "ev_42978e5f_4_d50adeaf2fa6"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_e4711f46",
+        "text": "US: Approved (MAH: Bristol-Myers Squibb Company) [NDA 220073, NDA 202155/S-039, NDA 202155/S-040]",
+        "jurisdiction": "US",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.US.status"
+        ],
+        "evidence_refs": [
+          "ev_72c96421_2_e1b029598684"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_21427aa0",
+        "text": "RU: active (MAH: СООО \"Лекфарм\") [ЛП-№(007734)-(РГ-RU)]",
+        "jurisdiction": "RU",
+        "semantic_role": "registration_positive",
+        "support_level": "strong",
+        "support_fields": [
+          "registrations.RU.status"
+        ],
+        "evidence_refs": [
+          "ev_d83efa9c_0_300e6ec1799c"
+        ],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [
+      {
+        "field_path": "passport.chemical_formula",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.chemical_formula could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.smiles",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.smiles could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.inchi_key",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.inchi_key could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.molecular_weight",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.molecular_weight could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.chemistry",
+        "reason_code": "NO_DOCUMENT_IN_CORPUS",
+        "message": "No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      }
+    ],
+    "confidence": {
+      "overall": "medium",
+      "strong_claims": 4,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 4,
+      "relevant_unknowns": 5,
+      "answer_mode": "direct"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct",
+      "missing_fields": [],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "Section 'registrations' readiness is 'insufficient' per coverage ledger",
+        "Section 'product_contexts' readiness is 'insufficient' per coverage ledger",
+        "Section 'passport' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 12
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_ip_blockers",
+    "answer": "## What are the main IP blockers by geography?\n\n### Conclusion\nInsufficient evidence to form a definitive conclusion.\n\n### Confidence: LOW\nBased on 1 claims: 0 strong, 0 moderate, 0 weak, 1 unsupported. Answer mode: ws1_backfill_required.\n\n### What Supports This\nNo strongly supported facts available.\n\n### Where Uncertainty Remains\n- No patent families found in dossier (weak/no evidence)\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\n- Run WS1 gap resolver to fill missing source coverage\n- Investigate 3 missing fields: patent_families[*].representative_pub, patent_families[*].legal_status_snapshot, patent_families[*].expiry_by_country\n\n---\n*Scope: mode=product_context | jurisdictions=EU,EAEU,US,RU*\n*Claims: 1 | Evidence refs: 0 | Unknowns: 0*",
+    "short_summary": "Insufficient data. Confidence: low. 0 unknowns remaining.",
+    "answer_frame": {
+      "question_id": "q_ip_blockers",
+      "question_text": "What are the main IP blockers by geography?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_f7dc82ff",
+          "text": "No patent families found in dossier",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "patent_families"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "low",
+        "strong_claims": 0,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 1,
+        "total_claims": 1,
+        "relevant_unknowns": 0,
+        "answer_mode": "ws1_backfill_required"
+      },
+      "business_implication": [],
+      "recommended_next_actions": [
+        "Run WS1 gap resolver to fill missing source coverage",
+        "Investigate 3 missing fields: patent_families[*].representative_pub, patent_families[*].legal_status_snapshot, patent_families[*].expiry_by_country"
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_f7dc82ff",
+        "text": "No patent families found in dossier",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "patent_families"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "low",
+      "strong_claims": 0,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 1,
+      "total_claims": 1,
+      "relevant_unknowns": 0,
+      "answer_mode": "ws1_backfill_required"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": false,
+      "answer_mode": "ws1_backfill_required",
+      "missing_fields": [
+        "patent_families[*].representative_pub",
+        "patent_families[*].legal_status_snapshot",
+        "patent_families[*].expiry_by_country"
+      ],
+      "critical_unknowns": [],
+      "should_trigger_ws1": true,
+      "warnings": [
+        "Required section 'patent_families' is empty",
+        "Section 'patent_families' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger",
+        "Section 'coverage_ledger' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 14
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_patent_expiry",
+    "answer": "## When do the key patents expire in US and EU?\n\n### Conclusion\nInsufficient evidence to form a definitive conclusion.\n\n### Confidence: LOW\nBased on 1 claims: 0 strong, 0 moderate, 0 weak, 1 unsupported. Answer mode: ws1_backfill_required.\n\n### What Supports This\nNo strongly supported facts available.\n\n### Where Uncertainty Remains\n- No patent families found in dossier (weak/no evidence)\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\n- Run WS1 gap resolver to fill missing source coverage\n- Investigate 2 missing fields: patent_families[*].expiry_by_country, patent_families[*].legal_status_snapshot\n\n---\n*Scope: mode=product_context | jurisdictions=EU,US*\n*Claims: 1 | Evidence refs: 0 | Unknowns: 0*",
+    "short_summary": "Insufficient data. Confidence: low. 0 unknowns remaining.",
+    "answer_frame": {
+      "question_id": "q_patent_expiry",
+      "question_text": "When do the key patents expire in US and EU?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_7ff6caf06789"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "US": "ctx_7ff6caf06789"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_f7dc82ff",
+          "text": "No patent families found in dossier",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "patent_families"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "low",
+        "strong_claims": 0,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 1,
+        "total_claims": 1,
+        "relevant_unknowns": 0,
+        "answer_mode": "ws1_backfill_required"
+      },
+      "business_implication": [],
+      "recommended_next_actions": [
+        "Run WS1 gap resolver to fill missing source coverage",
+        "Investigate 2 missing fields: patent_families[*].expiry_by_country, patent_families[*].legal_status_snapshot"
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_f7dc82ff",
+        "text": "No patent families found in dossier",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "patent_families"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "low",
+      "strong_claims": 0,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 1,
+      "total_claims": 1,
+      "relevant_unknowns": 0,
+      "answer_mode": "ws1_backfill_required"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_7ff6caf06789"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "US": "ctx_7ff6caf06789"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": false,
+      "answer_mode": "ws1_backfill_required",
+      "missing_fields": [
+        "patent_families[*].expiry_by_country",
+        "patent_families[*].legal_status_snapshot"
+      ],
+      "critical_unknowns": [],
+      "should_trigger_ws1": true,
+      "warnings": [
+        "Required section 'patent_families' is empty",
+        "Section 'patent_families' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 13
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_patent_types",
+    "answer": "## What types of patents protect this product (compound, formulation, method of use)?\n\n### Conclusion\nInsufficient evidence to form a definitive conclusion.\n\n### Confidence: LOW\nBased on 1 claims: 0 strong, 0 moderate, 0 weak, 1 unsupported. Answer mode: direct_with_warnings.\n\n### What Supports This\nNo strongly supported facts available.\n\n### Where Uncertainty Remains\n- No patent families found in dossier (weak/no evidence)\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\n- Run WS1 gap resolver to fill missing source coverage\n- Investigate 2 missing fields: patent_families[*].what_blocks, patent_families[*].technical_focus\n\n---\n*Scope: mode=product_context | jurisdictions=EU,US*\n*Claims: 1 | Evidence refs: 0 | Unknowns: 0*",
+    "short_summary": "Insufficient data. Confidence: low. 0 unknowns remaining.",
+    "answer_frame": {
+      "question_id": "q_patent_types",
+      "question_text": "What types of patents protect this product (compound, formulation, method of use)?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_7ff6caf06789"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "US": "ctx_7ff6caf06789"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_f7dc82ff",
+          "text": "No patent families found in dossier",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "patent_families"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "low",
+        "strong_claims": 0,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 1,
+        "total_claims": 1,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct_with_warnings"
+      },
+      "business_implication": [],
+      "recommended_next_actions": [
+        "Run WS1 gap resolver to fill missing source coverage",
+        "Investigate 2 missing fields: patent_families[*].what_blocks, patent_families[*].technical_focus"
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_f7dc82ff",
+        "text": "No patent families found in dossier",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "patent_families"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "low",
+      "strong_claims": 0,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 1,
+      "total_claims": 1,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct_with_warnings"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_7ff6caf06789"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "US": "ctx_7ff6caf06789"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct_with_warnings",
+      "missing_fields": [
+        "patent_families[*].what_blocks",
+        "patent_families[*].technical_focus"
+      ],
+      "critical_unknowns": [],
+      "should_trigger_ws1": true,
+      "warnings": [
+        "Required section 'patent_families' is empty",
+        "Section 'patent_families' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 15
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_clinical_overview",
+    "answer": "## What is the clinical evidence profile (phases, key trials, endpoints)?\n\n### Conclusion\n- BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu\n- A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie\n- Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported\n- Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o\n- Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with\n- Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco\n- A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at\n- Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase: \n- Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh\n- Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus\n- Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients \n- Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d\n- A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a\n- Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta\n- Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED\n- Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase: \n- Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A\n- Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At\n- APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib\n- A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api\n- Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED\n- Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no \n- RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima\n- Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over\n- Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a\n- Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start:\n- Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu\n\n### Confidence: HIGH\nBased on 27 claims: 27 strong, 0 moderate, 0 weak, 0 unsupported. Answer mode: direct.\n\n### What Supports This\n- BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu [refs: ev_9c768f98_1_005bd8d90626]\n- A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie [refs: ev_43e918d4_1_510f0e796c59]\n- Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported [refs: ev_455e61ec_1_8e290b5d80d2]\n- Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o [refs: ev_ecc67d80_1_b4bf125a0ea5, ev_ecc67d80_2_7772183a6144]\n- Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with [refs: ev_1c707944_1_c5e178583c5e]\n- Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco [refs: ev_dca6b00b_1_1bb1ae6f1fb6]\n- A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at [refs: ev_dd947428_1_86b9cb9ebb3c]\n- Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase:  [refs: ev_be402914_1_359515431d58]\n- Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh [refs: ev_66fcd34c_1_2566c4a5a0e2]\n- Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus [refs: ev_e6a823a6_1_3506185b4ce7]\n- Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients  [refs: ev_e75f2992_1_c25f6324cb16]\n- Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d [refs: ev_140aa9bc_1_eb198fa030af]\n- A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a [refs: ev_e15c53bf_1_4661c5f23895]\n- Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta [refs: ev_d8f3b739_1_a20096191374]\n- Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED [refs: ctgov_api_NCT02295475]\n- Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase:  [refs: ev_e32f1910_1_928b4445462b]\n- Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A [refs: ev_ef33178a_1_b69d604a7622]\n- Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At [refs: ev_0e0bb76f_1_6ae193dd5d19]\n- APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib [refs: ev_5ae1ce21_1_fb153de97fc5]\n- A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api [refs: ev_0fd28a5b_1_e44ace6c8caf]\n- Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED [refs: ctgov_api_NCT02761044]\n- Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no  [refs: ev_a6b5a96e_1_fc4f3bf365d9]\n- RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima [refs: ev_1b9a3d0f_1_37385975f4c4]\n- Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over [refs: ev_d6b59917_1_873f1f066155]\n- Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a [refs: ev_443e5c9c_1_1a237b6370c8]\n- Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start: [refs: ev_a3e3e539_1_8ad80a1fee9b]\n- Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu [refs: ev_4a45ff22_1_9325950691d4]\n\n### Where Uncertainty Remains\nNo significant uncertainties identified.\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\nNo immediate actions required.\n\n---\n*Scope: mode=inn | jurisdictions=EU,EAEU,US,RU | warnings=1*\n*Claims: 27 | Evidence refs: 28 | Unknowns: 0*",
+    "short_summary": "BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED |. Confidence: high. 27 claims, 0 unknowns.",
+    "answer_frame": {
+      "question_id": "q_clinical_overview",
+      "question_text": "What is the clinical evidence profile (phases, key trials, endpoints)?",
+      "scope": {
+        "entity_mode": "inn",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": [
+          "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+        ]
+      },
+      "claims": [
+        {
+          "claim_id": "clm_66904683",
+          "text": "BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_9c768f98_1_005bd8d90626"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_3b6b91e3",
+          "text": "A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_43e918d4_1_510f0e796c59"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_480e3747",
+          "text": "Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_455e61ec_1_8e290b5d80d2"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_8e617f4b",
+          "text": "Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_ecc67d80_1_b4bf125a0ea5",
+            "ev_ecc67d80_2_7772183a6144"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_25cbc57c",
+          "text": "Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_1c707944_1_c5e178583c5e"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_beb0087e",
+          "text": "Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_dca6b00b_1_1bb1ae6f1fb6"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_37e8d1e1",
+          "text": "A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_dd947428_1_86b9cb9ebb3c"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_60b8a453",
+          "text": "Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase: ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_be402914_1_359515431d58"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_4a9a2b09",
+          "text": "Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_66fcd34c_1_2566c4a5a0e2"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_f9ecb998",
+          "text": "Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e6a823a6_1_3506185b4ce7"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_f2f4fc49",
+          "text": "Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e75f2992_1_c25f6324cb16"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_d394532f",
+          "text": "Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_140aa9bc_1_eb198fa030af"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_de49a231",
+          "text": "A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e15c53bf_1_4661c5f23895"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_cd96db11",
+          "text": "Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_d8f3b739_1_a20096191374"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_b242fe81",
+          "text": "Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ctgov_api_NCT02295475"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_64332c22",
+          "text": "Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase: ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e32f1910_1_928b4445462b"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_e057d13a",
+          "text": "Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_ef33178a_1_b69d604a7622"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_d7846add",
+          "text": "Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_0e0bb76f_1_6ae193dd5d19"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_5bad8b99",
+          "text": "APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_5ae1ce21_1_fb153de97fc5"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_eabff80b",
+          "text": "A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_0fd28a5b_1_e44ace6c8caf"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_6f26e0e6",
+          "text": "Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ctgov_api_NCT02761044"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_1ace5217",
+          "text": "Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_a6b5a96e_1_fc4f3bf365d9"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_d517920c",
+          "text": "RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_1b9a3d0f_1_37385975f4c4"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_513c2313",
+          "text": "Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_d6b59917_1_873f1f066155"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_ca80c136",
+          "text": "Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_443e5c9c_1_1a237b6370c8"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_7a3ff21e",
+          "text": "Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start:",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_a3e3e539_1_8ad80a1fee9b"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_f0ff62a3",
+          "text": "Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_4a45ff22_1_9325950691d4"
+          ],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "high",
+        "strong_claims": 27,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 27,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct"
+      },
+      "business_implication": [],
+      "recommended_next_actions": []
+    },
+    "claims": [
+      {
+        "claim_id": "clm_66904683",
+        "text": "BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_9c768f98_1_005bd8d90626"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_3b6b91e3",
+        "text": "A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_43e918d4_1_510f0e796c59"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_480e3747",
+        "text": "Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_455e61ec_1_8e290b5d80d2"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_8e617f4b",
+        "text": "Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_ecc67d80_1_b4bf125a0ea5",
+          "ev_ecc67d80_2_7772183a6144"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_25cbc57c",
+        "text": "Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_1c707944_1_c5e178583c5e"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_beb0087e",
+        "text": "Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_dca6b00b_1_1bb1ae6f1fb6"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_37e8d1e1",
+        "text": "A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_dd947428_1_86b9cb9ebb3c"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_60b8a453",
+        "text": "Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase: ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_be402914_1_359515431d58"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_4a9a2b09",
+        "text": "Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_66fcd34c_1_2566c4a5a0e2"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_f9ecb998",
+        "text": "Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e6a823a6_1_3506185b4ce7"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_f2f4fc49",
+        "text": "Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e75f2992_1_c25f6324cb16"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_d394532f",
+        "text": "Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_140aa9bc_1_eb198fa030af"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_de49a231",
+        "text": "A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e15c53bf_1_4661c5f23895"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_cd96db11",
+        "text": "Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_d8f3b739_1_a20096191374"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_b242fe81",
+        "text": "Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ctgov_api_NCT02295475"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_64332c22",
+        "text": "Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase: ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e32f1910_1_928b4445462b"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_e057d13a",
+        "text": "Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_ef33178a_1_b69d604a7622"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_d7846add",
+        "text": "Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_0e0bb76f_1_6ae193dd5d19"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_5bad8b99",
+        "text": "APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_5ae1ce21_1_fb153de97fc5"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_eabff80b",
+        "text": "A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_0fd28a5b_1_e44ace6c8caf"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_6f26e0e6",
+        "text": "Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ctgov_api_NCT02761044"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_1ace5217",
+        "text": "Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_a6b5a96e_1_fc4f3bf365d9"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_d517920c",
+        "text": "RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_1b9a3d0f_1_37385975f4c4"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_513c2313",
+        "text": "Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_d6b59917_1_873f1f066155"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_ca80c136",
+        "text": "Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_443e5c9c_1_1a237b6370c8"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_7a3ff21e",
+        "text": "Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start:",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_a3e3e539_1_8ad80a1fee9b"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_f0ff62a3",
+        "text": "Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_4a45ff22_1_9325950691d4"
+        ],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "high",
+      "strong_claims": 27,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 27,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct"
+    },
+    "scope": {
+      "entity_mode": "inn",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+      ]
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct",
+      "missing_fields": [],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations",
+        "Section 'clinical_studies' readiness is 'insufficient' per coverage ledger",
+        "Section 'passport' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 14
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_ongoing_trials",
+    "answer": "## Are there ongoing clinical trials, and what are they studying?\n\n### Conclusion\n- BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu\n- A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie\n- Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported\n- Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o\n- Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with\n- Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco\n- A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at\n- Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase: \n- Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh\n- Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus\n- Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients \n- Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d\n- A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a\n- Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta\n- Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED\n- Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase: \n- Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A\n- Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At\n- APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib\n- A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api\n- Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED\n- Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no \n- RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima\n- Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over\n- Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a\n- Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start:\n- Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu\n\n### Confidence: HIGH\nBased on 27 claims: 27 strong, 0 moderate, 0 weak, 0 unsupported. Answer mode: direct.\n\n### What Supports This\n- BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu [refs: ev_9c768f98_1_005bd8d90626]\n- A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie [refs: ev_43e918d4_1_510f0e796c59]\n- Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported [refs: ev_455e61ec_1_8e290b5d80d2]\n- Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o [refs: ev_ecc67d80_1_b4bf125a0ea5, ev_ecc67d80_2_7772183a6144]\n- Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with [refs: ev_1c707944_1_c5e178583c5e]\n- Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco [refs: ev_dca6b00b_1_1bb1ae6f1fb6]\n- A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at [refs: ev_dd947428_1_86b9cb9ebb3c]\n- Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase:  [refs: ev_be402914_1_359515431d58]\n- Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh [refs: ev_66fcd34c_1_2566c4a5a0e2]\n- Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus [refs: ev_e6a823a6_1_3506185b4ce7]\n- Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients  [refs: ev_e75f2992_1_c25f6324cb16]\n- Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d [refs: ev_140aa9bc_1_eb198fa030af]\n- A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a [refs: ev_e15c53bf_1_4661c5f23895]\n- Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta [refs: ev_d8f3b739_1_a20096191374]\n- Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED [refs: ctgov_api_NCT02295475]\n- Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase:  [refs: ev_e32f1910_1_928b4445462b]\n- Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A [refs: ev_ef33178a_1_b69d604a7622]\n- Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At [refs: ev_0e0bb76f_1_6ae193dd5d19]\n- APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib [refs: ev_5ae1ce21_1_fb153de97fc5]\n- A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api [refs: ev_0fd28a5b_1_e44ace6c8caf]\n- Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED [refs: ctgov_api_NCT02761044]\n- Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no  [refs: ev_a6b5a96e_1_fc4f3bf365d9]\n- RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima [refs: ev_1b9a3d0f_1_37385975f4c4]\n- Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over [refs: ev_d6b59917_1_873f1f066155]\n- Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a [refs: ev_443e5c9c_1_1a237b6370c8]\n- Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start: [refs: ev_a3e3e539_1_8ad80a1fee9b]\n- Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu [refs: ev_4a45ff22_1_9325950691d4]\n\n### Where Uncertainty Remains\nNo significant uncertainties identified.\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\nNo immediate actions required.\n\n---\n*Scope: mode=inn | jurisdictions=EU,EAEU,US,RU | warnings=1*\n*Claims: 27 | Evidence refs: 28 | Unknowns: 0*",
+    "short_summary": "BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED |. Confidence: high. 27 claims, 0 unknowns.",
+    "answer_frame": {
+      "question_id": "q_ongoing_trials",
+      "question_text": "Are there ongoing clinical trials, and what are they studying?",
+      "scope": {
+        "entity_mode": "inn",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": [
+          "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+        ]
+      },
+      "claims": [
+        {
+          "claim_id": "clm_66904683",
+          "text": "BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_9c768f98_1_005bd8d90626"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_3b6b91e3",
+          "text": "A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_43e918d4_1_510f0e796c59"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_480e3747",
+          "text": "Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_455e61ec_1_8e290b5d80d2"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_8e617f4b",
+          "text": "Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_ecc67d80_1_b4bf125a0ea5",
+            "ev_ecc67d80_2_7772183a6144"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_25cbc57c",
+          "text": "Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_1c707944_1_c5e178583c5e"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_beb0087e",
+          "text": "Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_dca6b00b_1_1bb1ae6f1fb6"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_37e8d1e1",
+          "text": "A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_dd947428_1_86b9cb9ebb3c"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_60b8a453",
+          "text": "Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase: ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_be402914_1_359515431d58"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_4a9a2b09",
+          "text": "Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_66fcd34c_1_2566c4a5a0e2"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_f9ecb998",
+          "text": "Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e6a823a6_1_3506185b4ce7"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_f2f4fc49",
+          "text": "Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e75f2992_1_c25f6324cb16"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_d394532f",
+          "text": "Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_140aa9bc_1_eb198fa030af"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_de49a231",
+          "text": "A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e15c53bf_1_4661c5f23895"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_cd96db11",
+          "text": "Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_d8f3b739_1_a20096191374"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_b242fe81",
+          "text": "Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ctgov_api_NCT02295475"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_64332c22",
+          "text": "Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase: ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_e32f1910_1_928b4445462b"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_e057d13a",
+          "text": "Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_ef33178a_1_b69d604a7622"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_d7846add",
+          "text": "Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_0e0bb76f_1_6ae193dd5d19"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_5bad8b99",
+          "text": "APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_5ae1ce21_1_fb153de97fc5"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_eabff80b",
+          "text": "A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_0fd28a5b_1_e44ace6c8caf"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_6f26e0e6",
+          "text": "Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ctgov_api_NCT02761044"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_1ace5217",
+          "text": "Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no ",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_a6b5a96e_1_fc4f3bf365d9"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_d517920c",
+          "text": "RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_1b9a3d0f_1_37385975f4c4"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_513c2313",
+          "text": "Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_d6b59917_1_873f1f066155"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_ca80c136",
+          "text": "Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_443e5c9c_1_1a237b6370c8"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_7a3ff21e",
+          "text": "Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start:",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_a3e3e539_1_8ad80a1fee9b"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_f0ff62a3",
+          "text": "Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "strong",
+          "support_fields": [
+            "clinical_studies"
+          ],
+          "evidence_refs": [
+            "ev_4a45ff22_1_9325950691d4"
+          ],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "high",
+        "strong_claims": 27,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 27,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct"
+      },
+      "business_implication": [],
+      "recommended_next_actions": []
+    },
+    "claims": [
+      {
+        "claim_id": "clm_66904683",
+        "text": "BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery | Phase Phase 3 | N=1238 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00097357 Title: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery OverallStatu",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_9c768f98_1_005bd8d90626"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_3b6b91e3",
+        "text": "A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advan | Phase Phase 2 | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT00320255 Title: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patie",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_43e918d4_1_510f0e796c59"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_480e3747",
+        "text": "Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery | Phase Phase 3 | N=3608 | Status: COMPLETED | Conclusion: The available results snippet for NCT00371683 does not include outcome data or a results-based interpretation, so no study conclusion can be supported",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_455e61ec_1_8e290b5d80d2"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_8e617f4b",
+        "text": "Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation | Phase Phase 3 | N=20976 | Status: COMPLETED | Conclusion: Completed Phase 3 randomized double-blind active-controlled study of apixaban versus warfarin for stroke prevention in atrial fibrillation; no study o",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_ecc67d80_1_b4bf125a0ea5",
+          "ev_ecc67d80_2_7772183a6144"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_25cbc57c",
+        "text": "Apixaban in patients with atrial fibrillation | Phase Phase 3 | N=6421 | Status: COMPLETED | Conclusion: Apixaban was superior to aspirin for stroke prevention in patients with atrial fibrillation who were unsuitable for vitamin K antagonist therapy, with",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_1c707944_1_c5e178583c5e"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_beb0087e",
+        "text": "Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Em | Phase Phase 3 | N=2711 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided NCT00633893 snippet because it only shows the study title and status, without any outco",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_dca6b00b_1_1bb1ae6f1fb6"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_37e8d1e1",
+        "text": "A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation | Phase Phase 2 | N=222 | Status: COMPLETED | Conclusion: The available results snippet for NCT00787150 does not provide enough outcome data to support a results-based conclusion about apixaban's safety in at",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_dd947428_1_86b9cb9ebb3c"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_60b8a453",
+        "text": "Eliquis Regulatory Post Marketing Surveillance (rPMS) | N=100 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT01885585 Title: Eliquis Regulatory Post Marketing Surveillance (rPMS) OverallStatus: COMPLETED Phase: ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_be402914_1_359515431d58"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_4a9a2b09",
+        "text": "Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administere | Phase Phase 1 | N=37 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02034591 Title: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban Wh",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_66fcd34c_1_2566c4a5a0e2"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_f9ecb998",
+        "text": "Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients | Phase Phase 2 | N=575 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02048865 Title: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients OverallStatus",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e6a823a6_1_3506185b4ce7"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_f2f4fc49",
+        "text": "Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma T | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02066454 Title: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e75f2992_1_c25f6324cb16"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_d394532f",
+        "text": "Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrill | Phase Phase 4 | N=1500 | Status: COMPLETED | Conclusion: Completed study of apixaban in atrial fibrillation patients undergoing cardioversion; the provided excerpt includes the primary outcome category but d",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_140aa9bc_1_eb198fa030af"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_de49a231",
+        "text": "A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Antico | Phase Phase 3 | N=68 | Status: COMPLETED | Conclusion: Andexanet alfa reversed apixaban anticoagulation in older subjects, with anti-fXa activity reduced from baseline at the nadir in the primary outcome a",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e15c53bf_1_4661c5f23895"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_cd96db11",
+        "text": "Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects | Phase Phase 1 | N=15 | Status: Completed | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02262533 Title: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects OverallSta",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_d8f3b739_1_a20096191374"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_b242fe81",
+        "text": "Apixaban for the Secondary Prevention of Thromboembolism: a Prospective Randomized Outcome Pilot Stu | Phase Phase 4 | N=48 | Status: COMPLETED",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ctgov_api_NCT02295475"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_64332c22",
+        "text": "Apixaban Pharmacokinetics in Bariatric Patients (APB) | Phase Phase 4 | N=33 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02406885 Title: Apixaban Pharmacokinetics in Bariatric Patients (APB) OverallStatus: COMPLETED Phase: ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_e32f1910_1_928b4445462b"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_e057d13a",
+        "text": "Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrilla | Phase Phase 2 | N=101 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02565693 Title: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With A",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_ef33178a_1_b69d604a7622"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_d7846add",
+        "text": "Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillat | Phase Phase 4 | N=300 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02608099 Title: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of At",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_0e0bb76f_1_6ae193dd5d19"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_5bad8b99",
+        "text": "APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in R | N=321501 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02640222 Title: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fib",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_5ae1ce21_1_fb153de97fc5"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_eabff80b",
+        "text": "A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma | Phase Phase 2 | N=2 | Status: TERMINATED | Conclusion: The study was terminated and only 2 participants were enrolled; the available results snippet reports serial anti-Xa activity over 3 months in the api",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_0fd28a5b_1_e44ace6c8caf"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_6f26e0e6",
+        "text": "Randomized Trial to Test the Effect of Rivaroxaban or Apixaban on Menstrual Blood Loss in Women | Phase Phase 3 | N=19 | Status: COMPLETED",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ctgov_api_NCT02761044"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_1ace5217",
+        "text": "Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Pati | N=14201 | Status: COMPLETED | Conclusion: No results-based conclusion can be supported from the provided evidence for NCT02769078 because only the study title/protocol context is shown and no ",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_a6b5a96e_1_fc4f3bf365d9"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_d517920c",
+        "text": "RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding | Phase Phase 3 | N=19 | Status: COMPLETED | Conclusion: Apixaban for Heavy Menstrual Bleeding OverallStatus: COMPLETED Phase: Start: 2016-09 | Primary Completion: 2020-02-13 Conditions: Interventions: Prima",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_1b9a3d0f_1_37385975f4c4"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_513c2313",
+        "text": "Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation | Phase Phase 3 | N=56 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02889562 Title: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation Over",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_d6b59917_1_873f1f066155"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_ca80c136",
+        "text": "Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage K | Phase Phase 3 | N=108 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02933697 Title: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) a",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_443e5c9c_1_1a237b6370c8"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_7a3ff21e",
+        "text": "Apixaban Discontinuation Prior to Major Surgery | N=130 | Status: COMPLETED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02935751 Title: Apixaban Discontinuation Prior to Major Surgery OverallStatus: COMPLETED Phase: Start:",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_a3e3e539_1_8ad80a1fee9b"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_f0ff62a3",
+        "text": "Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis | Phase Phase 4 | N=52 | Status: TERMINATED | Conclusion: # ClinicalTrials.gov (ctgov_results) NCT ID: NCT02945280 Title: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis OverallStatu",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "strong",
+        "support_fields": [
+          "clinical_studies"
+        ],
+        "evidence_refs": [
+          "ev_4a45ff22_1_9325950691d4"
+        ],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "high",
+      "strong_claims": 27,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 27,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct"
+    },
+    "scope": {
+      "entity_mode": "inn",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+      ]
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct",
+      "missing_fields": [],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations",
+        "Section 'clinical_studies' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 13
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_chemistry_identity",
+    "answer": "## What is the chemical identity of the drug (SMILES, formula, molecular weight)?\n\n### Conclusion\nInsufficient evidence to form a definitive conclusion.\n\n### Confidence: LOW\nBased on 4 claims: 0 strong, 0 moderate, 0 weak, 4 unsupported. Answer mode: ws1_backfill_required.\n\n### What Supports This\nNo strongly supported facts available.\n\n### Where Uncertainty Remains\n- **passport.chemical_formula**: Field passport.chemical_formula could not be extracted with evidence from available documents.\n- **passport.smiles**: Field passport.smiles could not be extracted with evidence from available documents.\n- **passport.inchi_key**: Field passport.inchi_key could not be extracted with evidence from available documents.\n- **passport.molecular_weight**: Field passport.molecular_weight could not be extracted with evidence from available documents.\n- **passport.chemistry**: No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.\n- SMILES: Not available (weak/no evidence)\n- Chemical Formula: Not available (weak/no evidence)\n- Molecular Weight: Not available (weak/no evidence)\n- InChI Key: Not available (weak/no evidence)\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\n- Run WS1 gap resolver to fill missing source coverage\n- Investigate 4 missing fields: passport.smiles, passport.chemical_formula, passport.molecular_weight\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n\n---\n*Scope: mode=inn | jurisdictions=EU,EAEU,US,RU | warnings=1*\n*Claims: 4 | Evidence refs: 0 | Unknowns: 5*",
+    "short_summary": "Insufficient data. Confidence: low. 5 unknowns remaining.",
+    "answer_frame": {
+      "question_id": "q_chemistry_identity",
+      "question_text": "What is the chemical identity of the drug (SMILES, formula, molecular weight)?",
+      "scope": {
+        "entity_mode": "inn",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": [
+          "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+        ]
+      },
+      "claims": [
+        {
+          "claim_id": "clm_bdf9fca2",
+          "text": "SMILES: Not available",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "passport.smiles"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_bb95cc49",
+          "text": "Chemical Formula: Not available",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "passport.chemical_formula"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_3bba7d11",
+          "text": "Molecular Weight: Not available",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "passport.molecular_weight"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_93e0c1b3",
+          "text": "InChI Key: Not available",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "unsupported",
+          "support_fields": [
+            "passport.inchi_key"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [
+        {
+          "field_path": "passport.chemical_formula",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.chemical_formula could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.smiles",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.smiles could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.inchi_key",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.inchi_key could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.molecular_weight",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.molecular_weight could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.chemistry",
+          "reason_code": "NO_DOCUMENT_IN_CORPUS",
+          "message": "No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        }
+      ],
+      "conflicts": [],
+      "confidence": {
+        "overall": "low",
+        "strong_claims": 0,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 4,
+        "total_claims": 4,
+        "relevant_unknowns": 5,
+        "answer_mode": "ws1_backfill_required"
+      },
+      "business_implication": [],
+      "recommended_next_actions": [
+        "Run WS1 gap resolver to fill missing source coverage",
+        "Investigate 4 missing fields: passport.smiles, passport.chemical_formula, passport.molecular_weight",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_bdf9fca2",
+        "text": "SMILES: Not available",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "passport.smiles"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_bb95cc49",
+        "text": "Chemical Formula: Not available",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "passport.chemical_formula"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_3bba7d11",
+        "text": "Molecular Weight: Not available",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "passport.molecular_weight"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_93e0c1b3",
+        "text": "InChI Key: Not available",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "unsupported",
+        "support_fields": [
+          "passport.inchi_key"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [
+      {
+        "field_path": "passport.chemical_formula",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.chemical_formula could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.smiles",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.smiles could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.inchi_key",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.inchi_key could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.molecular_weight",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.molecular_weight could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.chemistry",
+        "reason_code": "NO_DOCUMENT_IN_CORPUS",
+        "message": "No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      }
+    ],
+    "confidence": {
+      "overall": "low",
+      "strong_claims": 0,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 4,
+      "total_claims": 4,
+      "relevant_unknowns": 5,
+      "answer_mode": "ws1_backfill_required"
+    },
+    "scope": {
+      "entity_mode": "inn",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+      ]
+    },
+    "coverage_decision": {
+      "can_answer": false,
+      "answer_mode": "ws1_backfill_required",
+      "missing_fields": [
+        "passport.smiles",
+        "passport.chemical_formula",
+        "passport.molecular_weight",
+        "passport.inchi_key"
+      ],
+      "critical_unknowns": [],
+      "should_trigger_ws1": true,
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations",
+        "Section 'passport' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 22
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_synthesis_overview",
+    "answer": "## What is known about the synthesis route?\n\n### Conclusion\nInsufficient evidence to form a definitive conclusion.\n\n### Confidence: NONE\nBased on 0 claims: 0 strong, 0 moderate, 0 weak, 0 unsupported. Answer mode: direct_with_warnings.\n\n### What Supports This\nNo strongly supported facts available.\n\n### Where Uncertainty Remains\nNo significant uncertainties identified.\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\n- Run WS1 gap resolver to fill missing source coverage\n- Investigate 2 missing fields: synthesis_steps[*].description, synthesis_steps[*].reagents\n\n---\n*Scope: mode=inn | jurisdictions=EU,EAEU,US,RU | warnings=1*\n*Claims: 0 | Evidence refs: 0 | Unknowns: 0*",
+    "short_summary": "Insufficient data. Confidence: none. 0 unknowns remaining.",
+    "answer_frame": {
+      "question_id": "q_synthesis_overview",
+      "question_text": "What is known about the synthesis route?",
+      "scope": {
+        "entity_mode": "inn",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": [
+          "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+        ]
+      },
+      "claims": [],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "none",
+        "strong_claims": 0,
+        "moderate_claims": 0,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 0,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct_with_warnings"
+      },
+      "business_implication": [],
+      "recommended_next_actions": [
+        "Run WS1 gap resolver to fill missing source coverage",
+        "Investigate 2 missing fields: synthesis_steps[*].description, synthesis_steps[*].reagents"
+      ]
+    },
+    "claims": [],
+    "unknowns": [],
+    "confidence": {
+      "overall": "none",
+      "strong_claims": 0,
+      "moderate_claims": 0,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 0,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct_with_warnings"
+    },
+    "scope": {
+      "entity_mode": "inn",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+      ]
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct_with_warnings",
+      "missing_fields": [
+        "synthesis_steps[*].description",
+        "synthesis_steps[*].reagents"
+      ],
+      "critical_unknowns": [],
+      "should_trigger_ws1": true,
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations",
+        "Required section 'synthesis_steps' is empty",
+        "Required section 'patent_families' is empty",
+        "Section 'synthesis_steps' readiness is 'insufficient' per coverage ledger",
+        "Section 'patent_families' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 20
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_commercial_opportunity",
+    "answer": "## What is the overall commercial opportunity assessment (registration gaps, IP window, clinical maturity)?\n\n### Conclusion\n- registrations[*].status: Marketing authorisation granted (centralised EU authorisation), Действует, Approved, active\n- clinical_studies[*].phase: Phase 3, Phase 2, Phase 3, Phase 3, Phase 3\n\n### Confidence: MEDIUM_HIGH\nBased on 2 claims: 0 strong, 2 moderate, 0 weak, 0 unsupported. Answer mode: direct_with_warnings.\n\n### What Supports This\n- registrations[*].status: Marketing authorisation granted (centralised EU authorisation), Действует, Approved, active [refs: ev_e9b594e5_90_e6bf31b7578d, ev_e9b594e5_76_c667e169f35e, ev_e9b594e5_72_63363993f51f]\n- clinical_studies[*].phase: Phase 3, Phase 2, Phase 3, Phase 3, Phase 3 [refs: ctgov_api_NCT00097357, ctgov_api_NCT00320255, ctgov_api_NCT00371683]\n\n### Where Uncertainty Remains\nNo significant uncertainties identified.\n\n### Why This Matters Commercially\nNo specific commercial implications identified.\n\n### Recommended Next Steps\n- Investigate 1 missing fields: patent_families[*].expiry_by_country\n\n---\n*Scope: mode=product_context | jurisdictions=EU,EAEU,US,RU*\n*Claims: 2 | Evidence refs: 33 | Unknowns: 0*",
+    "short_summary": "registrations[*].status: Marketing authorisation granted (centralised EU authorisation), Действует, Approved, active. Confidence: medium_high. 2 claims, 0 unknowns.",
+    "answer_frame": {
+      "question_id": "q_commercial_opportunity",
+      "question_text": "What is the overall commercial opportunity assessment (registration gaps, IP window, clinical maturity)?",
+      "scope": {
+        "entity_mode": "product_context",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": []
+      },
+      "claims": [
+        {
+          "claim_id": "clm_68f6f7c2",
+          "text": "registrations[*].status: Marketing authorisation granted (centralised EU authorisation), Действует, Approved, active",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "moderate",
+          "support_fields": [
+            "registrations[*].status"
+          ],
+          "evidence_refs": [
+            "ev_e9b594e5_90_e6bf31b7578d",
+            "ev_e9b594e5_76_c667e169f35e",
+            "ev_e9b594e5_72_63363993f51f",
+            "ev_e9b594e5_83_34bd1c90b5d7",
+            "ev_e9b594e5_86_35a45337e85f",
+            "ev_e9b594e5_80_96cf58c11e63",
+            "ev_42978e5f_1_43796832a963",
+            "ev_42978e5f_4_d50adeaf2fa6",
+            "ev_72c96421_2_e1b029598684",
+            "ev_d83efa9c_0_300e6ec1799c"
+          ],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_8c045402",
+          "text": "clinical_studies[*].phase: Phase 3, Phase 2, Phase 3, Phase 3, Phase 3",
+          "jurisdiction": null,
+          "semantic_role": null,
+          "support_level": "moderate",
+          "support_fields": [
+            "clinical_studies[*].phase"
+          ],
+          "evidence_refs": [
+            "ctgov_api_NCT00097357",
+            "ctgov_api_NCT00320255",
+            "ctgov_api_NCT00371683",
+            "ev_ecc67d80_2_7772183a6144",
+            "ctgov_api_NCT00496769",
+            "ctgov_api_NCT00633893",
+            "ctgov_api_NCT00787150",
+            "ev_66fcd34c_1_2566c4a5a0e2",
+            "ctgov_api_NCT02048865",
+            "ctgov_api_NCT02066454",
+            "ctgov_api_NCT02100228",
+            "ctgov_api_NCT02207725",
+            "ev_d8f3b739_1_a20096191374",
+            "ctgov_api_NCT02295475",
+            "ctgov_api_NCT02406885",
+            "ctgov_api_NCT02565693",
+            "ctgov_api_NCT02608099",
+            "ctgov_api_NCT02749617",
+            "ctgov_api_NCT02761044",
+            "ctgov_api_NCT02829957",
+            "ctgov_api_NCT02889562",
+            "ctgov_api_NCT02933697",
+            "ctgov_api_NCT02945280"
+          ],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [],
+      "conflicts": [],
+      "confidence": {
+        "overall": "medium_high",
+        "strong_claims": 0,
+        "moderate_claims": 2,
+        "weak_claims": 0,
+        "unsupported_claims": 0,
+        "total_claims": 2,
+        "relevant_unknowns": 0,
+        "answer_mode": "direct_with_warnings"
+      },
+      "business_implication": [],
+      "recommended_next_actions": [
+        "Investigate 1 missing fields: patent_families[*].expiry_by_country"
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_68f6f7c2",
+        "text": "registrations[*].status: Marketing authorisation granted (centralised EU authorisation), Действует, Approved, active",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "moderate",
+        "support_fields": [
+          "registrations[*].status"
+        ],
+        "evidence_refs": [
+          "ev_e9b594e5_90_e6bf31b7578d",
+          "ev_e9b594e5_76_c667e169f35e",
+          "ev_e9b594e5_72_63363993f51f",
+          "ev_e9b594e5_83_34bd1c90b5d7",
+          "ev_e9b594e5_86_35a45337e85f",
+          "ev_e9b594e5_80_96cf58c11e63",
+          "ev_42978e5f_1_43796832a963",
+          "ev_42978e5f_4_d50adeaf2fa6",
+          "ev_72c96421_2_e1b029598684",
+          "ev_d83efa9c_0_300e6ec1799c"
+        ],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_8c045402",
+        "text": "clinical_studies[*].phase: Phase 3, Phase 2, Phase 3, Phase 3, Phase 3",
+        "jurisdiction": null,
+        "semantic_role": null,
+        "support_level": "moderate",
+        "support_fields": [
+          "clinical_studies[*].phase"
+        ],
+        "evidence_refs": [
+          "ctgov_api_NCT00097357",
+          "ctgov_api_NCT00320255",
+          "ctgov_api_NCT00371683",
+          "ev_ecc67d80_2_7772183a6144",
+          "ctgov_api_NCT00496769",
+          "ctgov_api_NCT00633893",
+          "ctgov_api_NCT00787150",
+          "ev_66fcd34c_1_2566c4a5a0e2",
+          "ctgov_api_NCT02048865",
+          "ctgov_api_NCT02066454",
+          "ctgov_api_NCT02100228",
+          "ctgov_api_NCT02207725",
+          "ev_d8f3b739_1_a20096191374",
+          "ctgov_api_NCT02295475",
+          "ctgov_api_NCT02406885",
+          "ctgov_api_NCT02565693",
+          "ctgov_api_NCT02608099",
+          "ctgov_api_NCT02749617",
+          "ctgov_api_NCT02761044",
+          "ctgov_api_NCT02829957",
+          "ctgov_api_NCT02889562",
+          "ctgov_api_NCT02933697",
+          "ctgov_api_NCT02945280"
+        ],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [],
+    "confidence": {
+      "overall": "medium_high",
+      "strong_claims": 0,
+      "moderate_claims": 2,
+      "weak_claims": 0,
+      "unsupported_claims": 0,
+      "total_claims": 2,
+      "relevant_unknowns": 0,
+      "answer_mode": "direct_with_warnings"
+    },
+    "scope": {
+      "entity_mode": "product_context",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": []
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct_with_warnings",
+      "missing_fields": [
+        "patent_families[*].expiry_by_country"
+      ],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "Required section 'patent_families' is empty",
+        "Section 'registrations' readiness is 'insufficient' per coverage ledger",
+        "Section 'patent_families' readiness is 'insufficient' per coverage ledger",
+        "Section 'clinical_studies' readiness is 'insufficient' per coverage ledger",
+        "Section 'passport' readiness is 'insufficient' per coverage ledger",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger",
+        "Section 'dossier_quality_v2' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 16
+  },
+  {
+    "inn": "apixaban",
+    "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+    "question_id": "q_data_completeness",
+    "answer": "## How complete is the available data for decision-making?\n\n### Conclusion\n- Decision readiness gates: registrations=GREEN; clinical=GREEN; patents_discovery=RED; patents_legal=YELLOW; context_integrity=GREEN\n- Section coverage: passport=71%; registrations=100%; clinical=74%; patents=0%; synthesis=0%\n- Critical unknowns: 1 item(s) flagged; impact: registrations may be incomplete\n- Outstanding dossier unknowns: 7\n\n### Confidence: MEDIUM\nBased on 5 claims: 0 strong, 4 moderate, 1 weak, 0 unsupported. Answer mode: direct.\n\n### What Supports This\nNo strongly supported facts available.\n\n### Where Uncertainty Remains\n- **passport.chemical_formula**: Field passport.chemical_formula could not be extracted with evidence from available documents.\n- **passport.smiles**: Field passport.smiles could not be extracted with evidence from available documents.\n- **passport.inchi_key**: Field passport.inchi_key could not be extracted with evidence from available documents.\n- **passport.molecular_weight**: Field passport.molecular_weight could not be extracted with evidence from available documents.\n- **passport.chemistry**: No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.\n- **patent_families[*]**: No patent documents (patent_family/patent_pdf/ops/ru_patent_fips) indexed for apixaban. gpt-researcher did not discover patent URLs during research phase.\n- **synthesis_steps[*]**: No synthesis-relevant passages found for apixaban in patent corpus or EPAR/assessment_report fallback.\n- Quality notes: Product contexts: 4 registration_confirmed; patent_families=[] — no minimally valid patent families in corpus. For off-patent drugs this is expected; for on-patent drugs check EPO OPS/patent sources. (weak/no evidence)\n\n### Why This Matters Commercially\n- Decision readiness gates: registrations=GREEN; clinical=GREEN; patents_discovery=RED; patents_legal=YELLOW; context_integrity=GREEN\n- Section coverage: passport=71%; registrations=100%; clinical=74%; patents=0%; synthesis=0%\n- Critical unknowns remain and should be resolved before treating the dossier as decision-ready.\n\n### Recommended Next Steps\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n- Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.\n\n---\n*Scope: mode=inn | jurisdictions=EU,EAEU,US,RU | warnings=1*\n*Claims: 5 | Evidence refs: 0 | Unknowns: 7*",
+    "short_summary": "Decision readiness gates: registrations=GREEN; clinical=GREEN; patents_discovery=RED; patents_legal=YELLOW; context_inte. Confidence: medium. 5 claims, 7 unknowns.",
+    "answer_frame": {
+      "question_id": "q_data_completeness",
+      "question_text": "How complete is the available data for decision-making?",
+      "scope": {
+        "entity_mode": "inn",
+        "selected_contexts": [
+          "ctx_992f4a38e469",
+          "ctx_d52317fd074d",
+          "ctx_7ff6caf06789",
+          "ctx_f462a08e6240"
+        ],
+        "jurisdictions": {
+          "EU": "ctx_992f4a38e469",
+          "EAEU": "ctx_d52317fd074d",
+          "US": "ctx_7ff6caf06789",
+          "RU": "ctx_f462a08e6240"
+        },
+        "warnings": [
+          "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+        ]
+      },
+      "claims": [
+        {
+          "claim_id": "clm_6efddff8",
+          "text": "Decision readiness gates: registrations=GREEN; clinical=GREEN; patents_discovery=RED; patents_legal=YELLOW; context_integrity=GREEN",
+          "jurisdiction": null,
+          "semantic_role": "quality_readiness",
+          "support_level": "moderate",
+          "support_fields": [
+            "dossier_quality_v2.decision_readiness"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_60294083",
+          "text": "Section coverage: passport=71%; registrations=100%; clinical=74%; patents=0%; synthesis=0%",
+          "jurisdiction": null,
+          "semantic_role": "quality_coverage",
+          "support_level": "moderate",
+          "support_fields": [
+            "dossier_quality_v2.coverage"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_0a87b1f8",
+          "text": "Critical unknowns: 1 item(s) flagged; impact: registrations may be incomplete",
+          "jurisdiction": null,
+          "semantic_role": "quality_critical_unknowns",
+          "support_level": "moderate",
+          "support_fields": [
+            "dossier_quality_v2.critical_unknowns"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_7d241b9b",
+          "text": "Outstanding dossier unknowns: 7",
+          "jurisdiction": null,
+          "semantic_role": "quality_unknown_count",
+          "support_level": "moderate",
+          "support_fields": [
+            "unknowns"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        },
+        {
+          "claim_id": "clm_b8066d96",
+          "text": "Quality notes: Product contexts: 4 registration_confirmed; patent_families=[] — no minimally valid patent families in corpus. For off-patent drugs this is expected; for on-patent drugs check EPO OPS/patent sources.",
+          "jurisdiction": null,
+          "semantic_role": "quality_notes",
+          "support_level": "weak",
+          "support_fields": [
+            "dossier_quality_v2.notes"
+          ],
+          "evidence_refs": [],
+          "source_ids": []
+        }
+      ],
+      "unknowns": [
+        {
+          "field_path": "passport.chemical_formula",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.chemical_formula could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.smiles",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.smiles could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.inchi_key",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.inchi_key could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.molecular_weight",
+          "reason_code": "NO_EVIDENCE_IN_CORPUS",
+          "message": "Field passport.molecular_weight could not be extracted with evidence from available documents.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "passport.chemistry",
+          "reason_code": "NO_DOCUMENT_IN_CORPUS",
+          "message": "No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.",
+          "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+        },
+        {
+          "field_path": "patent_families[*]",
+          "reason_code": "PATENT_DISCOVERY_GAP",
+          "message": "No patent documents (patent_family/patent_pdf/ops/ru_patent_fips) indexed for apixaban. gpt-researcher did not discover patent URLs during research phase.",
+          "suggested_next_action": "Strengthen Q19/Q21/Q22 templates in router-map.json (done Sprint 4). Re-run research:run to discover patent URLs. Alternatively use EPO OPS direct API attach (follow-up item)."
+        },
+        {
+          "field_path": "synthesis_steps[*]",
+          "reason_code": "PATENT_DISCOVERY_GAP",
+          "message": "No synthesis-relevant passages found for apixaban in patent corpus or EPAR/assessment_report fallback.",
+          "suggested_next_action": "Attach patent PDFs with full text (claims + examples) or assessment reports with chemistry sections to corpus."
+        }
+      ],
+      "conflicts": [],
+      "confidence": {
+        "overall": "medium",
+        "strong_claims": 0,
+        "moderate_claims": 4,
+        "weak_claims": 1,
+        "unsupported_claims": 0,
+        "total_claims": 5,
+        "relevant_unknowns": 7,
+        "answer_mode": "direct"
+      },
+      "business_implication": [
+        "Decision readiness gates: registrations=GREEN; clinical=GREEN; patents_discovery=RED; patents_legal=YELLOW; context_integrity=GREEN",
+        "Section coverage: passport=71%; registrations=100%; clinical=74%; patents=0%; synthesis=0%",
+        "Critical unknowns remain and should be resolved before treating the dossier as decision-ready."
+      ],
+      "recommended_next_actions": [
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus.",
+        "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      ]
+    },
+    "claims": [
+      {
+        "claim_id": "clm_6efddff8",
+        "text": "Decision readiness gates: registrations=GREEN; clinical=GREEN; patents_discovery=RED; patents_legal=YELLOW; context_integrity=GREEN",
+        "jurisdiction": null,
+        "semantic_role": "quality_readiness",
+        "support_level": "moderate",
+        "support_fields": [
+          "dossier_quality_v2.decision_readiness"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_60294083",
+        "text": "Section coverage: passport=71%; registrations=100%; clinical=74%; patents=0%; synthesis=0%",
+        "jurisdiction": null,
+        "semantic_role": "quality_coverage",
+        "support_level": "moderate",
+        "support_fields": [
+          "dossier_quality_v2.coverage"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_0a87b1f8",
+        "text": "Critical unknowns: 1 item(s) flagged; impact: registrations may be incomplete",
+        "jurisdiction": null,
+        "semantic_role": "quality_critical_unknowns",
+        "support_level": "moderate",
+        "support_fields": [
+          "dossier_quality_v2.critical_unknowns"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_7d241b9b",
+        "text": "Outstanding dossier unknowns: 7",
+        "jurisdiction": null,
+        "semantic_role": "quality_unknown_count",
+        "support_level": "moderate",
+        "support_fields": [
+          "unknowns"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      },
+      {
+        "claim_id": "clm_b8066d96",
+        "text": "Quality notes: Product contexts: 4 registration_confirmed; patent_families=[] — no minimally valid patent families in corpus. For off-patent drugs this is expected; for on-patent drugs check EPO OPS/patent sources.",
+        "jurisdiction": null,
+        "semantic_role": "quality_notes",
+        "support_level": "weak",
+        "support_fields": [
+          "dossier_quality_v2.notes"
+        ],
+        "evidence_refs": [],
+        "source_ids": []
+      }
+    ],
+    "unknowns": [
+      {
+        "field_path": "passport.chemical_formula",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.chemical_formula could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.smiles",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.smiles could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.inchi_key",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.inchi_key could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.molecular_weight",
+        "reason_code": "NO_EVIDENCE_IN_CORPUS",
+        "message": "Field passport.molecular_weight could not be extracted with evidence from available documents.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "passport.chemistry",
+        "reason_code": "NO_DOCUMENT_IN_CORPUS",
+        "message": "No chemistry data (SMILES/InChIKey/formula) for apixaban. Structured chemistry sources are not yet in corpus.",
+        "suggested_next_action": "Attach structured chemistry JSON (doc_kind=pubchem and/or chembl) to corpus."
+      },
+      {
+        "field_path": "patent_families[*]",
+        "reason_code": "PATENT_DISCOVERY_GAP",
+        "message": "No patent documents (patent_family/patent_pdf/ops/ru_patent_fips) indexed for apixaban. gpt-researcher did not discover patent URLs during research phase.",
+        "suggested_next_action": "Strengthen Q19/Q21/Q22 templates in router-map.json (done Sprint 4). Re-run research:run to discover patent URLs. Alternatively use EPO OPS direct API attach (follow-up item)."
+      },
+      {
+        "field_path": "synthesis_steps[*]",
+        "reason_code": "PATENT_DISCOVERY_GAP",
+        "message": "No synthesis-relevant passages found for apixaban in patent corpus or EPAR/assessment_report fallback.",
+        "suggested_next_action": "Attach patent PDFs with full text (claims + examples) or assessment reports with chemistry sections to corpus."
+      }
+    ],
+    "confidence": {
+      "overall": "medium",
+      "strong_claims": 0,
+      "moderate_claims": 4,
+      "weak_claims": 1,
+      "unsupported_claims": 0,
+      "total_claims": 5,
+      "relevant_unknowns": 7,
+      "answer_mode": "direct"
+    },
+    "scope": {
+      "entity_mode": "inn",
+      "selected_contexts": [
+        "ctx_992f4a38e469",
+        "ctx_d52317fd074d",
+        "ctx_7ff6caf06789",
+        "ctx_f462a08e6240"
+      ],
+      "jurisdictions": {
+        "EU": "ctx_992f4a38e469",
+        "EAEU": "ctx_d52317fd074d",
+        "US": "ctx_7ff6caf06789",
+        "RU": "ctx_f462a08e6240"
+      },
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations"
+      ]
+    },
+    "coverage_decision": {
+      "can_answer": true,
+      "answer_mode": "direct",
+      "missing_fields": [],
+      "critical_unknowns": [],
+      "should_trigger_ws1": false,
+      "warnings": [
+        "INN-level query spans 4 product contexts — answer may aggregate across different formulations",
+        "Section 'unknowns' readiness is 'insufficient' per coverage ledger",
+        "Section 'dossier_quality_v2' readiness is 'insufficient' per coverage ledger",
+        "Section 'coverage_ledger' readiness is 'insufficient' per coverage ledger"
+      ]
+    },
+    "pipeline_ms": 17
+  }
+]

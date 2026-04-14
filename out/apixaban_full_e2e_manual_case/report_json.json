@@ -1,0 +1,3164 @@
+{
+  "report_id": "dd_report_edf721c6-ce6a-4778-8289-6d3f7774bea1_1775931782",
+  "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+  "generated_at": "2026-04-11T18:23:02Z",
+  "sections_plan_version": "unknown",
+  "sections": [
+    {
+      "section_id": "clinical_results",
+      "title": "Clinical Results Highlights",
+      "claims": [
+        {
+          "id": "claim_1",
+          "text": "In ARISTOTLE (NCT00412984), apixaban reduced the rate of adjudicated stroke/systemic embolism versus warfarin during the intended treatment period.",
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_1_5c14bdac",
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58"
+          ],
+          "confidence": 0.98
+        },
+        {
+          "id": "claim_2",
+          "text": "In ARISTOTLE, the secondary composite endpoint of stroke/systemic embolism/major bleeding in warfarin/VKA-naive participants also favored apixaban versus warfarin.",
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_132_f2204791"
+          ],
+          "confidence": 0.95
+        },
+        {
+          "id": "claim_3",
+          "text": "In the post-operative atrial fibrillation study (NCT02889562), no strokes were observed in either apixaban or warfarin groups over 30 days.",
+          "evidence_ids": [
+            "ev_d6b59917-4fca-4c76-9e3f-fbebd389969e_8_53cf9293"
+          ],
+          "confidence": 0.97
+        },
+        {
+          "id": "claim_4",
+          "text": "In the cardioversion study (NCT02100228), apixaban had 0 acute stroke events and 0 systemic embolism events reported in the primary outcome tables.",
+          "evidence_ids": [
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521",
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_30_98014259"
+          ],
+          "confidence": 0.9
+        },
+        {
+          "id": "claim_5",
+          "text": "In the extended-treatment VTE study (NCT00633893), apixaban 2.5 mg showed a lower risk of symptomatic recurrent VTE or all-cause death versus placebo.",
+          "evidence_ids": [
+            "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313"
+          ],
+          "confidence": 0.96
+        },
+        {
+          "id": "claim_6",
+          "text": "In the knee-replacement study (NCT00371683), apixaban 2.5 mg BID had lower event rates than enoxaparin for major/clinically relevant bleeding and for the composite VTE endpoint.",
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86",
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_39_d56dcd55"
+          ],
+          "confidence": 0.88
+        },
+        {
+          "id": "claim_7",
+          "text": "In the bariatric PK study (NCT02406885), apixaban exposure endpoints (Cmax and AUC) were reported for oral solution versus nasogastric tube administration, indicating pharmacokinetic rather than clinical efficacy outcomes.",
+          "evidence_ids": [
+            "ev_e32f1910-0216-4eac-bbf4-20c600bd079a_3_36375f55",
+            "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_7_31146bb6",
+            "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_9_985616e9"
+          ],
+          "confidence": 0.84
+        }
+      ],
+      "numbers": [
+        {
+          "id": "num_1",
+          "label": "ARISTOTLE stroke/systemic embolism rate - apixaban",
+          "value": 1.27,
+          "as_reported": "1.27",
+          "unit": "events per 100 patient years",
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58"
+          ]
+        },
+        {
+          "id": "num_2",
+          "label": "ARISTOTLE stroke/systemic embolism rate - warfarin",
+          "value": 1.6,
+          "as_reported": "1.60",
+          "unit": "events per 100 patient years",
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58"
+          ]
+        },
+        {
+          "id": "num_3",
+          "label": "ARISTOTLE stroke/systemic embolism hazard ratio",
+          "value": 0.79,
+          "as_reported": "0.79",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58"
+          ]
+        },
+        {
+          "id": "num_4",
+          "label": "ARISTOTLE stroke/systemic embolism 95% CI lower",
+          "value": 0.66,
+          "as_reported": ".66",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58"
+          ]
+        },
+        {
+          "id": "num_5",
+          "label": "ARISTOTLE stroke/systemic embolism 95% CI upper",
+          "value": 0.95,
+          "as_reported": ".95",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58"
+          ]
+        },
+        {
+          "id": "num_6",
+          "label": "ARISTOTLE VKA-naive composite event rate - apixaban",
+          "value": 3.21,
+          "as_reported": "3.21",
+          "unit": "events per 100 patient years",
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_129_8a90fb83"
+          ]
+        },
+        {
+          "id": "num_7",
+          "label": "ARISTOTLE VKA-naive composite event rate - warfarin",
+          "value": 4.06,
+          "as_reported": "4.06",
+          "unit": "events per 100 patient years",
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_129_8a90fb83"
+          ]
+        },
+        {
+          "id": "num_8",
+          "label": "ARISTOTLE VKA-naive composite hazard ratio",
+          "value": 0.68,
+          "as_reported": "0.68",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_132_f2204791"
+          ]
+        },
+        {
+          "id": "num_9",
+          "label": "ARISTOTLE VKA-naive composite 95% CI lower",
+          "value": 0.61,
+          "as_reported": "0.61",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_132_f2204791"
+          ]
+        },
+        {
+          "id": "num_10",
+          "label": "ARISTOTLE VKA-naive composite 95% CI upper",
+          "value": 0.75,
+          "as_reported": "0.75",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Intended Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_132_f2204791"
+          ]
+        },
+        {
+          "id": "num_11",
+          "label": "Post-operative AF strokes - apixaban",
+          "value": 0,
+          "as_reported": "0",
+          "unit": "participants",
+          "currency": null,
+          "scale": null,
+          "period": "30 days",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_d6b59917-4fca-4c76-9e3f-fbebd389969e_8_53cf9293"
+          ]
+        },
+        {
+          "id": "num_12",
+          "label": "Post-operative AF strokes - warfarin",
+          "value": 0,
+          "as_reported": "0",
+          "unit": "participants",
+          "currency": null,
+          "scale": null,
+          "period": "30 days",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_d6b59917-4fca-4c76-9e3f-fbebd389969e_8_53cf9293"
+          ]
+        },
+        {
+          "id": "num_13",
+          "label": "Cardioversion acute stroke events - apixaban",
+          "value": 0,
+          "as_reported": "0",
+          "unit": "participants",
+          "currency": null,
+          "scale": null,
+          "period": "Baseline up to 30 days post cardioversion",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521"
+          ]
+        },
+        {
+          "id": "num_14",
+          "label": "Cardioversion acute stroke events - usual care",
+          "value": 6,
+          "as_reported": "6",
+          "unit": "participants",
+          "currency": null,
+          "scale": null,
+          "period": "Baseline up to 30 days post cardioversion",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521"
+          ]
+        },
+        {
+          "id": "num_15",
+          "label": "Cardioversion systemic embolism events - apixaban",
+          "value": 0,
+          "as_reported": "0",
+          "unit": "participants",
+          "currency": null,
+          "scale": null,
+          "period": "Baseline up to 30 days post cardioversion",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521"
+          ]
+        },
+        {
+          "id": "num_16",
+          "label": "Cardioversion systemic embolism events - usual care",
+          "value": 0,
+          "as_reported": "0",
+          "unit": "participants",
+          "currency": null,
+          "scale": null,
+          "period": "Baseline up to 30 days post cardioversion",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521"
+          ]
+        },
+        {
+          "id": "num_17",
+          "label": "Extended VTE RR - apixaban 2.5 mg vs placebo",
+          "value": 0.3283,
+          "as_reported": "0.3283",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Day 1 up to 12 Months",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313"
+          ]
+        },
+        {
+          "id": "num_18",
+          "label": "Extended VTE RR 95% CI lower",
+          "value": 0.2225,
+          "as_reported": "0.2225",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Day 1 up to 12 Months",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313"
+          ]
+        },
+        {
+          "id": "num_19",
+          "label": "Extended VTE RR 95% CI upper",
+          "value": 0.4844,
+          "as_reported": "0.4844",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Day 1 up to 12 Months",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313"
+          ]
+        },
+        {
+          "id": "num_20",
+          "label": "Knee replacement major bleeding rate - apixaban",
+          "value": 0.13,
+          "as_reported": "0.13",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_21",
+          "label": "Knee replacement major bleeding rate - enoxaparin",
+          "value": 0.13,
+          "as_reported": "0.13",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_22",
+          "label": "Knee replacement CRNM bleeding rate - apixaban",
+          "value": 0.26,
+          "as_reported": "0.26",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_23",
+          "label": "Knee replacement CRNM bleeding rate - enoxaparin",
+          "value": 0.45,
+          "as_reported": "0.45",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_24",
+          "label": "Knee replacement major or CRNM bleeding rate - apixaban",
+          "value": 0.38,
+          "as_reported": "0.38",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_25",
+          "label": "Knee replacement major or CRNM bleeding rate - enoxaparin",
+          "value": 0.58,
+          "as_reported": "0.58",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_26",
+          "label": "Knee replacement any bleeding rate - apixaban",
+          "value": 0.9,
+          "as_reported": "0.90",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_27",
+          "label": "Knee replacement any bleeding rate - enoxaparin",
+          "value": 1.29,
+          "as_reported": "1.29",
+          "unit": "percentage of participants",
+          "currency": null,
+          "scale": null,
+          "period": "Treatment Period",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86"
+          ]
+        },
+        {
+          "id": "num_28",
+          "label": "PK Cmax ratio oral solution vs nasogastric tube",
+          "value": 0.81,
+          "as_reported": "0.810",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Pre-dose to 72 hours post-dose",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_8_97f595cd"
+          ]
+        },
+        {
+          "id": "num_29",
+          "label": "PK AUC(INF) ratio oral solution vs nasogastric tube",
+          "value": 0.95,
+          "as_reported": "0.950",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": "Pre-dose to 72 hours post-dose",
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_9_985616e9"
+          ]
+        }
+      ],
+      "risks": [
+        {
+          "id": "risk_1",
+          "title": "Evidence base is heterogeneous across indications and study designs",
+          "severity": "medium",
+          "description": "The available outcomes span AF stroke prevention, cardioversion, post-operative AF, VTE treatment/prevention, PK studies, and observational cohorts, so efficacy endpoints are not directly comparable across all trials.",
+          "evidence_ids": [
+            "ev_ecc67d80-d38c-425e-9517-337799fc516e_2_7045b211",
+            "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521",
+            "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313",
+            "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_7_31146bb6"
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "id": "unk_1",
+          "question": "What are the exact publication-derived efficacy results for all apixaban trials and publications in the US scope?",
+          "reason": "No supporting evidence in provided candidates for a complete publication set or all US publications."
+        },
+        {
+          "id": "unk_2",
+          "question": "What are the full numerical results for every endpoint in every apixaban US trial?",
+          "reason": "No supporting evidence in provided candidates for all endpoints across all studies."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_39_d56dcd55",
+          "doc_id": "455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7",
+          "doc_title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+          "page": 39,
+          "snippet": "{\n\n\"value\": \"1563\"\n\n},\n\n{\n\n\"value\": \"1553\"\n\n}\n\n]\n\n}\n\n],\n\n\"classes\": [\n\n{\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"title\": \"MI\",\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"title\": \"Stroke\",\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"type\": \"SECONDARY\",\n\n- \"title\": \"Number of Participants With Serious Adverse Events..."
+        },
+        {
+          "id": "ev_d6b59917-4fca-4c76-9e3f-fbebd389969e_8_53cf9293",
+          "doc_id": "d6b59917-4fca-4c76-9e3f-fbebd389969e",
+          "doc_title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+          "page": 8,
+          "snippet": "]\n\n},\n\n{\n\n\"type\": \"PRIMARY\",\n\n- \"title\": \"Number of Participants With Strokes\",\n\n\"description\": \"Efficacy will be measured by the freedom from stroke during the study period. Events relating to stroke will be adjudicated usi\n\n- \"reportingStatus\": \"POSTED\",\n- \"paramType\": \"NUMBER\",\n- \"dispersionType\": \"95% Confidence Interval\",\n- \"unitOfMeasure\": \"participants\",\n- \"timeFrame\": \"30 days\",\n\n\"g..."
+        },
+        {
+          "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_132_f2204791",
+          "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+          "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+          "page": 132,
+          "snippet": "} ], \"analyses\": [ { \"groupIds\": [ \"OG000\", \"OG001\" ], \"nonInferiorityType\": \"OTHER\", \"pValue\": \"<.0001\", \"pValueComment\": \"nominal two-sided p-value was associated with a test of H0: RR=1 vs H1: RR ≠ 1\", \"statisticalMethod\": \"Cox Proportional Hazard Model\", \"paramType\": \"Hazard Ratio (HR)\", \"paramValue\": \"0.68\", \"ciPctValue\": \"95\", \"ciNumSides\": \"TWO_SIDED\", \"ciLowerLimit\": \"0.61\", \"ciUpperLim..."
+        },
+        {
+          "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_129_8a90fb83",
+          "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+          "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+          "page": 129,
+          "snippet": "\"counts\": [\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n],\n\n\"classes\": [\n\n{\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n- \"type\": \"SECONDARY\",\n- \"title\": \"Rate of Composite Stroke / Systemic Embolism / Major Bleeding in Warfarin/Vitamin K Antagonist (VKA) Naive Participants During the In \"populationDescription\": \"Intention to treat analysis, randomized participants. Participants who did not experience an ..."
+        },
+        {
+          "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_2_7045b211",
+          "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+          "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+          "page": 2,
+          "snippet": "{\n\n\"identificationModule\": {\n\n\"nctId\": \"NCT00412984\",\n\n\"orgStudyIdInfo\": {\n\n\"id\": \"CV185-030\"\n\n},\n\n\"organization\": {\n\n\"fullName\": \"Bristol-Myers Squibb\",\n\n\"class\": \"INDUSTRY\"\n\n}, \"briefTitle\": \"Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation\", \"officialTitle\": \"A Phase 3, Active (Warfarin) Controlled, Randomized, Double-Blind, Parallel Arm Study to Evaluate Efficacy a..."
+        },
+        {
+          "id": "ev_e32f1910-0216-4eac-bbf4-20c600bd079a_3_36375f55",
+          "doc_id": "e32f1910-0216-4eac-bbf4-20c600bd079a",
+          "doc_title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+          "page": 3,
+          "snippet": "], \"otherNames\": [ \"Eliquis\" ] } ] }, \"outcomesModule\": { \"primaryOutcomes\": [ { \"measure\": \"Change in Pharmacokinetics as Assessed by Cmax (Max Concentration)\", \"description\": \"To determine the durability or change in pharmacokinetics of apixaban in patients with obesity following one of two bariatric s \"timeFrame\": \"Baseline and 12 months\" }, { \"measure\": \"Change in Pharmacokinetics as Assess..."
+        },
+        {
+          "id": "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_30_98014259",
+          "doc_id": "140aa9bc-17f4-4fe3-8beb-9568d822b028",
+          "doc_title": "CTGov NCT02100228: Study Of The Blood Thinner",
+          "page": 30,
+          "snippet": "}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n- \"type\": \"SECONDARY\",\n- \"title\": \"Number of Participants Who Used Image Guidance Approach\",\n- \"description\": \"An image-guided approach helped cardioversion earlier than the conventional minimum of 3 weeks of anticoagulation that would no \"populationDescription\": \"Full analysis set included all randomized participants.\",\n- \"reportingStatus\": \"POSTED\",\n\n\"paramType\": \"N..."
+        },
+        {
+          "id": "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_9_985616e9",
+          "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+          "doc_title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+          "page": 9,
+          "snippet": "- \"type\": \"SECONDARY\",\n- \"title\": \"Adjusted Geometric Mean of the Area Under the Plasma Concentration-Time Curve From Time Zero Extrapolated to Infinite Time [AUC(INF)] \"description\": \"AUC(INF) is measured in nanogram hours per milliliter (ng\\\\*h/mL)\",\n- \"populationDescription\": \"All randomized participants with available PK data\",\n- \"reportingStatus\": \"POSTED\",\n- \"paramType\": \"GEOMETRIC_MEAN\",..."
+        },
+        {
+          "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58",
+          "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+          "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+          "page": 121,
+          "snippet": "{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"type\": \"PRIMARY\",\n\n- \"title\": \"Rate of Adjudicated Stroke or Systemic Embolism (SE) During the Intended Treatment Period\",\n- \"description\": \"Rate=Number of adjudicated stroke or SE events per 100 patient years. Diagnosis of stroke=the nontraumatic focal neurological d\n\n\"populationDescription\": \"Intention to treat analysis,..."
+        },
+        {
+          "id": "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_8_97f595cd",
+          "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+          "doc_title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+          "page": 8,
+          "snippet": "\"measurements\": [ { \"groupId\": \"OG000\", \"value\": \"1372.836\", \"lowerLimit\": \"1306.240\", \"upperLimit\": \"1442.828\" }, { \"groupId\": \"OG001\", \"value\": \"1112.493\", \"lowerLimit\": \"1041.751\", \"upperLimit\": \"1188.038\" } ] } ] } ], \"analyses\": [ { \"groupIds\": [ \"OG000\", \"OG001\" ], \"testedNonInferiority\": false, \"nonInferiorityType\": \"SUPERIORITY_OR_OTHER\", \"paramType\": \"Ratio of Adjusted Geometric Means\"..."
+        },
+        {
+          "id": "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313",
+          "doc_id": "dca6b00b-c67a-496a-a9b8-0f41e47db807",
+          "doc_title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+          "page": 54,
+          "snippet": "}\n\n]\n\n},\n\n\"outcomeMeasuresModule\": {\n\n\"outcomeMeasures\": [\n\n{\n\n\"type\": \"PRIMARY\",\n\n\"title\": \"Adjudicated Composite of Symptomatic, Recurrent Venous Thromboembolism (VTE) or All-Cause Death During the Intended Treatment Period \"description\": \"VTE included: nonfatal deep vein thrombosis (DVT) or nonfatal pulmonary embolism (PE). All index events, DVT and/or PE were adj \"populationDescription\": \"I..."
+        },
+        {
+          "id": "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86",
+          "doc_id": "455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7",
+          "doc_title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+          "page": 38,
+          "snippet": "{ \"title\": \"Major Bleeding (n=1563, 1553)\", \"categories\": [ { \"measurements\": [ { \"groupId\": \"OG000\", \"value\": \"0.13\", \"lowerLimit\": \"0.01\", \"upperLimit\": \"0.51\" }, { \"groupId\": \"OG001\", \"value\": \"0.13\", \"lowerLimit\": \"0.01\", \"upperLimit\": \"0.51\" } ] } ] }, { \"title\": \"CR N-M Bleeding (n=1563, 1553)\", \"categories\": [ { \"measurements\": [ { \"groupId\": \"OG000\", \"value\": \"0.26\", \"lowerLimit\": \"0.08..."
+        },
+        {
+          "id": "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521",
+          "doc_id": "140aa9bc-17f4-4fe3-8beb-9568d822b028",
+          "doc_title": "CTGov NCT02100228: Study Of The Blood Thinner",
+          "page": 1,
+          "snippet": "# ClinicalTrials.gov (ctgov_results)\n\nNCT ID: NCT02100228\n\nTitle: Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrillation) And Expected To Have Treatment To Put Them Back Into A Normal Heart Rhythm (Cardioversion)\n\nOverallStatus:\n\nCOMPLETED\n\nPhase:\n\nStart: 2014-07-14 | Primary Completion: 2017-02-08\n\nConditions:\n\nInterventions:\n\nPrimary Outcomes..."
+        },
+        {
+          "id": "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_7_31146bb6",
+          "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+          "doc_title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+          "page": 7,
+          "snippet": "\"paramType\": \"GEOMETRIC_MEAN\", \"dispersionType\": \"90% Confidence Interval\", \"unitOfMeasure\": \"ng*h/mL\", \"timeFrame\": \"Pre-dose and 0.25, 0.50, 1, 2, 3, 4, 5, 6, 9, 12, 24, 36, 48, 60, 72 hours post-dose for each intervention\", \"groups\": [ { \"id\": \"OG000\", \"title\": \"Treatment A\", \"description\": \"Single dose apixaban 5 milligrams (mg) oral solution (OS) (0.4 milligrams per milliliter (mg/mL) x 12..."
+        },
+        {
+          "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_1_5c14bdac",
+          "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+          "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+          "page": 1,
+          "snippet": "## Rate of Adjudicated Stroke or Systemic Embolism (SE) During the Intended Treatment Period\n\nDescription: Rate=Number of adjudicated stroke or SE events per 100 patient years. Diagnosis of stroke=the nontraumatic focal neurological deficit lasting at least 24 hours, and includes ischemic stroke, hemorrhagic stroke, ischemic stroke with hemorrhagic conversion, stroke of uncertain type, and reti..."
+        }
+      ]
+    },
+    {
+      "section_id": "regulatory_status_eu",
+      "title": "EU Regulatory Status",
+      "claims": [
+        {
+          "id": "claim_1",
+          "text": "Apixaban Accord is approved in the EU as a medicinal product with SmPC and package leaflet included in the regulatory document set.",
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_107_96a8f9e3",
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_95_ccb70642"
+          ],
+          "confidence": 0.93
+        },
+        {
+          "id": "claim_2",
+          "text": "The EU SmPC states adult indications for prevention of stroke and systemic embolism in non-valvular atrial fibrillation, treatment of DVT and PE, prevention of recurrent DVT and PE, and prevention of VTE after elective hip or knee replacement surgery (for the 2.5 mg strength).",
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_2_89fcb999",
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a"
+          ],
+          "confidence": 0.98
+        },
+        {
+          "id": "claim_3",
+          "text": "The EU SmPC includes a paediatric indication for treatment of venous thromboembolism and prevention of recurrent VTE in patients from 28 days to less than 18 years of age.",
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_2_89fcb999",
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a"
+          ],
+          "confidence": 0.97
+        },
+        {
+          "id": "claim_4",
+          "text": "The SmPC notes that the European Medicines Agency has deferred the obligation to submit results of studies for treatment of venous thromboembolism in one or more subsets of the paediatric population.",
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_30_dd278848"
+          ],
+          "confidence": 0.96
+        },
+        {
+          "id": "claim_5",
+          "text": "The EU regulatory documents show two marketed strengths for Apixaban Accord: 2.5 mg and 5 mg film-coated tablets.",
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_2_89fcb999",
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a"
+          ],
+          "confidence": 0.9
+        }
+      ],
+      "numbers": [
+        {
+          "id": "num_1",
+          "label": "Adult NVAF dose",
+          "value": 5,
+          "as_reported": "5 mg taken orally twice daily",
+          "unit": "mg",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a"
+          ]
+        },
+        {
+          "id": "num_2",
+          "label": "Adult NVAF dose reduction",
+          "value": 2.5,
+          "as_reported": "2.5 mg taken orally twice daily",
+          "unit": "mg",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a"
+          ]
+        },
+        {
+          "id": "num_3",
+          "label": "Paediatric age range",
+          "value": 28,
+          "as_reported": "from 28 days to less than 18 years of age",
+          "unit": "days/years",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_2_89fcb999",
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a"
+          ]
+        }
+      ],
+      "risks": [
+        {
+          "id": "risk_1",
+          "title": "Paediatric evidence/obligation deferred for VTE studies",
+          "severity": "medium",
+          "description": "The SmPC states that EMA has deferred the obligation to submit results of studies for treatment of VTE in one or more subsets of the paediatric population, indicating an incomplete pediatric evidence/filing obligation for that area.",
+          "evidence_ids": [
+            "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_30_dd278848"
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "id": "unk_1",
+          "question": "What is the formal EU approval date or marketing authorisation number for Apixaban Accord?",
+          "reason": "No supporting evidence in provided candidates"
+        },
+        {
+          "id": "unk_2",
+          "question": "Is there any EU regulatory text confirming the exact legal marketing authorisation holder or centralized procedure approval status?",
+          "reason": "No supporting evidence in provided candidates"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_2_89fcb999",
+          "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+          "doc_title": "EU SmPC (CAP): apixaban",
+          "page": 2,
+          "snippet": "# 1. NAME OF THE MEDICINAL PRODUCT\n\nApixaban Accord 2.5 mg film-coated tablets\n\n## 2. QUALITATIVE AND QUANTITATIVE COMPOSITION\n\nEach film-coated tablet contains 2.5 mg apixaban.\n\n## Excipients with known effect\n\nEach 2.5 mg film-coated tablet contains 51.97  mg lactose (see section 4.4).\n\nFor the full list of excipients, see section 6.1.\n\n## 3. PHARMACEUTICAL FORM\n\nFilm-coated tablet (tablet..."
+        },
+        {
+          "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_95_ccb70642",
+          "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+          "doc_title": "EU SmPC (CAP): apixaban",
+          "page": 95,
+          "snippet": "# Package leaflet: Information for the user\n\n## Apixaban Accord 2.5 mg film-coated tablets\n\napixaban\n\n## Read all of this leaflet carefully before you start taking this medicine because it contains important information for you.\n\n- -Keep this leaflet. You may need to read it again.\n- -If you have any further questions, ask your doctor, pharmacist or nurse.\n- -This medicine has been prescribe..."
+        },
+        {
+          "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_30_dd278848",
+          "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+          "doc_title": "EU SmPC (CAP): apixaban",
+          "page": 30,
+          "snippet": "The European Medicines Agency has deferred the obligation to submit the results of studies for the treatment of venous thromboembolism with apixaban in one or more subsets of the paediatric population (see section 4.2 for information on paediatric use).\n\n# 5.2 Pharmacokinetic properties\n\n## Absorption\n\nIn adults, the absolute bioavailability of apixaban is approximately 50% for doses up to 10..."
+        },
+        {
+          "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_107_96a8f9e3",
+          "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+          "doc_title": "EU SmPC (CAP): apixaban",
+          "page": 107,
+          "snippet": "# Package leaflet: Information for the user\n\n## Apixaban Accord  5 mg film-coated tablets apixaban\n\n## Read all of this leaflet carefully before you start taking this medicine because it contains important information for you.\n\n- -Keep this leaflet. You may need to read it again.\n- -If you have any further questions, ask your doctor, pharmacist or nurse.\n- -This medicine has been prescribed ..."
+        },
+        {
+          "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a",
+          "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+          "doc_title": "EU SmPC (CAP): apixaban",
+          "page": 35,
+          "snippet": "# 1. NAME OF THE MEDICINAL PRODUCT\n\nApixaban Accord 5 mg film-coated tablets\n\n## 2. QUALITATIVE AND QUANTITATIVE COMPOSITION\n\nEach film-coated tablet contains 5 mg apixaban.\n\n## Excipients with known effect\n\nEach 5 mg film-coated tablet contains 103.95 mg lactose (see section 4.4).\n\nFor the full list of excipients, see section 6.1.\n\n## 3. PHARMACEUTICAL FORM\n\nFilm-coated tablet (tablet)\n\nPin..."
+        }
+      ]
+    },
+    {
+      "section_id": "regulatory_status_ru",
+      "title": "RU Regulatory Status",
+      "claims": [
+        {
+          "id": "claim_status_active",
+          "text": "GRLS/EAEU data show multiple apixaban registrations in Russia are active, including registrations 1, 4, 6, 15, 17, 20, 23, 25 and 26 in the GRLS summary.",
+          "evidence_ids": [
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_1_0a7d0986",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_2_617a55fc",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_3_b9cb1201",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_6_d556884b",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_7_ab0dc1e0",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_8_7bcbc304",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_9_aeb2ffa3",
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_10_ab3635df"
+          ],
+          "confidence": 0.93
+        },
+        {
+          "id": "claim_eaeu_status",
+          "text": "EAEU product data indicate apixaban is currently valid/active ('Статус РУ: Действует') and the product is classified as ATC B01AF02.",
+          "evidence_ids": [
+            "ev_42978e5f-cbf6-4f21-adf0-7884e44f6bf7_1_64e64e3b"
+          ],
+          "confidence": 0.97
+        },
+        {
+          "id": "claim_holder_moscow_endo",
+          "text": "One EAEU leaflet identifies the registration holder and manufacturer as the Federal State Unitary Enterprise 'Moscow Endocrine Plant' in the Russian Federation.",
+          "evidence_ids": [
+            "ev_08da2668-cbee-49cc-8011-e6ecf1c6f690_9_8279db97"
+          ],
+          "confidence": 0.95
+        },
+        {
+          "id": "claim_holder_alvils",
+          "text": "Another EAEU leaflet identifies the registration holder as ООО «АЛВИЛС» and the manufacturer as СП ООО «ФАРМЛЭНД» (Belarus).",
+          "evidence_ids": [
+            "ev_3bb3ee6d-3fff-46d0-9e4b-bb1bab217543_12_2c72618a"
+          ],
+          "confidence": 0.95
+        },
+        {
+          "id": "claim_holder_oncotarget",
+          "text": "A separate EAEU leaflet identifies the registration holder and manufacturer as ООО «ОнкоТаргет» in Russia.",
+          "evidence_ids": [
+            "ev_b994044d-4043-4b60-8b2f-e6a7b3fd518a_29_8443a8af",
+            "ev_29802896-45c7-4fc0-980c-44d112e4c10b_30_32cab6c7"
+          ],
+          "confidence": 0.95
+        }
+      ],
+      "numbers": [
+        {
+          "id": "num_total_registrations",
+          "label": "Total RU registrations",
+          "value": 26,
+          "as_reported": "26",
+          "unit": "registrations",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_1_0a7d0986"
+          ]
+        },
+        {
+          "id": "num_dosage_2_5",
+          "label": "Apixaban strength",
+          "value": 2.5,
+          "as_reported": "2.5 мг",
+          "unit": "mg",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_42978e5f-cbf6-4f21-adf0-7884e44f6bf7_1_64e64e3b",
+            "ev_f32f7f40-5767-47a9-8bea-e2346522b5e4_12_5a25f5fe"
+          ]
+        },
+        {
+          "id": "num_dosage_5",
+          "label": "Apixaban strength",
+          "value": 5,
+          "as_reported": "5 мг",
+          "unit": "mg",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_42978e5f-cbf6-4f21-adf0-7884e44f6bf7_1_64e64e3b",
+            "ev_f32f7f40-5767-47a9-8bea-e2346522b5e4_12_5a25f5fe"
+          ]
+        }
+      ],
+      "risks": [
+        {
+          "id": "risk_multiple_holders",
+          "title": "Multiple holders/manufacturers across registrations",
+          "severity": "medium",
+          "description": "The provided GRLS/EAEU materials show different registration holders and manufacturers for apixaban across records, which may indicate multiple national registrations, variants, or changed status that should be reconciled before relying on a single holder/manufacturer attribution.",
+          "evidence_ids": [
+            "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_1_0a7d0986",
+            "ev_08da2668-cbee-49cc-8011-e6ecf1c6f690_9_8279db97",
+            "ev_3bb3ee6d-3fff-46d0-9e4b-bb1bab217543_12_2c72618a",
+            "ev_b994044d-4043-4b60-8b2f-e6a7b3fd518a_29_8443a8af"
+          ]
+        }
+      ],
+      "unknowns": [
+        {
+          "id": "unk_single_current_holder",
+          "question": "What is the single current GRLS registration holder for apixaban in Russia?",
+          "reason": "No supporting evidence in provided candidates for a consolidated current holder across all RU registrations."
+        },
+        {
+          "id": "unk_single_current_product_details",
+          "question": "What are the definitive current GRLS product details (trade name, dosage form, packaging) for the active RU registration?",
+          "reason": "No supporting evidence in provided candidates for a single consolidated current product record; the candidates show multiple records and partial product details."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "ev_08da2668-cbee-49cc-8011-e6ecf1c6f690_9_8279db97",
+          "doc_id": "08da2668-cbee-49cc-8011-e6ecf1c6f690",
+          "doc_title": "ae49cbd7-cd85-4bd8-9e73-c6360fbd8749.pdf",
+          "page": 9,
+          "snippet": "# Держатель регистрационного удостоверения и производитель\n\nФедеральное государственное унитарное предприятие «Московский эндокринный завод» 109052, г. Москва, ул. Новохохловская, д. 25\n\nТел.: +7 (495) 678 -00-50\n\nФакс: +7 (495) 911 -42-10\n\nЭлектронная почта: mez@endopharm.ru\n\nРоссийская Федерация\n\nЗа любой информацией о препарате, а также в случаях возникновения претензий следует обращаться к ..."
+        },
+        {
+          "id": "ev_3bb3ee6d-3fff-46d0-9e4b-bb1bab217543_12_2c72618a",
+          "doc_id": "3bb3ee6d-3fff-46d0-9e4b-bb1bab217543",
+          "doc_title": "9a199917-d0c3-46e3-be2f-19cce5f041da.pdf",
+          "page": 12,
+          "snippet": "Круглые двояковыпуклые таблетки, с риской на одной стороне, покрытые оболочкой желтого цвета .\n\nРиска не предназначена для разламывания таблетки.\n\nПо  10  или  15  таблеток,  в  контурной  ячейковой  упаковке  из  фольги  алюминиевой  и  пленки поливинилхлоридной.\n\nПо 2, 3, 6 или 10 контурных ячейковых упаковок по 10 таблеток либо по 2, 4 контурных ячейковых упаковок по 15 таблеток вместе с лис..."
+        },
+        {
+          "id": "ev_f32f7f40-5767-47a9-8bea-e2346522b5e4_12_5a25f5fe",
+          "doc_id": "f32f7f40-5767-47a9-8bea-e2346522b5e4",
+          "doc_title": "53c1e299-37f9-4fdd-8054-15c86359a438.pdf",
+          "page": 12,
+          "snippet": "Прочими ингредиентами (вспомогательными веществами) являются:\n\nЯдро таблетки: лактозы моногидрат, целлюлоза микрокристаллическая (тип 102), кроскармеллоза натрия, натрия лаурилсульфат, магния стеарат.\n\nОболочка таблетки: гипромеллоза, лактозы моногидрат, титана диоксид [Е 171], триацетин, краситель железа оксид красный [Е 172].\n\nПрепарат Апиксабан содержит лактозу и натрий (см. раздел 2).\n\n## ..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_7_ab0dc1e0",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 7,
+          "snippet": "Card URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28010414%29-%28%D0%A0%D0%93-RU%29\nRegistration 17: ЛП-№(013618)-(РГ-RU)\nStatus:  active\nHolder:  Белор усско-голландск ое сов местно е пре дприятие обще ство с ограниченной о тветственно стью\n«ФАРМЛЭНД»\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https:..."
+        },
+        {
+          "id": "ev_b994044d-4043-4b60-8b2f-e6a7b3fd518a_29_8443a8af",
+          "doc_id": "b994044d-4043-4b60-8b2f-e6a7b3fd518a",
+          "doc_title": "85e3f0eb-be69-48a5-bbb5-953a7a6f159e.pdf",
+          "page": 29,
+          "snippet": "# Держатель регистрационного удостоверения\n\nРоссийская Федерация\n\nООО «БИСЕРНО»\n\nАдрес: 143404, Россия, Московская область, г. Красногорск, ул. Дачная, д. 11А, пом. 11\n\n## Производитель\n\nООО «ОнкоТаргет», Россия\n\nАдрес: г. Москва, проспект Волгоградский, д. 42, к. 24\n\nТел.: (495) 233-01-38\n\nE-mail: info@oncotarget.pro\n\nwww. oncotarget.pro\n\nЗа  любой  информацией  о  препарате,  а  также  в  сл..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_9_aeb2ffa3",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 9,
+          "snippet": "Registration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28010149%29-%28%D0%A0%D0%93-RU%29\nRegistration 23: ЛП-№(009585)-(РГ-RU)\nStatus:  active\nHolder:  Майлан Лабора ториз Лимите д\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_6_d556884b",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 6,
+          "snippet": "Status:  active\nHolder:  Айзант Драг Р есеч Со люшнз Прайвит Лимите д\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28003374%29-%28%D0%A0%D0%93-RU%29\nRegistration 15: ЛП-№(010599)-(РГ-RU)\nStatus:  active\nHolder:  Акционерно е обще ство \"КРКА, фар мацевтиче ский зав ..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_8_7bcbc304",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 8,
+          "snippet": "Dosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28003842%29-%28%D0%A0%D0%93-RU%29\nRegistration 20: ЛП-№007734-ГП-BY\nStatus:  active\nHolder:  СООО \"Л екфарм\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0..."
+        },
+        {
+          "id": "ev_42978e5f-cbf6-4f21-adf0-7884e44f6bf7_1_64e64e3b",
+          "doc_id": "42978e5f-cbf6-4f21-adf0-7884e44f6bf7",
+          "doc_title": "apixaban_eaeu_registrations_export_summary.txt",
+          "page": 1,
+          "snippet": "Производитель: Аизант Драг Рисерч Солюшнс (ИНДИЯ)\nСтатус РУ: Действует\nСостояние РУ: Д\nАТХ: B01AF02 - Апиксабан\nДозировки: 2.5 мг; 5 мг\nЛек. форма: таблетки, покрытые пленочной оболочкой; таблетки, покрытые пленочной оболочкой\nУпаковка: 10 шт. - упаковки ячейковые контурные (10 шт.)  - пачки картонные (100 шт.)  - По рецепту; 10 шт. - упаковки ячейковые контурные (2 шт.)  - па\nЖНВЛП: Да\n## Reco..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_10_ab3635df",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 10,
+          "snippet": "Registration 25: ЛП-№(007920)-(РГ-RU)\nStatus:  active\nHolder:  Акционерно е обще ство \"Фар мпро ект\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28007920%29-%28%D0%A0%D0%93-RU%29\nRegistration 26: ЛП-№(001906)-(РГ-RU)\nStatus:  active\nHolder:  Фар мацевтиче ский зав..."
+        },
+        {
+          "id": "ev_29802896-45c7-4fc0-980c-44d112e4c10b_30_32cab6c7",
+          "doc_id": "29802896-45c7-4fc0-980c-44d112e4c10b",
+          "doc_title": "c8462c70-6837-4383-b6c3-330b006bff22.pdf",
+          "page": 30,
+          "snippet": "По  20, 56, 60 или  100  таблеток  в  банки  из  полиэтилентерефталата, укупоренные\n\nкрышками из полиэтилена низкого давления с кольцом контроля первого вскрытия или\n\nбез него.\n\nПо 1 банке вместе с листком-вкладышем в пачку картонную.\n\n## Держатель регистрационного удостоверения\n\nРоссийская Федерация\n\nООО «ОнкоТаргет»\n\nАдрес:  109316,  Россия,  г.  Москва,  вн.тер.г.  муниципальный  округ  Печ..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_1_0a7d0986",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 1,
+          "snippet": "RU Regulatory Registration Summary\nINN:  апиксабан\nJurisdictions:  RU\nTotal r egistrations:  26\nGRLS Deeplink:  https://grls.rosminzdrav .ru/search?\nquery=%D0%B0%D0%BF%D0%B8%D0%BA%D1%81%D0%B0%D0%B1%D0%B0%D0%BD\nRegistration 1: ЛП-№(007734)-(РГ-RU)\nStatus:  active\nHolder:  СООО \"Л екфарм\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_3_b9cb1201",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 3,
+          "snippet": "Card URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96001906-%D0%93%D0%9F-BY\nRegistration 6: ЛП-№(010455)-(РГ-RU)\nStatus:  active\nHolder:  Д-р Р едди`c Лабора торис Лт д.\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28010455%29-%..."
+        },
+        {
+          "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_2_617a55fc",
+          "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+          "doc_title": "RU regulatory registration summary: apixaban",
+          "page": 2,
+          "snippet": "Holder:  Обще ство с ограниченной о тветственно стью \"Оз он\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28013713%29-%28%D0%A0%D0%93-RU%29\nRegistration 4: ЛП-№(006835)-(РГ-RU)\nStatus:  active\nHolder:  Открыт ое акционерно е обще ство \"Фар мстандар т-Лексредства\"\nR..."
+        }
+      ]
+    },
+    {
+      "section_id": "regulatory_status_us",
+      "title": "US Regulatory Status",
+      "claims": [
+        {
+          "id": "claim_approval_status",
+          "text": "US regulatory documents state that NDA 220073 for ELIQUIS SPRINKLE/apixaban was approved.",
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+            "ev_72c96421-7d61-4f7f-a5cd-98840b82f8bd_2_b11d73aa"
+          ],
+          "confidence": 0.98
+        },
+        {
+          "id": "claim_pediatric_indication",
+          "text": "The approved US pediatric indication is treatment of venous thromboembolism (VTE) and reduction in the risk of recurrent VTE in pediatric patients from birth and older after at least 5 days of initial anticoagulant treatment.",
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_43_ce592ef9"
+          ],
+          "confidence": 0.99
+        },
+        {
+          "id": "claim_initial_adult_approval",
+          "text": "Apixaban was initially approved in the US on December 28, 2012 for reduction of stroke and systemic embolism risk in patients with nonvalvular atrial fibrillation.",
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_108_3f6d805f",
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f"
+          ],
+          "confidence": 0.97
+        },
+        {
+          "id": "claim_other_adult_indications",
+          "text": "US documents also note prior adult indications for prophylaxis of DVT/PE after hip or knee replacement surgery and treatment of DVT/PE with reduction in recurrence risk after initial therapy.",
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_108_3f6d805f",
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f"
+          ],
+          "confidence": 0.97
+        }
+      ],
+      "numbers": [
+        {
+          "id": "num_nnda",
+          "label": "NDA number",
+          "value": 220073,
+          "as_reported": "NDA 220073",
+          "unit": null,
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+            "ev_72c96421-7d61-4f7f-a5cd-98840b82f8bd_2_b11d73aa"
+          ]
+        },
+        {
+          "id": "num_initial_approval_date",
+          "label": "Initial US approval date",
+          "value": 20121228,
+          "as_reported": "December 28, 2012",
+          "unit": "date",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_108_3f6d805f",
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f"
+          ]
+        },
+        {
+          "id": "num_pediatric_age_range",
+          "label": "Approved pediatric age range",
+          "value": 0,
+          "as_reported": "from birth and older",
+          "unit": "age",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f"
+          ]
+        },
+        {
+          "id": "num_initial_anticoagulation_days",
+          "label": "Minimum initial anticoagulant treatment before pediatric use",
+          "value": 5,
+          "as_reported": "after at least 5 days of initial anticoagulant treatment",
+          "unit": "days",
+          "currency": null,
+          "scale": null,
+          "period": null,
+          "as_of_date": null,
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_43_ce592ef9"
+          ]
+        }
+      ],
+      "risks": [
+        {
+          "id": "risk_boxed_warning_bleeding",
+          "title": "Serious bleeding risk remains a key labeled safety issue",
+          "severity": "high",
+          "description": "US documents note that apixaban has a warning for serious, potentially fatal bleeding, and the current label continues to emphasize bleeding-related precautions.",
+          "evidence_ids": [
+            "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_43_ce592ef9",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_44_136e93a2"
+          ]
+        }
+      ],
+      "unknowns": [],
+      "evidence": [
+        {
+          "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_43_ce592ef9",
+          "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+          "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+          "page": 43,
+          "snippet": " ELIQUIS is not for use in people with antiphospholipid syndrome (APS), especially with positive triple antibody \ntesting.  \nWhat is ELIQUIS? \nELIQUIS is a prescription medicine used in adults to:  \n reduce the risk of stroke and blood clots in people who have atrial fibrillation (a type of irregular heartbeat) that is \nnot caused by a heart valve problem. \n help prevent a blood clot in the ..."
+        },
+        {
+          "id": "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_108_3f6d805f",
+          "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+          "doc_title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+          "page": 108,
+          "snippet": "NDA  220073 , 202155 /S-039, 202155/ S-040 \nELIQUIS, ELIQUIS SPRINKLE  (apixaban)  \n94 \nIntegrated Review Template, version 4.0 (11/1/23)  III. Additional Analyses and Information  \n12. Summary of Regulatory History  \nApixaban was initially approved on December 28, 2012 to reduce the risk of stroke and systemic \nembolism in patients with nonvalvular atrial fibrillation. Apixaban is now approved..."
+        },
+        {
+          "id": "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f",
+          "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+          "doc_title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+          "page": 17,
+          "snippet": "NDA  220073 , 202155 /S-039, 202155/ S-040 \nELIQUIS, ELIQUIS SPRINKLE  (apixaban)  \n3 \nIntegrated Review Template, version 4.0 (11/1/23)  I. Executive Summary  \n1. Overview  \n1.1.  Summary of Regulatory Action  \nThe Applicant, Bristol -Myers Squibb , submitted an  original drug application NDA  220073 for \nthe registration of ELIQUIS (apixaban) SPRINKLE  for oral suspension an d two supplement ..."
+        },
+        {
+          "id": "ev_72c96421-7d61-4f7f-a5cd-98840b82f8bd_2_b11d73aa",
+          "doc_id": "72c96421-7d61-4f7f-a5cd-98840b82f8bd",
+          "doc_title": "FDA Approval Letter (NDA220073 / ELIQUIS)",
+          "page": 2,
+          "snippet": "NDA 220073 \nPage 2 \nfiles using eLIST may be found in the guidance for industry SPL Standard for Content of \nLabeling Technical Qs and As.2 \nThe SPL will be accessible via publicly available labeling repositories. \nCARTON AND CONTAINER LABELING \nSubmit final printed carton and container labeling that are identical to the enclosed \ncarton and container labeling as soon as they are available, but..."
+        },
+        {
+          "id": "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+          "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+          "doc_title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+          "page": 2,
+          "snippet": "NDA  220073 , 202155 /S-039, 202155/ S-040 \nELIQUIS, ELIQUIS SPRINKLE  (apixaban)  \ni \nIntegrated Review Template, version 4.0 (11/1/23)  Integrated Review  \nTable 1. Application Information  \nApplication type  NDA  \nApplication number(s)  220073 , 202155/S -039, 202155/S -040 \nPriority or standard  Priority  \nSubmit date(s)  10/17/2024  \nReceived date(s)  10/17/2024  \nPDUFA goal date  4/17/202..."
+        },
+        {
+          "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_44_136e93a2",
+          "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+          "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+          "page": 44,
+          "snippet": " Call your healthcare provider or healthcare provider right away if you fall or injure yourself, especially if you hit your \nhead. Your healthcare provider or healthcare provider may need to check you. \nFor children who take ELIQUIS: \n See the detailed Instructions for Use that comes with ELIQUIS SPRINKLE for oral suspension or ELIQUIS \ntablets for oral suspension for information on how to pr..."
+        }
+      ]
+    },
+    {
+      "section_id": "safety_profile",
+      "title": "Safety & Warnings",
+      "claims": [
+        {
+          "id": "claim_boxed_warnings",
+          "text": "US regulatory documents list two boxed warnings for ELIQUIS: premature discontinuation increases the risk of thrombotic events, and spinal/epidural hematoma.",
+          "evidence_ids": [
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_1_355d5dd2",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_8_c5fbcca0",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_42_5e056e0a"
+          ],
+          "confidence": 0.99
+        },
+        {
+          "id": "claim_contraindications",
+          "text": "The US label lists contraindications for active pathological bleeding and severe hypersensitivity reaction to ELIQUIS (e.g., anaphylactic reactions).",
+          "evidence_ids": [
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_7_4c975104"
+          ],
+          "confidence": 0.99
+        }
+      ],
+      "numbers": [],
+      "risks": [
+        {
+          "id": "risk_premature_discontinuation",
+          "title": "Premature discontinuation increases thrombotic risk",
+          "severity": "high",
+          "description": "Stopping ELIQUIS without adequate alternative anticoagulation increases the risk of thrombotic events; the label also notes increased stroke rate during transition to warfarin.",
+          "evidence_ids": [
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_8_c5fbcca0",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_42_5e056e0a"
+          ]
+        },
+        {
+          "id": "risk_spinal_epidural_hematoma",
+          "title": "Spinal/epidural hematoma risk",
+          "severity": "high",
+          "description": "Patients receiving neuraxial anesthesia or spinal puncture while on ELIQUIS are at risk of spinal/epidural hematomas, which may cause long-term or permanent paralysis.",
+          "evidence_ids": [
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_1_355d5dd2",
+            "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_42_5e056e0a"
+          ]
+        }
+      ],
+      "unknowns": [],
+      "evidence": [
+        {
+          "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_8_c5fbcca0",
+          "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+          "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+          "page": 8,
+          "snippet": "6 5 WARNINGS AND PRECAUTIONS \n5.1 Increased Risk of Thrombotic Events after Premature Discontinuation \nPremature discontinuation of any oral anticoagulant, including ELIQUIS, in the absence of \nadequate alternative anticoagulation increases the risk of thrombotic events. An increased rate of \nstroke was observed during the transition from ELIQUIS to warfarin in clinical trials in atrial \nfibril..."
+        },
+        {
+          "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_7_4c975104",
+          "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+          "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+          "page": 7,
+          "snippet": "5 applesauce and promptly administered orally [see Clinical Pharmacology (12.3)] . Alternatively, \nELIQUIS tablets may be crushed and suspended in 60 mL of water or D5W and promptly delivered \nthrough a 12 French nasogastric tube [see Clinical Pharmacology (12.3)] . \nFollowing administration of the dose, the nasogastric tube should be flushed with an additional 20 \nmL of water or D5W. \nCrushed ..."
+        },
+        {
+          "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_1_355d5dd2",
+          "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+          "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+          "page": 1,
+          "snippet": "USE IN SPECIFIC POPULATIONS  \n Pregnancy:  Not recommended. (8.1) \n Lactation:  Advise not to breastfeed. (8.2) \n Severe Hepatic Impairment:  Not recommended. (8.7, 12.2) \nSee 17 for PATIENT COUNSELING INFORMATION and Medication \nGuide.  \nRevised: 04/2025\n \nFULL PRESCRIBING INFORMATION: CONTENTS*  \nWARNING: (A) PREMATURE DISCONTINUATION OF ELIQUIS \nINCREASES THE RISK OF THROMBOTIC EVENTS \n(B..."
+        },
+        {
+          "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_42_5e056e0a",
+          "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+          "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+          "page": 42,
+          "snippet": "MEDICATION GUIDE \n  \nELIQUIS® (ELL eh kwiss) \n(apixaban) \ntablets ELIQUIS® (ELL eh kwiss) SPRINKLE  (SPRINK el) \n(apixaban) \n for oral suspension  \n \nWhat is the most important information I should know about ELIQUIS? \nELIQUIS may cause serious side effects, including:  \n Increased risk of blood clots if you stop taking ELIQUIS. \n ELIQUIS lowers your chance of having a stroke by helping to pre..."
+        }
+      ]
+    }
+  ],
+  "evidence_index": [
+    {
+      "id": "ev_d6b59917-4fca-4c76-9e3f-fbebd389969e_8_53cf9293",
+      "doc_id": "d6b59917-4fca-4c76-9e3f-fbebd389969e",
+      "doc_title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+      "page": 8,
+      "snippet": "]\n\n},\n\n{\n\n\"type\": \"PRIMARY\",\n\n- \"title\": \"Number of Participants With Strokes\",\n\n\"description\": \"Efficacy will be measured by the freedom from stroke during the study period. Events relating to stroke will be adjudicated usi\n\n- \"reportingStatus\": \"POSTED\",\n- \"paramType\": \"NUMBER\",\n- \"dispersionType\": \"95% Confidence Interval\",\n- \"unitOfMeasure\": \"participants\",\n- \"timeFrame\": \"30 days\",\n\n\"g..."
+    },
+    {
+      "id": "ev_e32f1910-0216-4eac-bbf4-20c600bd079a_3_36375f55",
+      "doc_id": "e32f1910-0216-4eac-bbf4-20c600bd079a",
+      "doc_title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+      "page": 3,
+      "snippet": "], \"otherNames\": [ \"Eliquis\" ] } ] }, \"outcomesModule\": { \"primaryOutcomes\": [ { \"measure\": \"Change in Pharmacokinetics as Assessed by Cmax (Max Concentration)\", \"description\": \"To determine the durability or change in pharmacokinetics of apixaban in patients with obesity following one of two bariatric s \"timeFrame\": \"Baseline and 12 months\" }, { \"measure\": \"Change in Pharmacokinetics as Assess..."
+    },
+    {
+      "id": "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_1_cc1b9521",
+      "doc_id": "140aa9bc-17f4-4fe3-8beb-9568d822b028",
+      "doc_title": "CTGov NCT02100228: Study Of The Blood Thinner",
+      "page": 1,
+      "snippet": "# ClinicalTrials.gov (ctgov_results)\n\nNCT ID: NCT02100228\n\nTitle: Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrillation) And Expected To Have Treatment To Put Them Back Into A Normal Heart Rhythm (Cardioversion)\n\nOverallStatus:\n\nCOMPLETED\n\nPhase:\n\nStart: 2014-07-14 | Primary Completion: 2017-02-08\n\nConditions:\n\nInterventions:\n\nPrimary Outcomes..."
+    },
+    {
+      "id": "ev_140aa9bc-17f4-4fe3-8beb-9568d822b028_30_98014259",
+      "doc_id": "140aa9bc-17f4-4fe3-8beb-9568d822b028",
+      "doc_title": "CTGov NCT02100228: Study Of The Blood Thinner",
+      "page": 30,
+      "snippet": "}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n- \"type\": \"SECONDARY\",\n- \"title\": \"Number of Participants Who Used Image Guidance Approach\",\n- \"description\": \"An image-guided approach helped cardioversion earlier than the conventional minimum of 3 weeks of anticoagulation that would no \"populationDescription\": \"Full analysis set included all randomized participants.\",\n- \"reportingStatus\": \"POSTED\",\n\n\"paramType\": \"N..."
+    },
+    {
+      "id": "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_8_97f595cd",
+      "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+      "doc_title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "page": 8,
+      "snippet": "\"measurements\": [ { \"groupId\": \"OG000\", \"value\": \"1372.836\", \"lowerLimit\": \"1306.240\", \"upperLimit\": \"1442.828\" }, { \"groupId\": \"OG001\", \"value\": \"1112.493\", \"lowerLimit\": \"1041.751\", \"upperLimit\": \"1188.038\" } ] } ] } ], \"analyses\": [ { \"groupIds\": [ \"OG000\", \"OG001\" ], \"testedNonInferiority\": false, \"nonInferiorityType\": \"SUPERIORITY_OR_OTHER\", \"paramType\": \"Ratio of Adjusted Geometric Means\"..."
+    },
+    {
+      "id": "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_7_31146bb6",
+      "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+      "doc_title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "page": 7,
+      "snippet": "\"paramType\": \"GEOMETRIC_MEAN\", \"dispersionType\": \"90% Confidence Interval\", \"unitOfMeasure\": \"ng*h/mL\", \"timeFrame\": \"Pre-dose and 0.25, 0.50, 1, 2, 3, 4, 5, 6, 9, 12, 24, 36, 48, 60, 72 hours post-dose for each intervention\", \"groups\": [ { \"id\": \"OG000\", \"title\": \"Treatment A\", \"description\": \"Single dose apixaban 5 milligrams (mg) oral solution (OS) (0.4 milligrams per milliliter (mg/mL) x 12..."
+    },
+    {
+      "id": "ev_66fcd34c-1f0b-4ba3-a64e-2d884d4999ac_9_985616e9",
+      "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+      "doc_title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "page": 9,
+      "snippet": "- \"type\": \"SECONDARY\",\n- \"title\": \"Adjusted Geometric Mean of the Area Under the Plasma Concentration-Time Curve From Time Zero Extrapolated to Infinite Time [AUC(INF)] \"description\": \"AUC(INF) is measured in nanogram hours per milliliter (ng\\\\*h/mL)\",\n- \"populationDescription\": \"All randomized participants with available PK data\",\n- \"reportingStatus\": \"POSTED\",\n- \"paramType\": \"GEOMETRIC_MEAN\",..."
+    },
+    {
+      "id": "ev_dca6b00b-c67a-496a-a9b8-0f41e47db807_54_ea02b313",
+      "doc_id": "dca6b00b-c67a-496a-a9b8-0f41e47db807",
+      "doc_title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+      "page": 54,
+      "snippet": "}\n\n]\n\n},\n\n\"outcomeMeasuresModule\": {\n\n\"outcomeMeasures\": [\n\n{\n\n\"type\": \"PRIMARY\",\n\n\"title\": \"Adjudicated Composite of Symptomatic, Recurrent Venous Thromboembolism (VTE) or All-Cause Death During the Intended Treatment Period \"description\": \"VTE included: nonfatal deep vein thrombosis (DVT) or nonfatal pulmonary embolism (PE). All index events, DVT and/or PE were adj \"populationDescription\": \"I..."
+    },
+    {
+      "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_1_5c14bdac",
+      "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+      "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "page": 1,
+      "snippet": "## Rate of Adjudicated Stroke or Systemic Embolism (SE) During the Intended Treatment Period\n\nDescription: Rate=Number of adjudicated stroke or SE events per 100 patient years. Diagnosis of stroke=the nontraumatic focal neurological deficit lasting at least 24 hours, and includes ischemic stroke, hemorrhagic stroke, ischemic stroke with hemorrhagic conversion, stroke of uncertain type, and reti..."
+    },
+    {
+      "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_2_7045b211",
+      "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+      "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "page": 2,
+      "snippet": "{\n\n\"identificationModule\": {\n\n\"nctId\": \"NCT00412984\",\n\n\"orgStudyIdInfo\": {\n\n\"id\": \"CV185-030\"\n\n},\n\n\"organization\": {\n\n\"fullName\": \"Bristol-Myers Squibb\",\n\n\"class\": \"INDUSTRY\"\n\n}, \"briefTitle\": \"Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation\", \"officialTitle\": \"A Phase 3, Active (Warfarin) Controlled, Randomized, Double-Blind, Parallel Arm Study to Evaluate Efficacy a..."
+    },
+    {
+      "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_121_c44f5e58",
+      "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+      "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "page": 121,
+      "snippet": "{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"type\": \"PRIMARY\",\n\n- \"title\": \"Rate of Adjudicated Stroke or Systemic Embolism (SE) During the Intended Treatment Period\",\n- \"description\": \"Rate=Number of adjudicated stroke or SE events per 100 patient years. Diagnosis of stroke=the nontraumatic focal neurological d\n\n\"populationDescription\": \"Intention to treat analysis,..."
+    },
+    {
+      "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_129_8a90fb83",
+      "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+      "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "page": 129,
+      "snippet": "\"counts\": [\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n],\n\n\"classes\": [\n\n{\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n- \"type\": \"SECONDARY\",\n- \"title\": \"Rate of Composite Stroke / Systemic Embolism / Major Bleeding in Warfarin/Vitamin K Antagonist (VKA) Naive Participants During the In \"populationDescription\": \"Intention to treat analysis, randomized participants. Participants who did not experience an ..."
+    },
+    {
+      "id": "ev_ecc67d80-d38c-425e-9517-337799fc516e_132_f2204791",
+      "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+      "doc_title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "page": 132,
+      "snippet": "} ], \"analyses\": [ { \"groupIds\": [ \"OG000\", \"OG001\" ], \"nonInferiorityType\": \"OTHER\", \"pValue\": \"<.0001\", \"pValueComment\": \"nominal two-sided p-value was associated with a test of H0: RR=1 vs H1: RR ≠ 1\", \"statisticalMethod\": \"Cox Proportional Hazard Model\", \"paramType\": \"Hazard Ratio (HR)\", \"paramValue\": \"0.68\", \"ciPctValue\": \"95\", \"ciNumSides\": \"TWO_SIDED\", \"ciLowerLimit\": \"0.61\", \"ciUpperLim..."
+    },
+    {
+      "id": "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_38_56e72e86",
+      "doc_id": "455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7",
+      "doc_title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "page": 38,
+      "snippet": "{ \"title\": \"Major Bleeding (n=1563, 1553)\", \"categories\": [ { \"measurements\": [ { \"groupId\": \"OG000\", \"value\": \"0.13\", \"lowerLimit\": \"0.01\", \"upperLimit\": \"0.51\" }, { \"groupId\": \"OG001\", \"value\": \"0.13\", \"lowerLimit\": \"0.01\", \"upperLimit\": \"0.51\" } ] } ] }, { \"title\": \"CR N-M Bleeding (n=1563, 1553)\", \"categories\": [ { \"measurements\": [ { \"groupId\": \"OG000\", \"value\": \"0.26\", \"lowerLimit\": \"0.08..."
+    },
+    {
+      "id": "ev_455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7_39_d56dcd55",
+      "doc_id": "455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7",
+      "doc_title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "page": 39,
+      "snippet": "{\n\n\"value\": \"1563\"\n\n},\n\n{\n\n\"value\": \"1553\"\n\n}\n\n]\n\n}\n\n],\n\n\"classes\": [\n\n{\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"title\": \"MI\",\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"title\": \"Stroke\",\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"categories\": [\n\n{\n\n{\n\n},\n\n{\n\n}\n\n]\n\n}\n\n]\n\n}\n\n]\n\n},\n\n{\n\n\"type\": \"SECONDARY\",\n\n- \"title\": \"Number of Participants With Serious Adverse Events..."
+    },
+    {
+      "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_35_4bd6aa9a",
+      "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+      "doc_title": "EU SmPC (CAP): apixaban",
+      "page": 35,
+      "snippet": "# 1. NAME OF THE MEDICINAL PRODUCT\n\nApixaban Accord 5 mg film-coated tablets\n\n## 2. QUALITATIVE AND QUANTITATIVE COMPOSITION\n\nEach film-coated tablet contains 5 mg apixaban.\n\n## Excipients with known effect\n\nEach 5 mg film-coated tablet contains 103.95 mg lactose (see section 4.4).\n\nFor the full list of excipients, see section 6.1.\n\n## 3. PHARMACEUTICAL FORM\n\nFilm-coated tablet (tablet)\n\nPin..."
+    },
+    {
+      "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_2_89fcb999",
+      "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+      "doc_title": "EU SmPC (CAP): apixaban",
+      "page": 2,
+      "snippet": "# 1. NAME OF THE MEDICINAL PRODUCT\n\nApixaban Accord 2.5 mg film-coated tablets\n\n## 2. QUALITATIVE AND QUANTITATIVE COMPOSITION\n\nEach film-coated tablet contains 2.5 mg apixaban.\n\n## Excipients with known effect\n\nEach 2.5 mg film-coated tablet contains 51.97  mg lactose (see section 4.4).\n\nFor the full list of excipients, see section 6.1.\n\n## 3. PHARMACEUTICAL FORM\n\nFilm-coated tablet (tablet..."
+    },
+    {
+      "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_30_dd278848",
+      "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+      "doc_title": "EU SmPC (CAP): apixaban",
+      "page": 30,
+      "snippet": "The European Medicines Agency has deferred the obligation to submit the results of studies for the treatment of venous thromboembolism with apixaban in one or more subsets of the paediatric population (see section 4.2 for information on paediatric use).\n\n# 5.2 Pharmacokinetic properties\n\n## Absorption\n\nIn adults, the absolute bioavailability of apixaban is approximately 50% for doses up to 10..."
+    },
+    {
+      "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_107_96a8f9e3",
+      "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+      "doc_title": "EU SmPC (CAP): apixaban",
+      "page": 107,
+      "snippet": "# Package leaflet: Information for the user\n\n## Apixaban Accord  5 mg film-coated tablets apixaban\n\n## Read all of this leaflet carefully before you start taking this medicine because it contains important information for you.\n\n- -Keep this leaflet. You may need to read it again.\n- -If you have any further questions, ask your doctor, pharmacist or nurse.\n- -This medicine has been prescribed ..."
+    },
+    {
+      "id": "ev_e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2_95_ccb70642",
+      "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+      "doc_title": "EU SmPC (CAP): apixaban",
+      "page": 95,
+      "snippet": "# Package leaflet: Information for the user\n\n## Apixaban Accord 2.5 mg film-coated tablets\n\napixaban\n\n## Read all of this leaflet carefully before you start taking this medicine because it contains important information for you.\n\n- -Keep this leaflet. You may need to read it again.\n- -If you have any further questions, ask your doctor, pharmacist or nurse.\n- -This medicine has been prescribe..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_1_0a7d0986",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 1,
+      "snippet": "RU Regulatory Registration Summary\nINN:  апиксабан\nJurisdictions:  RU\nTotal r egistrations:  26\nGRLS Deeplink:  https://grls.rosminzdrav .ru/search?\nquery=%D0%B0%D0%BF%D0%B8%D0%BA%D1%81%D0%B0%D0%B1%D0%B0%D0%BD\nRegistration 1: ЛП-№(007734)-(РГ-RU)\nStatus:  active\nHolder:  СООО \"Л екфарм\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_6_d556884b",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 6,
+      "snippet": "Status:  active\nHolder:  Айзант Драг Р есеч Со люшнз Прайвит Лимите д\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28003374%29-%28%D0%A0%D0%93-RU%29\nRegistration 15: ЛП-№(010599)-(РГ-RU)\nStatus:  active\nHolder:  Акционерно е обще ство \"КРКА, фар мацевтиче ский зав ..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_10_ab3635df",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 10,
+      "snippet": "Registration 25: ЛП-№(007920)-(РГ-RU)\nStatus:  active\nHolder:  Акционерно е обще ство \"Фар мпро ект\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28007920%29-%28%D0%A0%D0%93-RU%29\nRegistration 26: ЛП-№(001906)-(РГ-RU)\nStatus:  active\nHolder:  Фар мацевтиче ский зав..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_9_aeb2ffa3",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 9,
+      "snippet": "Registration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28010149%29-%28%D0%A0%D0%93-RU%29\nRegistration 23: ЛП-№(009585)-(РГ-RU)\nStatus:  active\nHolder:  Майлан Лабора ториз Лимите д\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_3_b9cb1201",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 3,
+      "snippet": "Card URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96001906-%D0%93%D0%9F-BY\nRegistration 6: ЛП-№(010455)-(РГ-RU)\nStatus:  active\nHolder:  Д-р Р едди`c Лабора торис Лт д.\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28010455%29-%..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_8_7bcbc304",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 8,
+      "snippet": "Dosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28003842%29-%28%D0%A0%D0%93-RU%29\nRegistration 20: ЛП-№007734-ГП-BY\nStatus:  active\nHolder:  СООО \"Л екфарм\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_7_ab0dc1e0",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 7,
+      "snippet": "Card URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28010414%29-%28%D0%A0%D0%93-RU%29\nRegistration 17: ЛП-№(013618)-(РГ-RU)\nStatus:  active\nHolder:  Белор усско-голландск ое сов местно е пре дприятие обще ство с ограниченной о тветственно стью\n«ФАРМЛЭНД»\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https:..."
+    },
+    {
+      "id": "ev_d83efa9c-1e95-4bad-aba4-bb77b991d2fc_2_617a55fc",
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "doc_title": "RU regulatory registration summary: apixaban",
+      "page": 2,
+      "snippet": "Holder:  Обще ство с ограниченной о тветственно стью \"Оз он\"\nRegistration Date:\nExpiry Date:\nTrade Names:\nDosage Form:\nStrength:\nRoute:\nPackaging:\nCard URL:  https://grls.rosminzdrav .ru/GRLS.aspx?Mode=1&RegNumber=%D0%9B%D0%9F-\n%E2%84%96%28013713%29-%28%D0%A0%D0%93-RU%29\nRegistration 4: ЛП-№(006835)-(РГ-RU)\nStatus:  active\nHolder:  Открыт ое акционерно е обще ство \"Фар мстандар т-Лексредства\"\nR..."
+    },
+    {
+      "id": "ev_42978e5f-cbf6-4f21-adf0-7884e44f6bf7_1_64e64e3b",
+      "doc_id": "42978e5f-cbf6-4f21-adf0-7884e44f6bf7",
+      "doc_title": "apixaban_eaeu_registrations_export_summary.txt",
+      "page": 1,
+      "snippet": "Производитель: Аизант Драг Рисерч Солюшнс (ИНДИЯ)\nСтатус РУ: Действует\nСостояние РУ: Д\nАТХ: B01AF02 - Апиксабан\nДозировки: 2.5 мг; 5 мг\nЛек. форма: таблетки, покрытые пленочной оболочкой; таблетки, покрытые пленочной оболочкой\nУпаковка: 10 шт. - упаковки ячейковые контурные (10 шт.)  - пачки картонные (100 шт.)  - По рецепту; 10 шт. - упаковки ячейковые контурные (2 шт.)  - па\nЖНВЛП: Да\n## Reco..."
+    },
+    {
+      "id": "ev_08da2668-cbee-49cc-8011-e6ecf1c6f690_9_8279db97",
+      "doc_id": "08da2668-cbee-49cc-8011-e6ecf1c6f690",
+      "doc_title": "ae49cbd7-cd85-4bd8-9e73-c6360fbd8749.pdf",
+      "page": 9,
+      "snippet": "# Держатель регистрационного удостоверения и производитель\n\nФедеральное государственное унитарное предприятие «Московский эндокринный завод» 109052, г. Москва, ул. Новохохловская, д. 25\n\nТел.: +7 (495) 678 -00-50\n\nФакс: +7 (495) 911 -42-10\n\nЭлектронная почта: mez@endopharm.ru\n\nРоссийская Федерация\n\nЗа любой информацией о препарате, а также в случаях возникновения претензий следует обращаться к ..."
+    },
+    {
+      "id": "ev_3bb3ee6d-3fff-46d0-9e4b-bb1bab217543_12_2c72618a",
+      "doc_id": "3bb3ee6d-3fff-46d0-9e4b-bb1bab217543",
+      "doc_title": "9a199917-d0c3-46e3-be2f-19cce5f041da.pdf",
+      "page": 12,
+      "snippet": "Круглые двояковыпуклые таблетки, с риской на одной стороне, покрытые оболочкой желтого цвета .\n\nРиска не предназначена для разламывания таблетки.\n\nПо  10  или  15  таблеток,  в  контурной  ячейковой  упаковке  из  фольги  алюминиевой  и  пленки поливинилхлоридной.\n\nПо 2, 3, 6 или 10 контурных ячейковых упаковок по 10 таблеток либо по 2, 4 контурных ячейковых упаковок по 15 таблеток вместе с лис..."
+    },
+    {
+      "id": "ev_b994044d-4043-4b60-8b2f-e6a7b3fd518a_29_8443a8af",
+      "doc_id": "b994044d-4043-4b60-8b2f-e6a7b3fd518a",
+      "doc_title": "85e3f0eb-be69-48a5-bbb5-953a7a6f159e.pdf",
+      "page": 29,
+      "snippet": "# Держатель регистрационного удостоверения\n\nРоссийская Федерация\n\nООО «БИСЕРНО»\n\nАдрес: 143404, Россия, Московская область, г. Красногорск, ул. Дачная, д. 11А, пом. 11\n\n## Производитель\n\nООО «ОнкоТаргет», Россия\n\nАдрес: г. Москва, проспект Волгоградский, д. 42, к. 24\n\nТел.: (495) 233-01-38\n\nE-mail: info@oncotarget.pro\n\nwww. oncotarget.pro\n\nЗа  любой  информацией  о  препарате,  а  также  в  сл..."
+    },
+    {
+      "id": "ev_f32f7f40-5767-47a9-8bea-e2346522b5e4_12_5a25f5fe",
+      "doc_id": "f32f7f40-5767-47a9-8bea-e2346522b5e4",
+      "doc_title": "53c1e299-37f9-4fdd-8054-15c86359a438.pdf",
+      "page": 12,
+      "snippet": "Прочими ингредиентами (вспомогательными веществами) являются:\n\nЯдро таблетки: лактозы моногидрат, целлюлоза микрокристаллическая (тип 102), кроскармеллоза натрия, натрия лаурилсульфат, магния стеарат.\n\nОболочка таблетки: гипромеллоза, лактозы моногидрат, титана диоксид [Е 171], триацетин, краситель железа оксид красный [Е 172].\n\nПрепарат Апиксабан содержит лактозу и натрий (см. раздел 2).\n\n## ..."
+    },
+    {
+      "id": "ev_29802896-45c7-4fc0-980c-44d112e4c10b_30_32cab6c7",
+      "doc_id": "29802896-45c7-4fc0-980c-44d112e4c10b",
+      "doc_title": "c8462c70-6837-4383-b6c3-330b006bff22.pdf",
+      "page": 30,
+      "snippet": "По  20, 56, 60 или  100  таблеток  в  банки  из  полиэтилентерефталата, укупоренные\n\nкрышками из полиэтилена низкого давления с кольцом контроля первого вскрытия или\n\nбез него.\n\nПо 1 банке вместе с листком-вкладышем в пачку картонную.\n\n## Держатель регистрационного удостоверения\n\nРоссийская Федерация\n\nООО «ОнкоТаргет»\n\nАдрес:  109316,  Россия,  г.  Москва,  вн.тер.г.  муниципальный  округ  Печ..."
+    },
+    {
+      "id": "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_108_3f6d805f",
+      "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+      "doc_title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+      "page": 108,
+      "snippet": "NDA  220073 , 202155 /S-039, 202155/ S-040 \nELIQUIS, ELIQUIS SPRINKLE  (apixaban)  \n94 \nIntegrated Review Template, version 4.0 (11/1/23)  III. Additional Analyses and Information  \n12. Summary of Regulatory History  \nApixaban was initially approved on December 28, 2012 to reduce the risk of stroke and systemic \nembolism in patients with nonvalvular atrial fibrillation. Apixaban is now approved..."
+    },
+    {
+      "id": "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_17_5c20537f",
+      "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+      "doc_title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+      "page": 17,
+      "snippet": "NDA  220073 , 202155 /S-039, 202155/ S-040 \nELIQUIS, ELIQUIS SPRINKLE  (apixaban)  \n3 \nIntegrated Review Template, version 4.0 (11/1/23)  I. Executive Summary  \n1. Overview  \n1.1.  Summary of Regulatory Action  \nThe Applicant, Bristol -Myers Squibb , submitted an  original drug application NDA  220073 for \nthe registration of ELIQUIS (apixaban) SPRINKLE  for oral suspension an d two supplement ..."
+    },
+    {
+      "id": "ev_ad406dea-280c-4d6e-819a-0fc0ce311ddd_2_b9b8df88",
+      "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+      "doc_title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+      "page": 2,
+      "snippet": "NDA  220073 , 202155 /S-039, 202155/ S-040 \nELIQUIS, ELIQUIS SPRINKLE  (apixaban)  \ni \nIntegrated Review Template, version 4.0 (11/1/23)  Integrated Review  \nTable 1. Application Information  \nApplication type  NDA  \nApplication number(s)  220073 , 202155/S -039, 202155/S -040 \nPriority or standard  Priority  \nSubmit date(s)  10/17/2024  \nReceived date(s)  10/17/2024  \nPDUFA goal date  4/17/202..."
+    },
+    {
+      "id": "ev_72c96421-7d61-4f7f-a5cd-98840b82f8bd_2_b11d73aa",
+      "doc_id": "72c96421-7d61-4f7f-a5cd-98840b82f8bd",
+      "doc_title": "FDA Approval Letter (NDA220073 / ELIQUIS)",
+      "page": 2,
+      "snippet": "NDA 220073 \nPage 2 \nfiles using eLIST may be found in the guidance for industry SPL Standard for Content of \nLabeling Technical Qs and As.2 \nThe SPL will be accessible via publicly available labeling repositories. \nCARTON AND CONTAINER LABELING \nSubmit final printed carton and container labeling that are identical to the enclosed \ncarton and container labeling as soon as they are available, but..."
+    },
+    {
+      "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_44_136e93a2",
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "page": 44,
+      "snippet": " Call your healthcare provider or healthcare provider right away if you fall or injure yourself, especially if you hit your \nhead. Your healthcare provider or healthcare provider may need to check you. \nFor children who take ELIQUIS: \n See the detailed Instructions for Use that comes with ELIQUIS SPRINKLE for oral suspension or ELIQUIS \ntablets for oral suspension for information on how to pr..."
+    },
+    {
+      "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_43_ce592ef9",
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "page": 43,
+      "snippet": " ELIQUIS is not for use in people with antiphospholipid syndrome (APS), especially with positive triple antibody \ntesting.  \nWhat is ELIQUIS? \nELIQUIS is a prescription medicine used in adults to:  \n reduce the risk of stroke and blood clots in people who have atrial fibrillation (a type of irregular heartbeat) that is \nnot caused by a heart valve problem. \n help prevent a blood clot in the ..."
+    },
+    {
+      "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_1_355d5dd2",
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "page": 1,
+      "snippet": "USE IN SPECIFIC POPULATIONS  \n Pregnancy:  Not recommended. (8.1) \n Lactation:  Advise not to breastfeed. (8.2) \n Severe Hepatic Impairment:  Not recommended. (8.7, 12.2) \nSee 17 for PATIENT COUNSELING INFORMATION and Medication \nGuide.  \nRevised: 04/2025\n \nFULL PRESCRIBING INFORMATION: CONTENTS*  \nWARNING: (A) PREMATURE DISCONTINUATION OF ELIQUIS \nINCREASES THE RISK OF THROMBOTIC EVENTS \n(B..."
+    },
+    {
+      "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_8_c5fbcca0",
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "page": 8,
+      "snippet": "6 5 WARNINGS AND PRECAUTIONS \n5.1 Increased Risk of Thrombotic Events after Premature Discontinuation \nPremature discontinuation of any oral anticoagulant, including ELIQUIS, in the absence of \nadequate alternative anticoagulation increases the risk of thrombotic events. An increased rate of \nstroke was observed during the transition from ELIQUIS to warfarin in clinical trials in atrial \nfibril..."
+    },
+    {
+      "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_7_4c975104",
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "page": 7,
+      "snippet": "5 applesauce and promptly administered orally [see Clinical Pharmacology (12.3)] . Alternatively, \nELIQUIS tablets may be crushed and suspended in 60 mL of water or D5W and promptly delivered \nthrough a 12 French nasogastric tube [see Clinical Pharmacology (12.3)] . \nFollowing administration of the dose, the nasogastric tube should be flushed with an additional 20 \nmL of water or D5W. \nCrushed ..."
+    },
+    {
+      "id": "ev_20e952d5-8c35-4424-a00a-c5dd93e5dc0e_42_5e056e0a",
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "doc_title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "page": 42,
+      "snippet": "MEDICATION GUIDE \n  \nELIQUIS® (ELL eh kwiss) \n(apixaban) \ntablets ELIQUIS® (ELL eh kwiss) SPRINKLE  (SPRINK el) \n(apixaban) \n for oral suspension  \n \nWhat is the most important information I should know about ELIQUIS? \nELIQUIS may cause serious side effects, including:  \n Increased risk of blood clots if you stop taking ELIQUIS. \n ELIQUIS lowers your chance of having a stroke by helping to pre..."
+    }
+  ],
+  "documents": [
+    {
+      "doc_id": "b50cb128-a73e-4f8b-b538-cce69c6bf020",
+      "title": "4f9fc99a-39f2-4172-9aae-5600b50dec19.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://4f9fc99a-39f2-4172-9aae-5600b50dec19.pdf"
+    },
+    {
+      "doc_id": "831aa100-e561-4c68-91d1-02994a5cdb8b",
+      "title": "9bff5e10-424e-4410-a86c-e7c9a6435e05.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://9bff5e10-424e-4410-a86c-e7c9a6435e05.pdf"
+    },
+    {
+      "doc_id": "3d77fb67-19bc-48d5-9059-6ed81db046df",
+      "title": "FDA Proprietary Name Review (NDA220073 / ELIQUIS)",
+      "kind": "us_fda",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000NameR.pdf"
+    },
+    {
+      "doc_id": "3bd7d9f4-51e0-4143-907f-ca06612cdd2f",
+      "title": "FDA Other Review (NDA220073 / ELIQUIS)",
+      "kind": "us_fda",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000OtherR.pdf"
+    },
+    {
+      "doc_id": "66fcd34c-1f0b-4ba3-a64e-2d884d4999ac",
+      "title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02034591?tab=results"
+    },
+    {
+      "doc_id": "3bb3ee6d-3fff-46d0-9e4b-bb1bab217543",
+      "title": "9a199917-d0c3-46e3-be2f-19cce5f041da.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://9a199917-d0c3-46e3-be2f-19cce5f041da.pdf"
+    },
+    {
+      "doc_id": "a8a459e0-7d39-4eee-8f00-235709c37310",
+      "title": "53cec486-cfd4-4a4d-bbf5-b79368bd2e7b (1).pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://53cec486-cfd4-4a4d-bbf5-b79368bd2e7b (1).pdf"
+    },
+    {
+      "doc_id": "a3e3e539-2e2a-49c3-a405-f68ad7234be6",
+      "title": "CTGov NCT02935751: Apixaban Discontinuation Prior to Major Surgery",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02935751?tab=results"
+    },
+    {
+      "doc_id": "0e0bb76f-86f4-4960-9ee7-aa622efaf8e9",
+      "title": "CTGov NCT02608099: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillation",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02608099?tab=results"
+    },
+    {
+      "doc_id": "c164dca2-2685-4d3e-a34e-171ec72db638",
+      "title": "Распоряжение+Правительства+РФ+от+18.12.2025+N+3867.pdf",
+      "kind": "grls",
+      "source_url": "byo://Распоряжение+Правительства+РФ+от+18.12.2025+N+3867.pdf"
+    },
+    {
+      "doc_id": "72c96421-7d61-4f7f-a5cd-98840b82f8bd",
+      "title": "FDA Approval Letter (NDA220073 / ELIQUIS)",
+      "kind": "approval_letter",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2025/220073Orig1s000ltr.pdf"
+    },
+    {
+      "doc_id": "43e918d4-4210-4982-8f2f-a4d3db137c68",
+      "title": "CTGov NCT00320255: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advanced (Metastatic) Cancer",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT00320255?tab=results"
+    },
+    {
+      "doc_id": "34316682-71f9-4fa8-89bf-214c62da491d",
+      "title": "0ef18cb0-ab29-45bd-855f-fb6c28982801.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://0ef18cb0-ab29-45bd-855f-fb6c28982801.pdf"
+    },
+    {
+      "doc_id": "42978e5f-cbf6-4f21-adf0-7884e44f6bf7",
+      "title": "apixaban_eaeu_registrations_export_summary.txt",
+      "kind": "eaeu_document",
+      "source_url": "byo://apixaban_eaeu_registrations_export_summary.txt"
+    },
+    {
+      "doc_id": "d6b59917-4fca-4c76-9e3f-fbebd389969e",
+      "title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02889562?tab=results"
+    },
+    {
+      "doc_id": "ed0c3bb9-a0c9-4959-9ec9-5a465767f1fb",
+      "title": "02c173b6-36c0-4a4e-8d00-fac0aec39b29.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://02c173b6-36c0-4a4e-8d00-fac0aec39b29.pdf"
+    },
+    {
+      "doc_id": "5fdcbd6d-2b2a-416c-a858-e4d90d841ace",
+      "title": "6bd684fb-5e4a-46cb-be7c-ebbda5a713fd.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://6bd684fb-5e4a-46cb-be7c-ebbda5a713fd.pdf"
+    },
+    {
+      "doc_id": "81e01842-18fc-4858-9709-37a86fb5434c",
+      "title": "FDA label (openFDA",
+      "kind": "label",
+      "source_url": "ANDA210180): apixaban"
+    },
+    {
+      "doc_id": "be402914-96cf-48d3-8696-6a88b01675b2",
+      "title": "CTGov NCT01885585: Eliquis Regulatory Post Marketing Surveillance (rPMS)",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT01885585?tab=results"
+    },
+    {
+      "doc_id": "a6b5a96e-7835-4641-bf2c-c96b0f3dbe35",
+      "title": "CTGov NCT02769078: Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Patients Treated With Dabigatran",
+      "kind": "ctgov_results",
+      "source_url": "Rivaroxaban"
+    },
+    {
+      "doc_id": "dd947428-8c36-4779-87c1-32ca97db8796",
+      "title": "CTGov NCT00787150: A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT00787150?tab=results"
+    },
+    {
+      "doc_id": "ef33178a-08d3-4659-bb64-9bec832cf6b2",
+      "title": "CTGov NCT02565693: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrillation",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02565693?tab=results"
+    },
+    {
+      "doc_id": "9f4b891d-963d-4e81-b96e-d6908f2f3ec3",
+      "title": "b7a711c3-591e-435e-8967-f5b04ee16946.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://b7a711c3-591e-435e-8967-f5b04ee16946.pdf"
+    },
+    {
+      "doc_id": "be2d3944-2e4e-48d4-b483-570e1c728e48",
+      "title": "e3311773-bebe-4cce-85a5-349e9d3d0e3d.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://e3311773-bebe-4cce-85a5-349e9d3d0e3d.pdf"
+    },
+    {
+      "doc_id": "455e61ec-a5e6-4c6a-acb7-d3c3a5bd25f7",
+      "title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT00371683?tab=results"
+    },
+    {
+      "doc_id": "e75f2992-bbec-4417-8d24-a151064dbba2",
+      "title": "CTGov NCT02066454: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma Trated With iMiDs",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02066454?tab=results"
+    },
+    {
+      "doc_id": "ecc67d80-d38c-425e-9517-337799fc516e",
+      "title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT00412984?tab=results"
+    },
+    {
+      "doc_id": "5ae1ce21-183c-4d27-bcbd-665a57191e93",
+      "title": "CTGov NCT02640222: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in Real-Life Setting in France SNIIRAM Study",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02640222?tab=results"
+    },
+    {
+      "doc_id": "42624d2c-232d-47ca-ae16-ba2401b3eb93",
+      "title": "FDA Approval Letter (NDA220073 / ELIQUIS)",
+      "kind": "approval_letter",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000Approv.pdf"
+    },
+    {
+      "doc_id": "a7bac1b2-933f-4498-91c9-e1c4c11cead4",
+      "title": "c766ca9b-9b7f-4141-b109-b64857d8dc0e.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://c766ca9b-9b7f-4141-b109-b64857d8dc0e.pdf"
+    },
+    {
+      "doc_id": "0fd28a5b-f7dd-446e-a508-6a497a70d140",
+      "title": "CTGov NCT02749617: A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02749617?tab=results"
+    },
+    {
+      "doc_id": "f32f7f40-5767-47a9-8bea-e2346522b5e4",
+      "title": "53c1e299-37f9-4fdd-8054-15c86359a438.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://53c1e299-37f9-4fdd-8054-15c86359a438.pdf"
+    },
+    {
+      "doc_id": "1b9a3d0f-651d-4e33-bec3-861e077035c6",
+      "title": "CTGov NCT02829957: RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02829957?tab=results"
+    },
+    {
+      "doc_id": "dca6b00b-c67a-496a-a9b8-0f41e47db807",
+      "title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT00633893?tab=results"
+    },
+    {
+      "doc_id": "c2c6cfac-ae7b-48d8-acc0-202cbc95cb0b",
+      "title": "apixaban_ru_registrations_export_summary_grls.txt",
+      "kind": "grls",
+      "source_url": "byo://apixaban_ru_registrations_export_summary_grls.txt"
+    },
+    {
+      "doc_id": "3b4371f3-265c-4517-8489-f94115ab7eac",
+      "title": "9ddee32a-317f-4795-890a-6c37ec711c59.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://9ddee32a-317f-4795-890a-6c37ec711c59.pdf"
+    },
+    {
+      "doc_id": "140aa9bc-17f4-4fe3-8beb-9568d822b028",
+      "title": "CTGov NCT02100228: Study Of The Blood Thinner",
+      "kind": "ctgov_results",
+      "source_url": "Apixaban"
+    },
+    {
+      "doc_id": "9c768f98-36be-49f9-9c50-1ee5b376c536",
+      "title": "CTGov NCT00097357: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT00097357?tab=results"
+    },
+    {
+      "doc_id": "e9b594e5-905b-4fe7-9283-2e2b0d5fd0c2",
+      "title": "EU SmPC (CAP): apixaban",
+      "kind": "smpc",
+      "source_url": "https://www.ema.europa.eu/en/documents/product-information/apixaban-accord-epar-product-information_en.pdf"
+    },
+    {
+      "doc_id": "443e5c9c-901e-4dba-9fdd-2ae4788f88cc",
+      "title": "CTGov NCT02933697: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage Kidney Disease (ESKD)",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02933697?tab=results"
+    },
+    {
+      "doc_id": "660c567a-a01b-47a5-8c49-34ad240d62f7",
+      "title": "b0b54416-9809-438f-b659-0487840aba9c.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://b0b54416-9809-438f-b659-0487840aba9c.pdf"
+    },
+    {
+      "doc_id": "e15c53bf-c7bb-4f53-bf39-109737685733",
+      "title": "CTGov NCT02207725: A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Anticoagulation Effect of Apixaban",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02207725?tab=results"
+    },
+    {
+      "doc_id": "b994044d-4043-4b60-8b2f-e6a7b3fd518a",
+      "title": "85e3f0eb-be69-48a5-bbb5-953a7a6f159e.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://85e3f0eb-be69-48a5-bbb5-953a7a6f159e.pdf"
+    },
+    {
+      "doc_id": "d65ab2a0-5e14-4519-80a2-25830d5198cd",
+      "title": "apixaban_esklp_summary_eaeu.txt",
+      "kind": "eaeu_document",
+      "source_url": "byo://apixaban_esklp_summary_eaeu.txt"
+    },
+    {
+      "doc_id": "20e952d5-8c35-4424-a00a-c5dd93e5dc0e",
+      "title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "kind": "us_fda",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/220073s000lbl.pdf"
+    },
+    {
+      "doc_id": "ad406dea-280c-4d6e-819a-0fc0ce311ddd",
+      "title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+      "kind": "us_fda",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000IntegratedR.pdf"
+    },
+    {
+      "doc_id": "e6a823a6-167d-4c9d-82b0-752be64abf1a",
+      "title": "CTGov NCT02048865: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02048865?tab=results"
+    },
+    {
+      "doc_id": "e32f1910-0216-4eac-bbf4-20c600bd079a",
+      "title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02406885?tab=results"
+    },
+    {
+      "doc_id": "a9c89ea8-3ae2-4e71-a14b-113a96f7843b",
+      "title": "6973a17f-c91f-40c6-b5a8-ed66125dfc26.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://6973a17f-c91f-40c6-b5a8-ed66125dfc26.pdf"
+    },
+    {
+      "doc_id": "d8f3b739-154e-409f-82c5-b6cb91db9f9d",
+      "title": "CTGov NCT02262533: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02262533?tab=results"
+    },
+    {
+      "doc_id": "29802896-45c7-4fc0-980c-44d112e4c10b",
+      "title": "c8462c70-6837-4383-b6c3-330b006bff22.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://c8462c70-6837-4383-b6c3-330b006bff22.pdf"
+    },
+    {
+      "doc_id": "08da2668-cbee-49cc-8011-e6ecf1c6f690",
+      "title": "ae49cbd7-cd85-4bd8-9e73-c6360fbd8749.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://ae49cbd7-cd85-4bd8-9e73-c6360fbd8749.pdf"
+    },
+    {
+      "doc_id": "4a45ff22-9269-4fac-9e13-03a65284c996",
+      "title": "CTGov NCT02945280: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis",
+      "kind": "ctgov_results",
+      "source_url": "https://clinicaltrials.gov/study/NCT02945280?tab=results"
+    },
+    {
+      "doc_id": "c4829e7b-ba3d-4a7f-98ee-ebea10b50a8b",
+      "title": "0ce5c675-2137-4394-96f2-74aca595cbef.pdf",
+      "kind": "ru_instruction",
+      "source_url": "byo://0ce5c675-2137-4394-96f2-74aca595cbef.pdf"
+    },
+    {
+      "doc_id": "eb471e8d-ab04-44b4-9c11-e4d30cd4bc9c",
+      "title": "FDA Product Quality Review (NDA220073 / ELIQUIS)",
+      "kind": "us_fda",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000ChemR.pdf"
+    },
+    {
+      "doc_id": "d83efa9c-1e95-4bad-aba4-bb77b991d2fc",
+      "title": "RU regulatory registration summary: apixaban",
+      "kind": "grls",
+      "source_url": "http://api-gateway:8080/v1/ru/drugs/apixaban/regulatory"
+    }
+  ],
+  "completeness": {
+    "is_partial": false,
+    "generated_at": "2026-04-11T18:23:02Z",
+    "expected": {
+      "total": 0,
+      "by_kind": {}
+    },
+    "included": {
+      "total": 56,
+      "by_kind": {
+        "ru_instruction": 18,
+        "us_fda": 5,
+        "ctgov_results": 24,
+        "grls": 3,
+        "approval_letter": 2,
+        "eaeu_document": 2,
+        "label": 1,
+        "smpc": 1
+      }
+    },
+    "missing": {
+      "total": 0,
+      "by_kind": {}
+    },
+    "completeness_ratio": 1.0,
+    "over_included": 0,
+    "reasons": []
+  },
+  "coverage_ledger": {
+    "basis": "declared_source_universe_v2.0",
+    "use_case": "ra_regulatory_screening",
+    "generated_at": "2026-04-11T18:23:02Z",
+    "totals": {
+      "declared_sources": 29,
+      "reachable_sources": 27,
+      "attached_docs": 494,
+      "indexed_docs": 56,
+      "fields_expected": 32,
+      "fields_filled": 0,
+      "fields_evidenced": 0,
+      "critical_unknowns": 0,
+      "decision_readiness": "insufficient",
+      "verdict_summary": {
+        "KEEP": 7,
+        "FIX": 6,
+        "PARK": 7,
+        "CONNECT": 5,
+        "DEMOTE": 2
+      }
+    },
+    "section_coverage": {
+      "registrations": {
+        "declared_sources": 11,
+        "reachable_sources": 10,
+        "attached_docs": 34,
+        "indexed_docs": 31,
+        "fields_expected": 17,
+        "fields_filled": 0,
+        "fields_evidenced": 0,
+        "critical_unknowns": 0,
+        "decision_readiness": "partial",
+        "source_breakdown": [
+          {
+            "source_id": "openfda",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 2,
+            "docs_attached": 6,
+            "docs_indexed": 6,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Returns only current label, not historical versions",
+              "No direct link to approval letter"
+            ]
+          },
+          {
+            "source_id": "dailymed",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 1,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Fallback for FDA label when openFDA returns 403"
+            ]
+          },
+          {
+            "source_id": "drugsatfda",
+            "tier": "tier2",
+            "status": "ok",
+            "verdict": "FIX",
+            "doc_kinds_expected": 3,
+            "doc_kinds_attached": 1,
+            "docs_attached": 2,
+            "docs_indexed": 2,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "rems",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "PARK",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "ema_smpc",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "CONNECT",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 1,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "URL-based only; depends on EMA product page structure",
+              "OCR disabled by default (DOCLING_DO_OCR=false) - image-based SmPCs produce 0 text"
+            ]
+          },
+          {
+            "source_id": "ema_pil",
+            "tier": "tier1",
+            "status": "not_attached",
+            "verdict": "CONNECT",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "PIL is less detailed than SmPC; primarily patient-facing"
+            ]
+          },
+          {
+            "source_id": "ema_epar",
+            "tier": "tier1",
+            "status": "failed",
+            "verdict": "CONNECT",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 2,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Large PDFs (100+ pages) may timeout on parse",
+              "Not all centrally authorized products have public EPARs"
+            ]
+          },
+          {
+            "source_id": "grls",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "FIX",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 3,
+            "docs_indexed": 3,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Canvas CAPTCHA blocker (requires CAPTCHA_API_KEY)",
+              "instruction_url always nil from Go client (grls.go:parseDetails)",
+              "Go client has no captcha handling; ru-api TS has paid captcha solving"
+            ]
+          },
+          {
+            "source_id": "grls_instruction",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "CONNECT",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 1,
+            "docs_attached": 19,
+            "docs_indexed": 18,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "instruction_url extraction not implemented (always nil)",
+              "Even if URL found, OCR disabled for RU PDFs",
+              "EasyOCR lang=['en'] — Cyrillic not recognized"
+            ]
+          },
+          {
+            "source_id": "ru_quality_letter",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "PARK",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "eaeu_portal",
+            "tier": "tier1",
+            "status": "unsupported",
+            "verdict": "FIX",
+            "reason": "EAEU portal client is a URL builder only; no data retrieval implemented (ddkit_handler.go:806-808 returns nil)",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": []
+          }
+        ]
+      },
+      "clinical": {
+        "declared_sources": 4,
+        "reachable_sources": 3,
+        "attached_docs": 340,
+        "indexed_docs": 24,
+        "fields_expected": 5,
+        "fields_filled": 0,
+        "fields_evidenced": 0,
+        "critical_unknowns": 0,
+        "decision_readiness": "partial",
+        "source_breakdown": [
+          {
+            "source_id": "ctgov",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 5,
+            "doc_kinds_attached": 3,
+            "docs_attached": 239,
+            "docs_indexed": 24,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "No pagination — max 500 studies per request",
+              "Search-URL handling added for URLs without NCT ID"
+            ]
+          },
+          {
+            "source_id": "pubmed",
+            "tier": "tier2",
+            "status": "in_progress",
+            "verdict": "DEMOTE",
+            "doc_kinds_expected": 3,
+            "doc_kinds_attached": 1,
+            "docs_attached": 100,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Only OA articles have full text; paywalled articles use abstract only",
+              "Unpaywall API used for OA resolution"
+            ]
+          },
+          {
+            "source_id": "ctis",
+            "tier": "tier1",
+            "status": "unsupported",
+            "verdict": "FIX",
+            "reason": "eu-etl-svc is a separate deployment; if not running, EU clinical data is empty (clinical_aggregate_handler.go:464-589)",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": []
+          },
+          {
+            "source_id": "ru_clinical",
+            "tier": "tier1",
+            "status": "in_progress",
+            "verdict": "CONNECT",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Depends on ru_enrichment stack running"
+            ]
+          }
+        ]
+      },
+      "patents": {
+        "declared_sources": 8,
+        "reachable_sources": 8,
+        "attached_docs": 117,
+        "indexed_docs": 0,
+        "fields_expected": 5,
+        "fields_filled": 0,
+        "fields_evidenced": 0,
+        "critical_unknowns": 0,
+        "decision_readiness": "insufficient",
+        "source_breakdown": [
+          {
+            "source_id": "epo_ops",
+            "tier": "tier1",
+            "status": "in_progress",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 57,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Abstract extraction fixed (Sprint 14 audit confirmed parseOpsBiblioXML extracts EN abstracts)",
+              "normalizeINN() fixed (Cyrillic→Latin + salt stripping implemented)",
+              "Fair-use delay 1.2-1.7s between requests",
+              "~30 fmt.Printf debug statements in production code (cleanup needed)"
+            ]
+          },
+          {
+            "source_id": "epo_register",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "FIX",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "google_patents",
+            "tier": "tier2",
+            "status": "in_progress",
+            "verdict": "PARK",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 1,
+            "docs_attached": 57,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "patentsview",
+            "tier": "tier1",
+            "status": "in_progress",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Queries by assignee name (unreliable for brand->company mapping)",
+              "US-EU family matching uses string-contains on assignee (patent_handler.go:1401-1421)"
+            ]
+          },
+          {
+            "source_id": "lens_org",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "DEMOTE",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Requires LENS_TOKEN env var",
+              "Rate-limited by Lens.org API"
+            ]
+          },
+          {
+            "source_id": "rospatent",
+            "tier": "tier1",
+            "status": "in_progress",
+            "verdict": "FIX",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Data freshness depends on Rospatent opendata release cadence (monthly)",
+              "abstract_ru = None hardcoded",
+              "legal_status_ru = None — not in bulk dataset"
+            ]
+          },
+          {
+            "source_id": "eapo",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "PARK",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "lens_org",
+            "tier": "tier1",
+            "status": "in_progress",
+            "verdict": "DEMOTE",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Requires LENS_TOKEN env var",
+              "Rate-limited by Lens.org API"
+            ]
+          }
+        ]
+      },
+      "safety": {
+        "declared_sources": 2,
+        "reachable_sources": 2,
+        "attached_docs": 2,
+        "indexed_docs": 1,
+        "fields_expected": 1,
+        "fields_filled": 0,
+        "fields_evidenced": 0,
+        "critical_unknowns": 0,
+        "decision_readiness": "partial",
+        "source_breakdown": [
+          {
+            "source_id": "fda_label_safety",
+            "tier": "tier1",
+            "status": "ok",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 1,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "pubchem",
+            "tier": "tier2",
+            "status": "in_progress",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Summary data only; no detailed PK/PD"
+            ]
+          }
+        ]
+      },
+      "manufacturing": {
+        "declared_sources": 3,
+        "reachable_sources": 3,
+        "attached_docs": 0,
+        "indexed_docs": 0,
+        "fields_expected": 0,
+        "fields_filled": 0,
+        "fields_evidenced": 0,
+        "critical_unknowns": 0,
+        "decision_readiness": "insufficient",
+        "source_breakdown": [
+          {
+            "source_id": "manufacturing_svc",
+            "tier": "tier1",
+            "status": "not_attached",
+            "verdict": "PARK",
+            "doc_kinds_expected": 1,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Depends on manufacturing-svc:8088 being deployed",
+              "Timeout can exceed 30s for complex INNs"
+            ]
+          },
+          {
+            "source_id": "esklp",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "PARK",
+            "doc_kinds_expected": 0,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          },
+          {
+            "source_id": "pharmacompass",
+            "tier": "tier2",
+            "status": "not_attached",
+            "verdict": "PARK",
+            "doc_kinds_expected": 0,
+            "doc_kinds_attached": 0,
+            "docs_attached": 0,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": []
+          }
+        ]
+      },
+      "chemistry": {
+        "declared_sources": 1,
+        "reachable_sources": 1,
+        "attached_docs": 1,
+        "indexed_docs": 0,
+        "fields_expected": 4,
+        "fields_filled": 0,
+        "fields_evidenced": 0,
+        "critical_unknowns": 0,
+        "decision_readiness": "insufficient",
+        "source_breakdown": [
+          {
+            "source_id": "pubchem",
+            "tier": "tier1",
+            "status": "in_progress",
+            "verdict": "KEEP",
+            "doc_kinds_expected": 2,
+            "doc_kinds_attached": 1,
+            "docs_attached": 1,
+            "docs_indexed": 0,
+            "fields_contributed": 0,
+            "critical_missing": [],
+            "known_limitations": [
+              "Summary data only; no detailed PK/PD"
+            ]
+          }
+        ]
+      }
+    },
+    "source_breakdown": [
+      {
+        "source_id": "openfda",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 2,
+        "docs_attached": 6,
+        "docs_indexed": 6,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Returns only current label, not historical versions",
+          "No direct link to approval letter"
+        ]
+      },
+      {
+        "source_id": "dailymed",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 1,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Fallback for FDA label when openFDA returns 403"
+        ]
+      },
+      {
+        "source_id": "drugsatfda",
+        "tier": "tier2",
+        "status": "ok",
+        "verdict": "FIX",
+        "doc_kinds_expected": 3,
+        "doc_kinds_attached": 1,
+        "docs_attached": 2,
+        "docs_indexed": 2,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "rems",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "PARK",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "ema_smpc",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "CONNECT",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 1,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "URL-based only; depends on EMA product page structure",
+          "OCR disabled by default (DOCLING_DO_OCR=false) - image-based SmPCs produce 0 text"
+        ]
+      },
+      {
+        "source_id": "ema_pil",
+        "tier": "tier1",
+        "status": "not_attached",
+        "verdict": "CONNECT",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "PIL is less detailed than SmPC; primarily patient-facing"
+        ]
+      },
+      {
+        "source_id": "ema_epar",
+        "tier": "tier1",
+        "status": "failed",
+        "verdict": "CONNECT",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 2,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Large PDFs (100+ pages) may timeout on parse",
+          "Not all centrally authorized products have public EPARs"
+        ]
+      },
+      {
+        "source_id": "grls",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "FIX",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 3,
+        "docs_indexed": 3,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Canvas CAPTCHA blocker (requires CAPTCHA_API_KEY)",
+          "instruction_url always nil from Go client (grls.go:parseDetails)",
+          "Go client has no captcha handling; ru-api TS has paid captcha solving"
+        ]
+      },
+      {
+        "source_id": "grls_instruction",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "CONNECT",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 1,
+        "docs_attached": 19,
+        "docs_indexed": 18,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "instruction_url extraction not implemented (always nil)",
+          "Even if URL found, OCR disabled for RU PDFs",
+          "EasyOCR lang=['en'] — Cyrillic not recognized"
+        ]
+      },
+      {
+        "source_id": "ru_quality_letter",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "PARK",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "eaeu_portal",
+        "tier": "tier1",
+        "status": "unsupported",
+        "verdict": "FIX",
+        "reason": "EAEU portal client is a URL builder only; no data retrieval implemented (ddkit_handler.go:806-808 returns nil)",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": []
+      },
+      {
+        "source_id": "ctgov",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 5,
+        "doc_kinds_attached": 3,
+        "docs_attached": 239,
+        "docs_indexed": 24,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "No pagination — max 500 studies per request",
+          "Search-URL handling added for URLs without NCT ID"
+        ]
+      },
+      {
+        "source_id": "pubmed",
+        "tier": "tier2",
+        "status": "in_progress",
+        "verdict": "DEMOTE",
+        "doc_kinds_expected": 3,
+        "doc_kinds_attached": 1,
+        "docs_attached": 100,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Only OA articles have full text; paywalled articles use abstract only",
+          "Unpaywall API used for OA resolution"
+        ]
+      },
+      {
+        "source_id": "ctis",
+        "tier": "tier1",
+        "status": "unsupported",
+        "verdict": "FIX",
+        "reason": "eu-etl-svc is a separate deployment; if not running, EU clinical data is empty (clinical_aggregate_handler.go:464-589)",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": []
+      },
+      {
+        "source_id": "ru_clinical",
+        "tier": "tier1",
+        "status": "in_progress",
+        "verdict": "CONNECT",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Depends on ru_enrichment stack running"
+        ]
+      },
+      {
+        "source_id": "epo_ops",
+        "tier": "tier1",
+        "status": "in_progress",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 57,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Abstract extraction fixed (Sprint 14 audit confirmed parseOpsBiblioXML extracts EN abstracts)",
+          "normalizeINN() fixed (Cyrillic→Latin + salt stripping implemented)",
+          "Fair-use delay 1.2-1.7s between requests",
+          "~30 fmt.Printf debug statements in production code (cleanup needed)"
+        ]
+      },
+      {
+        "source_id": "epo_register",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "FIX",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "google_patents",
+        "tier": "tier2",
+        "status": "in_progress",
+        "verdict": "PARK",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 1,
+        "docs_attached": 57,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "patentsview",
+        "tier": "tier1",
+        "status": "in_progress",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Queries by assignee name (unreliable for brand->company mapping)",
+          "US-EU family matching uses string-contains on assignee (patent_handler.go:1401-1421)"
+        ]
+      },
+      {
+        "source_id": "lens_org",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "DEMOTE",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Requires LENS_TOKEN env var",
+          "Rate-limited by Lens.org API"
+        ]
+      },
+      {
+        "source_id": "rospatent",
+        "tier": "tier1",
+        "status": "in_progress",
+        "verdict": "FIX",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Data freshness depends on Rospatent opendata release cadence (monthly)",
+          "abstract_ru = None hardcoded",
+          "legal_status_ru = None — not in bulk dataset"
+        ]
+      },
+      {
+        "source_id": "eapo",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "PARK",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "lens_org",
+        "tier": "tier1",
+        "status": "in_progress",
+        "verdict": "DEMOTE",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Requires LENS_TOKEN env var",
+          "Rate-limited by Lens.org API"
+        ]
+      },
+      {
+        "source_id": "fda_label_safety",
+        "tier": "tier1",
+        "status": "ok",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 1,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "pubchem",
+        "tier": "tier2",
+        "status": "in_progress",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Summary data only; no detailed PK/PD"
+        ]
+      },
+      {
+        "source_id": "manufacturing_svc",
+        "tier": "tier1",
+        "status": "not_attached",
+        "verdict": "PARK",
+        "doc_kinds_expected": 1,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Depends on manufacturing-svc:8088 being deployed",
+          "Timeout can exceed 30s for complex INNs"
+        ]
+      },
+      {
+        "source_id": "esklp",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "PARK",
+        "doc_kinds_expected": 0,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "pharmacompass",
+        "tier": "tier2",
+        "status": "not_attached",
+        "verdict": "PARK",
+        "doc_kinds_expected": 0,
+        "doc_kinds_attached": 0,
+        "docs_attached": 0,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": []
+      },
+      {
+        "source_id": "pubchem",
+        "tier": "tier1",
+        "status": "in_progress",
+        "verdict": "KEEP",
+        "doc_kinds_expected": 2,
+        "doc_kinds_attached": 1,
+        "docs_attached": 1,
+        "docs_indexed": 0,
+        "fields_contributed": 0,
+        "critical_missing": [],
+        "known_limitations": [
+          "Summary data only; no detailed PK/PD"
+        ]
+      }
+    ],
+    "family_health": {
+      "US Regulatory": {
+        "sources": [
+          "openfda",
+          "dailymed",
+          "drugsatfda",
+          "rems",
+          "fda_label_safety"
+        ],
+        "total": 5,
+        "ok": 4,
+        "fields_contributed": 0,
+        "verdicts": {
+          "KEEP": 3,
+          "FIX": 1,
+          "PARK": 1
+        },
+        "health": "YELLOW"
+      },
+      "EU Regulatory": {
+        "sources": [
+          "ema_smpc",
+          "ema_pil",
+          "ema_epar"
+        ],
+        "total": 3,
+        "ok": 1,
+        "fields_contributed": 0,
+        "verdicts": {
+          "CONNECT": 3
+        },
+        "health": "YELLOW"
+      },
+      "RU Regulatory": {
+        "sources": [
+          "grls",
+          "grls_instruction",
+          "ru_quality_letter"
+        ],
+        "total": 3,
+        "ok": 2,
+        "fields_contributed": 0,
+        "verdicts": {
+          "FIX": 1,
+          "CONNECT": 1,
+          "PARK": 1
+        },
+        "health": "YELLOW"
+      },
+      "EAEU Regulatory": {
+        "sources": [
+          "eaeu_portal"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "FIX": 1
+        },
+        "health": "RED"
+      },
+      "US Clinical": {
+        "sources": [
+          "ctgov"
+        ],
+        "total": 1,
+        "ok": 1,
+        "fields_contributed": 0,
+        "verdicts": {
+          "KEEP": 1
+        },
+        "health": "YELLOW"
+      },
+      "Literature": {
+        "sources": [
+          "pubmed"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "DEMOTE": 1
+        },
+        "health": "GREY"
+      },
+      "EU Clinical": {
+        "sources": [
+          "ctis"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "FIX": 1
+        },
+        "health": "RED"
+      },
+      "RU Clinical": {
+        "sources": [
+          "ru_clinical"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "CONNECT": 1
+        },
+        "health": "RED"
+      },
+      "EU Patent": {
+        "sources": [
+          "epo_ops",
+          "epo_register"
+        ],
+        "total": 2,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "KEEP": 1,
+          "FIX": 1
+        },
+        "health": "RED"
+      },
+      "Patent": {
+        "sources": [
+          "google_patents"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "PARK": 1
+        },
+        "health": "GREY"
+      },
+      "US Patent": {
+        "sources": [
+          "patentsview"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "KEEP": 1
+        },
+        "health": "GREY"
+      },
+      "Global Patent": {
+        "sources": [
+          "lens_org"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "DEMOTE": 1
+        },
+        "health": "GREY"
+      },
+      "RU Patent": {
+        "sources": [
+          "rospatent"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "FIX": 1
+        },
+        "health": "RED"
+      },
+      "EAPO Patent": {
+        "sources": [
+          "eapo"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "PARK": 1
+        },
+        "health": "GREY"
+      },
+      "Chemistry": {
+        "sources": [
+          "pubchem"
+        ],
+        "total": 1,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "KEEP": 1
+        },
+        "health": "GREY"
+      },
+      "Manufacturing": {
+        "sources": [
+          "manufacturing_svc",
+          "esklp",
+          "pharmacompass"
+        ],
+        "total": 3,
+        "ok": 0,
+        "fields_contributed": 0,
+        "verdicts": {
+          "PARK": 3
+        },
+        "health": "GREY"
+      }
+    },
+    "wave2_delta": {
+      "wave2_enabled": false,
+      "wave2_new_docs": 0,
+      "wave2_new_facts": 0,
+      "wave2_critical_new_facts": 0,
+      "wave2_promoted_to_dossier": 0,
+      "wave2_noise_docs": 0,
+      "blind_spots": []
+    },
+    "limitations": [
+      {
+        "source_id": "ema_pil",
+        "type": "not_attached",
+        "severity": "high",
+        "verdict": "CONNECT",
+        "message": "Source was declared but no documents were attached",
+        "impact": "Missing fields: "
+      },
+      {
+        "source_id": "ema_epar",
+        "type": "fetch_failure",
+        "severity": "high",
+        "verdict": "CONNECT",
+        "message": "Source fetch failed with status: failed",
+        "impact": "Missing fields: "
+      },
+      {
+        "source_id": "eaeu_portal",
+        "type": "unsupported",
+        "severity": "high",
+        "verdict": "FIX",
+        "message": "EAEU portal client is a URL builder only; no data retrieval implemented (ddkit_handler.go:806-808 returns nil)",
+        "impact": "Missing fields: "
+      },
+      {
+        "source_id": "ctis",
+        "type": "unsupported",
+        "severity": "high",
+        "verdict": "FIX",
+        "message": "eu-etl-svc is a separate deployment; if not running, EU clinical data is empty (clinical_aggregate_handler.go:464-589)",
+        "impact": "Missing fields: "
+      },
+      {
+        "source_id": "epo_register",
+        "type": "not_attached",
+        "severity": "high",
+        "verdict": "FIX",
+        "message": "Source was declared but no documents were attached",
+        "impact": "Missing fields: "
+      },
+      {
+        "source_id": "lens_org",
+        "type": "not_attached",
+        "severity": "low",
+        "verdict": "DEMOTE",
+        "message": "Source was declared but no documents were attached",
+        "impact": "Missing fields: "
+      },
+      {
+        "section": "patents",
+        "type": "insufficient_coverage",
+        "severity": "high",
+        "message": "Section 'patents' has insufficient coverage: 0/8 sources indexed, 0/5 fields filled, 0 critical unknowns"
+      },
+      {
+        "section": "manufacturing",
+        "type": "insufficient_coverage",
+        "severity": "high",
+        "message": "Section 'manufacturing' has insufficient coverage: 0/3 sources indexed, 0/0 fields filled, 0 critical unknowns"
+      },
+      {
+        "section": "chemistry",
+        "type": "insufficient_coverage",
+        "severity": "high",
+        "message": "Section 'chemistry' has insufficient coverage: 0/1 sources indexed, 0/4 fields filled, 0 critical unknowns"
+      }
+    ]
+  }
+}

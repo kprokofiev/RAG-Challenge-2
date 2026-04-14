@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "tenant_id": "demo",
+  "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+  "report_id": "dossier_apixaban_exec_gapfix_1775946199",
+  "dossier_key": "tenants/demo/cases/edf721c6-ce6a-4778-8289-6d3f7774bea1/reports/dossier_apixaban_exec_gapfix_1775946199/dossier_v3.json",
+  "dossier_path": "/app/out/apixaban_exec_gap_fixes_2026-04-12/dossier_v3.json",
+  "registrations_count": 4,
+  "clinical_studies_count": 27,
+  "patent_families_count": 5,
+  "synthesis_steps_count": 5,
+  "unknowns_count": 5,
+  "decision_readiness": {
+    "registrations": "YELLOW",
+    "clinical": "GREEN",
+    "patents_discovery": "GREEN",
+    "patents_legal": "GREEN",
+    "context_integrity": "RED"
+  }
+}

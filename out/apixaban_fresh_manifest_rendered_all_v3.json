@@ -1,0 +1,2071 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "documents": [
+    {
+      "doc_id": "c008df89-0677-4fa6-ad75-de28eb081bf3",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07237308: BEACON-AA: Apixaban With or Without Clopidogrel in Stroke Patients With Atrial Fibrillation and Cerebral Atherosclerosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT07237308?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c008df89-0677-4fa6-ad75-de28eb081bf3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8aacf1f7-85ed-4201-bd14-b7f0206a8c7b",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT07237308: BEACON-AA: Apixaban With or Without Clopidogrel in Stroke Patients With Atrial Fibrillation and Cerebral Atherosclerosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT07237308?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8aacf1f7-85ed-4201-bd14-b7f0206a8c7b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "15cebc25-2475-48d0-8d2b-dd24653b5f1a",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05093504: Safe and Timely Antithrombotic Removal - Direct Oral Anticoagulants Apixaban & Rivaroxaban (STAR-D)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT05093504?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/15cebc25-2475-48d0-8d2b-dd24653b5f1a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b1822151-16b2-4787-a703-5d54d35c4348",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT05093504: Safe and Timely Antithrombotic Removal - Direct Oral Anticoagulants Apixaban & Rivaroxaban (STAR-D)",
+      "source_url": "https://clinicaltrials.gov/study/NCT05093504?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b1822151-16b2-4787-a703-5d54d35c4348/rendered/document.pdf"
+    },
+    {
+      "doc_id": "50766154-a281-4364-939a-2c03ad63943c",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05093504: Safe and Timely Antithrombotic Removal - Direct Oral Anticoagulants Apixaban & Rivaroxaban (STAR-D)",
+      "source_url": "https://clinicaltrials.gov/study/NCT05093504?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/50766154-a281-4364-939a-2c03ad63943c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e06a6fe5-1812-4e58-9609-6fcb208eb5d5",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT05093504: Safe and Timely Antithrombotic Removal - Direct Oral Anticoagulants Apixaban & Rivaroxaban (STAR-D)",
+      "source_url": "https://clinicaltrials.gov/study/NCT05093504?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e06a6fe5-1812-4e58-9609-6fcb208eb5d5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "751520ce-5edf-4440-9eb1-b0a4e9f4ad24",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02207725: A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Anticoagulation Effect of Apixaban",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02207725?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/751520ce-5edf-4440-9eb1-b0a4e9f4ad24/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4f8c7382-e8bc-4253-bc96-ce48e7e91161",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02207725: A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Anticoagulation Effect of Apixaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT02207725?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4f8c7382-e8bc-4253-bc96-ce48e7e91161/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9e0e4978-f715-4884-a805-385919feb251",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02207725: A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Anticoagulation Effect of Apixaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT02207725?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9e0e4978-f715-4884-a805-385919feb251/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9cd86bb2-9979-4652-bdcd-1373cf2f0f29",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02207725: A Study in Older Subjects to Evaluate the Safety and Ability of Andexanet Alfa to Reverse the Anticoagulation Effect of Apixaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT02207725?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9cd86bb2-9979-4652-bdcd-1373cf2f0f29/rendered/document.pdf"
+    },
+    {
+      "doc_id": "47b6c0f0-307e-4d32-9daf-5a0df2613ea0",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06370273: Thromboprophylaxis in Lower Limb Immobilisation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT06370273?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/47b6c0f0-307e-4d32-9daf-5a0df2613ea0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ecb50705-3ac8-4cce-9c55-dc31c3eb8f4e",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT06370273: Thromboprophylaxis in Lower Limb Immobilisation",
+      "source_url": "https://clinicaltrials.gov/study/NCT06370273?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ecb50705-3ac8-4cce-9c55-dc31c3eb8f4e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "df6a8115-06a4-4b78-9beb-fb5ff40e424d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06370273: Thromboprophylaxis in Lower Limb Immobilisation",
+      "source_url": "https://clinicaltrials.gov/study/NCT06370273?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/df6a8115-06a4-4b78-9beb-fb5ff40e424d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ef3b2bda-25fb-4c81-9a45-5a8d87f342ae",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT06370273: Thromboprophylaxis in Lower Limb Immobilisation",
+      "source_url": "https://clinicaltrials.gov/study/NCT06370273?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ef3b2bda-25fb-4c81-9a45-5a8d87f342ae/rendered/document.pdf"
+    },
+    {
+      "doc_id": "64d98ece-da87-4f51-8289-87cba4f5be7b",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07005024: DOAC - Dosing Options in AntiCoagulation Prophylaxis",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT07005024?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/64d98ece-da87-4f51-8289-87cba4f5be7b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1c7614a1-669c-4cb9-90bc-cfcb294cc3aa",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT07005024: DOAC - Dosing Options in AntiCoagulation Prophylaxis",
+      "source_url": "https://clinicaltrials.gov/study/NCT07005024?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1c7614a1-669c-4cb9-90bc-cfcb294cc3aa/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c9683cb2-c7af-4b3d-904a-18740ac5a1e7",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07005024: DOAC - Dosing Options in AntiCoagulation Prophylaxis",
+      "source_url": "https://clinicaltrials.gov/study/NCT07005024?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c9683cb2-c7af-4b3d-904a-18740ac5a1e7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "57ccc3c7-a056-438f-a225-5addb38fae3c",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT07005024: DOAC - Dosing Options in AntiCoagulation Prophylaxis",
+      "source_url": "https://clinicaltrials.gov/study/NCT07005024?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/57ccc3c7-a056-438f-a225-5addb38fae3c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e00ca5e1-be02-4980-bdd5-41936cb0f033",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02749617: A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02749617?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e00ca5e1-be02-4980-bdd5-41936cb0f033/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a7882808-828b-4eb2-8333-f173d4820ffe",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02749617: A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/study/NCT02749617?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a7882808-828b-4eb2-8333-f173d4820ffe/rendered/document.pdf"
+    },
+    {
+      "doc_id": "05c981a2-200b-4ae7-9804-38c132a2ae03",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02749617: A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/study/NCT02749617?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/05c981a2-200b-4ae7-9804-38c132a2ae03/rendered/document.pdf"
+    },
+    {
+      "doc_id": "510a2778-f49d-4fef-b5eb-6dbf367ec151",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02749617: A Pilot Study Investigating Apixaban and Dexamethasone InterAction in Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/study/NCT02749617?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/510a2778-f49d-4fef-b5eb-6dbf367ec151/rendered/document.pdf"
+    },
+    {
+      "doc_id": "08baf49d-16c1-4682-ac52-8b14ba24b834",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04106700: Prophylaxis With Apixaban in Transplant Eligible Patients With Multiple Myeloma Receiving Induction Therapy With IMiDs",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04106700?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/08baf49d-16c1-4682-ac52-8b14ba24b834/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f30f9879-753b-412c-8ccd-b25729c38b95",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04106700: Prophylaxis With Apixaban in Transplant Eligible Patients With Multiple Myeloma Receiving Induction Therapy With IMiDs",
+      "source_url": "https://clinicaltrials.gov/study/NCT04106700?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f30f9879-753b-412c-8ccd-b25729c38b95/rendered/document.pdf"
+    },
+    {
+      "doc_id": "34e9de88-116f-4dc3-9d40-a0e459fd6dd7",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04106700: Prophylaxis With Apixaban in Transplant Eligible Patients With Multiple Myeloma Receiving Induction Therapy With IMiDs",
+      "source_url": "https://clinicaltrials.gov/study/NCT04106700?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/34e9de88-116f-4dc3-9d40-a0e459fd6dd7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "991602c2-81f4-4829-af63-8c5eebd41a3f",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04106700: Prophylaxis With Apixaban in Transplant Eligible Patients With Multiple Myeloma Receiving Induction Therapy With IMiDs",
+      "source_url": "https://clinicaltrials.gov/study/NCT04106700?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/991602c2-81f4-4829-af63-8c5eebd41a3f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cb0add14-c212-43a6-8c99-d4ba01fab55f",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT01885585: Eliquis Regulatory Post Marketing Surveillance (rPMS)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT01885585?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cb0add14-c212-43a6-8c99-d4ba01fab55f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b17bad13-adcd-4fcf-85cf-42cec843da9b",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT01885585: Eliquis Regulatory Post Marketing Surveillance (rPMS)",
+      "source_url": "https://clinicaltrials.gov/study/NCT01885585?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b17bad13-adcd-4fcf-85cf-42cec843da9b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7b4b6fbe-38a1-4e9c-9074-8dcf8f45fe0b",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT01885585: Eliquis Regulatory Post Marketing Surveillance (rPMS)",
+      "source_url": "https://clinicaltrials.gov/study/NCT01885585?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7b4b6fbe-38a1-4e9c-9074-8dcf8f45fe0b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "462a671d-c6b3-4fd7-ac89-17d715d9a7de",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT01885585: Eliquis Regulatory Post Marketing Surveillance (rPMS)",
+      "source_url": "https://clinicaltrials.gov/study/NCT01885585?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/462a671d-c6b3-4fd7-ac89-17d715d9a7de/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0a8b5250-344f-4d8d-ae95-55da8c99d0d6",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02640222: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in Real-Life Setting in France SNIIRAM Study",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02640222?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0a8b5250-344f-4d8d-ae95-55da8c99d0d6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e06abdb3-c94c-4b99-a822-54164217a731",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02640222: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in Real-Life Setting in France SNIIRAM Study",
+      "source_url": "https://clinicaltrials.gov/study/NCT02640222?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e06abdb3-c94c-4b99-a822-54164217a731/rendered/document.pdf"
+    },
+    {
+      "doc_id": "66928103-b3f6-40ef-8bcb-9711893e792c",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02640222: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in Real-Life Setting in France SNIIRAM Study",
+      "source_url": "https://clinicaltrials.gov/study/NCT02640222?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/66928103-b3f6-40ef-8bcb-9711893e792c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "33a2fb8a-7126-4931-96ac-e61d85dce5ba",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02640222: APIXABAN in the Prevention of Stroke and Systemic Embolism in Patients With Atrial Fibrillation in Real-Life Setting in France SNIIRAM Study",
+      "source_url": "https://clinicaltrials.gov/study/NCT02640222?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/33a2fb8a-7126-4931-96ac-e61d85dce5ba/rendered/document.pdf"
+    },
+    {
+      "doc_id": "818f9ec5-f222-4fab-bf32-4dec712ef9d5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02769078: Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Patients Treated With Dabigatran, Rivaroxaban, Apixaban, or Warfarin In The U.S",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02769078?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/818f9ec5-f222-4fab-bf32-4dec712ef9d5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1268c3c5-0036-40ae-92c5-21511acf0b20",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02769078: Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Patients Treated With Dabigatran, Rivaroxaban, Apixaban, or Warfarin In The U.S",
+      "source_url": "https://clinicaltrials.gov/study/NCT02769078?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1268c3c5-0036-40ae-92c5-21511acf0b20/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5096bb7a-7065-48d8-bc18-22a0f51cc7c3",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02769078: Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Patients Treated With Dabigatran, Rivaroxaban, Apixaban, or Warfarin In The U.S",
+      "source_url": "https://clinicaltrials.gov/study/NCT02769078?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5096bb7a-7065-48d8-bc18-22a0f51cc7c3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "27d073e1-f630-4f67-8df4-bab656abefc0",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02769078: Replication Of An Early Evaluation Of 30-Day Readmissions Among Nonvalvular Atrial Fibrillation Patients Treated With Dabigatran, Rivaroxaban, Apixaban, or Warfarin In The U.S",
+      "source_url": "https://clinicaltrials.gov/study/NCT02769078?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/27d073e1-f630-4f67-8df4-bab656abefc0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2d2d53e7-8d73-4d52-8e9d-4040ded51c30",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02935751: Apixaban Discontinuation Prior to Major Surgery",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02935751?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2d2d53e7-8d73-4d52-8e9d-4040ded51c30/rendered/document.pdf"
+    },
+    {
+      "doc_id": "28bd7263-f8c1-4d8a-9353-317aee1b86f8",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02935751: Apixaban Discontinuation Prior to Major Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT02935751?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/28bd7263-f8c1-4d8a-9353-317aee1b86f8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8ea36f5d-e389-4c0c-992b-351db73d894a",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02935751: Apixaban Discontinuation Prior to Major Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT02935751?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8ea36f5d-e389-4c0c-992b-351db73d894a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f7269d99-e0ad-4e8a-a08f-d80526574492",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02935751: Apixaban Discontinuation Prior to Major Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT02935751?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f7269d99-e0ad-4e8a-a08f-d80526574492/rendered/document.pdf"
+    },
+    {
+      "doc_id": "868b8cd8-8af8-4223-afe7-e979af09b02d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03026556: The Comparative Safety and Effectiveness of Dabigatran, Versus Rivaroxaban, and Apixaban Utilized in the Department of Defense Non-Valvular Atrial Fibrillation Patient Population: A Retrospective Database Analysis",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03026556?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/868b8cd8-8af8-4223-afe7-e979af09b02d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7476fe7c-31bc-4a03-910e-30b078eeda3d",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03026556: The Comparative Safety and Effectiveness of Dabigatran, Versus Rivaroxaban, and Apixaban Utilized in the Department of Defense Non-Valvular Atrial Fibrillation Patient Population: A Retrospective Database Analysis",
+      "source_url": "https://clinicaltrials.gov/study/NCT03026556?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7476fe7c-31bc-4a03-910e-30b078eeda3d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "dfc7adbd-c6dd-42bd-939f-03caf1890685",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03026556: The Comparative Safety and Effectiveness of Dabigatran, Versus Rivaroxaban, and Apixaban Utilized in the Department of Defense Non-Valvular Atrial Fibrillation Patient Population: A Retrospective Database Analysis",
+      "source_url": "https://clinicaltrials.gov/study/NCT03026556?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/dfc7adbd-c6dd-42bd-939f-03caf1890685/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e5d12f59-9784-4b06-91b1-f89c84e9d87f",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03026556: The Comparative Safety and Effectiveness of Dabigatran, Versus Rivaroxaban, and Apixaban Utilized in the Department of Defense Non-Valvular Atrial Fibrillation Patient Population: A Retrospective Database Analysis",
+      "source_url": "https://clinicaltrials.gov/study/NCT03026556?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e5d12f59-9784-4b06-91b1-f89c84e9d87f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d951ccad-ef26-4478-a8b2-f43532664cd9",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03073265: Apixaban Validation Study - Additional Study on Fresh Samples",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03073265?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d951ccad-ef26-4478-a8b2-f43532664cd9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4339f125-5d0d-4f96-886b-eb646792d7cf",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03073265: Apixaban Validation Study - Additional Study on Fresh Samples",
+      "source_url": "https://clinicaltrials.gov/study/NCT03073265?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4339f125-5d0d-4f96-886b-eb646792d7cf/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c92a59c3-bc39-4e94-9e6a-ffb7c9ef51f5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03073265: Apixaban Validation Study - Additional Study on Fresh Samples",
+      "source_url": "https://clinicaltrials.gov/study/NCT03073265?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c92a59c3-bc39-4e94-9e6a-ffb7c9ef51f5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d8d7ca6f-c913-40bd-9fb8-2935544fd8d9",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03073265: Apixaban Validation Study - Additional Study on Fresh Samples",
+      "source_url": "https://clinicaltrials.gov/study/NCT03073265?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d8d7ca6f-c913-40bd-9fb8-2935544fd8d9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "34f281da-5a8f-45df-9e18-207c7a0391bc",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03441633: Apixaban Drug Utilization Study In Stroke Prevention In Atrial Fibrillation (Spaf)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03441633?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/34f281da-5a8f-45df-9e18-207c7a0391bc/rendered/document.pdf"
+    },
+    {
+      "doc_id": "fba1805a-fa2a-44ee-a457-cdd7773a8d20",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03441633: Apixaban Drug Utilization Study In Stroke Prevention In Atrial Fibrillation (Spaf)",
+      "source_url": "https://clinicaltrials.gov/study/NCT03441633?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/fba1805a-fa2a-44ee-a457-cdd7773a8d20/rendered/document.pdf"
+    },
+    {
+      "doc_id": "672409af-d6f7-41ef-9939-1a680811cfad",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03441633: Apixaban Drug Utilization Study In Stroke Prevention In Atrial Fibrillation (Spaf)",
+      "source_url": "https://clinicaltrials.gov/study/NCT03441633?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/672409af-d6f7-41ef-9939-1a680811cfad/rendered/document.pdf"
+    },
+    {
+      "doc_id": "86a30410-6252-4fdc-82a7-9dd43bc4cbff",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03441633: Apixaban Drug Utilization Study In Stroke Prevention In Atrial Fibrillation (Spaf)",
+      "source_url": "https://clinicaltrials.gov/study/NCT03441633?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/86a30410-6252-4fdc-82a7-9dd43bc4cbff/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e35c240e-73e4-4e4a-a9c2-c1d5b44eca18",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05088928: Efficacy and Safety of Apixaban in COVID-19 Coagulopathy Patients With Respiratory Severity Under Critical Care",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT05088928?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e35c240e-73e4-4e4a-a9c2-c1d5b44eca18/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0c5aa01b-3c99-42d1-ba94-fc8330237f5e",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT05088928: Efficacy and Safety of Apixaban in COVID-19 Coagulopathy Patients With Respiratory Severity Under Critical Care",
+      "source_url": "https://clinicaltrials.gov/study/NCT05088928?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0c5aa01b-3c99-42d1-ba94-fc8330237f5e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4e0657fc-cbc8-4b96-b2af-8e68af09f7c3",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05088928: Efficacy and Safety of Apixaban in COVID-19 Coagulopathy Patients With Respiratory Severity Under Critical Care",
+      "source_url": "https://clinicaltrials.gov/study/NCT05088928?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4e0657fc-cbc8-4b96-b2af-8e68af09f7c3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9bcf2ae9-0b58-4ecd-9fef-2baf8ff83c68",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT05088928: Efficacy and Safety of Apixaban in COVID-19 Coagulopathy Patients With Respiratory Severity Under Critical Care",
+      "source_url": "https://clinicaltrials.gov/study/NCT05088928?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9bcf2ae9-0b58-4ecd-9fef-2baf8ff83c68/rendered/document.pdf"
+    },
+    {
+      "doc_id": "35038a55-b149-440d-a587-5681427915e5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05461807: An Observational Study Called H2H-OSCAR-US to Learn More About How Well Rivaroxaban Works and How Safe it is Compared to Apixaban Under Real World Conditions in People in the US With Cancer Who Have Problems Due to Formation of Blood Clots in the Veins (Venous Thromboembolism)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT05461807?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/35038a55-b149-440d-a587-5681427915e5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "522a938b-0645-4b43-879d-6b5d305c81cb",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT05461807: An Observational Study Called H2H-OSCAR-US to Learn More About How Well Rivaroxaban Works and How Safe it is Compared to Apixaban Under Real World Conditions in People in the US With Cancer Who Have Problems Due to Formation of Blood Clots in the Veins (Venous Thromboembolism)",
+      "source_url": "https://clinicaltrials.gov/study/NCT05461807?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/522a938b-0645-4b43-879d-6b5d305c81cb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4c489537-ca0a-4f25-bb46-174f66e2862e",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05461807: An Observational Study Called H2H-OSCAR-US to Learn More About How Well Rivaroxaban Works and How Safe it is Compared to Apixaban Under Real World Conditions in People in the US With Cancer Who Have Problems Due to Formation of Blood Clots in the Veins (Venous Thromboembolism)",
+      "source_url": "https://clinicaltrials.gov/study/NCT05461807?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4c489537-ca0a-4f25-bb46-174f66e2862e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ed83ab17-d890-4511-a4ab-0811d169f2bb",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT05461807: An Observational Study Called H2H-OSCAR-US to Learn More About How Well Rivaroxaban Works and How Safe it is Compared to Apixaban Under Real World Conditions in People in the US With Cancer Who Have Problems Due to Formation of Blood Clots in the Veins (Venous Thromboembolism)",
+      "source_url": "https://clinicaltrials.gov/study/NCT05461807?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ed83ab17-d890-4511-a4ab-0811d169f2bb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "746b8246-f9fe-44d9-b17d-ae4e827afa10",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02945280: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02945280?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/746b8246-f9fe-44d9-b17d-ae4e827afa10/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7f6182d1-836a-4163-8f3e-32608379d62d",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02945280: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT02945280?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7f6182d1-836a-4163-8f3e-32608379d62d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1fd8f0c8-5a9d-4521-8b13-848aaaf628d3",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02945280: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT02945280?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1fd8f0c8-5a9d-4521-8b13-848aaaf628d3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "27f4158c-3c21-48db-8221-9cfa5c1b6d07",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02945280: Apixaban for Routine Management of Upper Extremity Deep Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT02945280?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/27f4158c-3c21-48db-8221-9cfa5c1b6d07/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1b9de75c-7d43-4ba8-97ad-4288023126f4",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03678506: Apixaban for Extended Anticoagulation (APIDULCIS)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03678506?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1b9de75c-7d43-4ba8-97ad-4288023126f4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ed01c643-8c70-4535-83e8-aa9609a51025",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03678506: Apixaban for Extended Anticoagulation (APIDULCIS)",
+      "source_url": "https://clinicaltrials.gov/study/NCT03678506?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ed01c643-8c70-4535-83e8-aa9609a51025/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7a4c46ec-2e1f-4ec2-9875-e7eb43e4efa3",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03678506: Apixaban for Extended Anticoagulation (APIDULCIS)",
+      "source_url": "https://clinicaltrials.gov/study/NCT03678506?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7a4c46ec-2e1f-4ec2-9875-e7eb43e4efa3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f3f3c95d-9d2a-42d5-89fc-d8b35620cb54",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03678506: Apixaban for Extended Anticoagulation (APIDULCIS)",
+      "source_url": "https://clinicaltrials.gov/study/NCT03678506?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f3f3c95d-9d2a-42d5-89fc-d8b35620cb54/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0baa2941-6115-4748-8a2a-35e446f09cd2",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03448783: Bariatric Surgery and Pharmacokinetics of Apixaban",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03448783?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0baa2941-6115-4748-8a2a-35e446f09cd2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b812c99b-9875-44b6-873d-b7d2cb1a5bb8",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03448783: Bariatric Surgery and Pharmacokinetics of Apixaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT03448783?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b812c99b-9875-44b6-873d-b7d2cb1a5bb8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8729c0df-6f55-40b5-93b4-2a250db4ae79",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03448783: Bariatric Surgery and Pharmacokinetics of Apixaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT03448783?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8729c0df-6f55-40b5-93b4-2a250db4ae79/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e3158cd9-1d72-425d-8e02-35b32554f6e6",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03448783: Bariatric Surgery and Pharmacokinetics of Apixaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT03448783?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e3158cd9-1d72-425d-8e02-35b32554f6e6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e3d3d725-c115-474e-a213-33b9c553c124",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04344717: Pharmacokinetics of Apixaban in Patients With Short Bowel Syndrome Requiring Long Term Parenteral Nutrition",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04344717?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e3d3d725-c115-474e-a213-33b9c553c124/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f10cdf6a-738b-4e86-985b-4382a9f055d0",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04344717: Pharmacokinetics of Apixaban in Patients With Short Bowel Syndrome Requiring Long Term Parenteral Nutrition",
+      "source_url": "https://clinicaltrials.gov/study/NCT04344717?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f10cdf6a-738b-4e86-985b-4382a9f055d0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5b1bd972-c707-4c5a-b2df-a663ab4d632e",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04344717: Pharmacokinetics of Apixaban in Patients With Short Bowel Syndrome Requiring Long Term Parenteral Nutrition",
+      "source_url": "https://clinicaltrials.gov/study/NCT04344717?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5b1bd972-c707-4c5a-b2df-a663ab4d632e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "eaf53a47-3ddc-4aee-a457-f9fb1b3efe29",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04344717: Pharmacokinetics of Apixaban in Patients With Short Bowel Syndrome Requiring Long Term Parenteral Nutrition",
+      "source_url": "https://clinicaltrials.gov/study/NCT04344717?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/eaf53a47-3ddc-4aee-a457-f9fb1b3efe29/rendered/document.pdf"
+    },
+    {
+      "doc_id": "81c9d70e-89b0-4b8c-b2e2-98b7376e91aa",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04489849: Apixaban for Prevention of Post-angioplasty Thrombosis of Hemodialysis Vascular Access",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04489849?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/81c9d70e-89b0-4b8c-b2e2-98b7376e91aa/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f7dd8d69-7eb9-4560-b840-deb608704c88",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04489849: Apixaban for Prevention of Post-angioplasty Thrombosis of Hemodialysis Vascular Access",
+      "source_url": "https://clinicaltrials.gov/study/NCT04489849?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f7dd8d69-7eb9-4560-b840-deb608704c88/rendered/document.pdf"
+    },
+    {
+      "doc_id": "10924d67-77ea-40c1-a2f6-373068f23b24",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04489849: Apixaban for Prevention of Post-angioplasty Thrombosis of Hemodialysis Vascular Access",
+      "source_url": "https://clinicaltrials.gov/study/NCT04489849?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/10924d67-77ea-40c1-a2f6-373068f23b24/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4f5a8775-0a3c-4549-9bf8-11f184ed970c",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04489849: Apixaban for Prevention of Post-angioplasty Thrombosis of Hemodialysis Vascular Access",
+      "source_url": "https://clinicaltrials.gov/study/NCT04489849?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4f5a8775-0a3c-4549-9bf8-11f184ed970c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "39c2917f-03d2-4c99-9c62-9886665ee56d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05484557: Prevention of Thromboembolism Using Apixaban vs Enoxaparin Following Spinal Cord Injury",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT05484557?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/39c2917f-03d2-4c99-9c62-9886665ee56d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6481bcca-36fc-428c-a791-50bedbd40795",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT05484557: Prevention of Thromboembolism Using Apixaban vs Enoxaparin Following Spinal Cord Injury",
+      "source_url": "https://clinicaltrials.gov/study/NCT05484557?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6481bcca-36fc-428c-a791-50bedbd40795/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b4146575-e93a-4a8f-a96f-500464cd0304",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05484557: Prevention of Thromboembolism Using Apixaban vs Enoxaparin Following Spinal Cord Injury",
+      "source_url": "https://clinicaltrials.gov/study/NCT05484557?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b4146575-e93a-4a8f-a96f-500464cd0304/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b7b3d646-3eac-4033-87c9-3441b956d9a5",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT05484557: Prevention of Thromboembolism Using Apixaban vs Enoxaparin Following Spinal Cord Injury",
+      "source_url": "https://clinicaltrials.gov/study/NCT05484557?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b7b3d646-3eac-4033-87c9-3441b956d9a5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8dc2c6a0-6f11-4887-bc4b-07bbf2552d37",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05532878: Pharmacokinetics of Apixaban in Peritoneal Dialysis",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT05532878?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8dc2c6a0-6f11-4887-bc4b-07bbf2552d37/rendered/document.pdf"
+    },
+    {
+      "doc_id": "73097e1b-a7fe-494a-b137-f722025fb285",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT05532878: Pharmacokinetics of Apixaban in Peritoneal Dialysis",
+      "source_url": "https://clinicaltrials.gov/study/NCT05532878?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/73097e1b-a7fe-494a-b137-f722025fb285/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c31f8df6-0314-49da-9e2e-6a3ff65a1a5d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05532878: Pharmacokinetics of Apixaban in Peritoneal Dialysis",
+      "source_url": "https://clinicaltrials.gov/study/NCT05532878?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c31f8df6-0314-49da-9e2e-6a3ff65a1a5d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f4fa120c-3c41-4a39-81a1-d5b559c0dc90",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT05532878: Pharmacokinetics of Apixaban in Peritoneal Dialysis",
+      "source_url": "https://clinicaltrials.gov/study/NCT05532878?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f4fa120c-3c41-4a39-81a1-d5b559c0dc90/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ddd1a364-24fd-4329-9d14-db32652eab27",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06243510: Comparison of Apixaban Versus Enoxaparin",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT06243510?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ddd1a364-24fd-4329-9d14-db32652eab27/rendered/document.pdf"
+    },
+    {
+      "doc_id": "58b6ea3c-3a5c-4944-8b5f-079b9a107654",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT06243510: Comparison of Apixaban Versus Enoxaparin",
+      "source_url": "https://clinicaltrials.gov/study/NCT06243510?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/58b6ea3c-3a5c-4944-8b5f-079b9a107654/rendered/document.pdf"
+    },
+    {
+      "doc_id": "06c7da66-96e0-4363-bded-0d5a37bd62cb",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06243510: Comparison of Apixaban Versus Enoxaparin",
+      "source_url": "https://clinicaltrials.gov/study/NCT06243510?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/06c7da66-96e0-4363-bded-0d5a37bd62cb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0ac7c475-ea96-47cb-8a72-202421823008",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT06243510: Comparison of Apixaban Versus Enoxaparin",
+      "source_url": "https://clinicaltrials.gov/study/NCT06243510?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0ac7c475-ea96-47cb-8a72-202421823008/rendered/document.pdf"
+    },
+    {
+      "doc_id": "00b74515-6542-4fd7-bda8-687a9c1aefee",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06864052: The Incidence of New-brain Lesions on Brain MRI and Safety Between Edoxaban and Apixaban in Patients with Stroke and Nonvalvular Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT06864052?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/00b74515-6542-4fd7-bda8-687a9c1aefee/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7062b3cb-3999-484b-899f-f446eb4d2a5f",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT06864052: The Incidence of New-brain Lesions on Brain MRI and Safety Between Edoxaban and Apixaban in Patients with Stroke and Nonvalvular Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT06864052?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7062b3cb-3999-484b-899f-f446eb4d2a5f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4d1287d4-b099-4659-a463-bd08b330fc52",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06864052: The Incidence of New-brain Lesions on Brain MRI and Safety Between Edoxaban and Apixaban in Patients with Stroke and Nonvalvular Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT06864052?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4d1287d4-b099-4659-a463-bd08b330fc52/rendered/document.pdf"
+    },
+    {
+      "doc_id": "24b94458-7117-4f97-8e7d-f70d4973de9b",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT06864052: The Incidence of New-brain Lesions on Brain MRI and Safety Between Edoxaban and Apixaban in Patients with Stroke and Nonvalvular Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT06864052?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/24b94458-7117-4f97-8e7d-f70d4973de9b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ee2f67ed-e645-4a71-b52e-c4fef7f9e088",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07458191: Apixaban Safety and Therapy Adherence in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT07458191?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ee2f67ed-e645-4a71-b52e-c4fef7f9e088/rendered/document.pdf"
+    },
+    {
+      "doc_id": "00949376-55cf-4ca3-9ec9-cad40093ed6c",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT07458191: Apixaban Safety and Therapy Adherence in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT07458191?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/00949376-55cf-4ca3-9ec9-cad40093ed6c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "83526c1c-9c33-4850-8dc7-1b284685bcad",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07458191: Apixaban Safety and Therapy Adherence in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT07458191?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/83526c1c-9c33-4850-8dc7-1b284685bcad/rendered/document.pdf"
+    },
+    {
+      "doc_id": "af69b4b6-9fbb-47c1-81de-480417c5d24b",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT07458191: Apixaban Safety and Therapy Adherence in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT07458191?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/af69b4b6-9fbb-47c1-81de-480417c5d24b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1afe9909-0ba2-4750-8e08-5e083d9ad829",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07461545: Efficacy of Apixaban in the Treatment of Portal Vein Thrombosis Occurring More Than One Year After LS",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT07461545?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1afe9909-0ba2-4750-8e08-5e083d9ad829/rendered/document.pdf"
+    },
+    {
+      "doc_id": "63a12a56-d33b-472f-ba8d-b158fc882d85",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT07461545: Efficacy of Apixaban in the Treatment of Portal Vein Thrombosis Occurring More Than One Year After LS",
+      "source_url": "https://clinicaltrials.gov/study/NCT07461545?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/63a12a56-d33b-472f-ba8d-b158fc882d85/rendered/document.pdf"
+    },
+    {
+      "doc_id": "65eb646a-601a-4f43-8d50-2364666c88d5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07461545: Efficacy of Apixaban in the Treatment of Portal Vein Thrombosis Occurring More Than One Year After LS",
+      "source_url": "https://clinicaltrials.gov/study/NCT07461545?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/65eb646a-601a-4f43-8d50-2364666c88d5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6e64c9ab-ff39-49e2-a5c0-41ce4c1167a4",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT07461545: Efficacy of Apixaban in the Treatment of Portal Vein Thrombosis Occurring More Than One Year After LS",
+      "source_url": "https://clinicaltrials.gov/study/NCT07461545?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6e64c9ab-ff39-49e2-a5c0-41ce4c1167a4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "55929f8c-2df8-4c90-8d15-7c75324eca24",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03192215: AtRial Cardiopathy and Antithrombotic Drugs In Prevention After Cryptogenic Stroke",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03192215?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/55929f8c-2df8-4c90-8d15-7c75324eca24/rendered/document.pdf"
+    },
+    {
+      "doc_id": "88d8c687-b7fa-431b-8c84-acf51ef5c892",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03192215: AtRial Cardiopathy and Antithrombotic Drugs In Prevention After Cryptogenic Stroke",
+      "source_url": "https://clinicaltrials.gov/study/NCT03192215?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/88d8c687-b7fa-431b-8c84-acf51ef5c892/rendered/document.pdf"
+    },
+    {
+      "doc_id": "10b40769-5a5e-4151-9cad-7822793665ad",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03192215: AtRial Cardiopathy and Antithrombotic Drugs In Prevention After Cryptogenic Stroke",
+      "source_url": "https://clinicaltrials.gov/study/NCT03192215?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/10b40769-5a5e-4151-9cad-7822793665ad/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8cab8e01-9188-4f1e-a3e0-1f579cbfe0e0",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03192215: AtRial Cardiopathy and Antithrombotic Drugs In Prevention After Cryptogenic Stroke",
+      "source_url": "https://clinicaltrials.gov/study/NCT03192215?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8cab8e01-9188-4f1e-a3e0-1f579cbfe0e0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2a5b907c-e9e0-4fe3-afdf-af9bc4caad1e",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02034591?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2a5b907c-e9e0-4fe3-afdf-af9bc4caad1e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "09c9ab45-82c3-4b22-91d0-6530c5caa3ea",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/study/NCT02034591?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/09c9ab45-82c3-4b22-91d0-6530c5caa3ea/rendered/document.pdf"
+    },
+    {
+      "doc_id": "911b1297-20a6-4329-aa7a-60489ea6379e",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/study/NCT02034591?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/911b1297-20a6-4329-aa7a-60489ea6379e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "79d1e200-df33-4437-8f80-b2f272f8ddb5",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02034591: Phase 1 Oral Solution and Crushed Tablet Relative Bioavailability Study of Apixaban When Administered Through a Nasogastric Tube in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/study/NCT02034591?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/79d1e200-df33-4437-8f80-b2f272f8ddb5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "aea662a4-8071-460c-89a0-f677ce03fa94",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02262533: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02262533?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/aea662a4-8071-460c-89a0-f677ce03fa94/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ca4c2e3e-c956-4695-a29c-5ca763ecb47f",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02262533: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/study/NCT02262533?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ca4c2e3e-c956-4695-a29c-5ca763ecb47f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "98b18824-6c84-4bae-959f-4f20fbe2feb8",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02262533: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/study/NCT02262533?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/98b18824-6c84-4bae-959f-4f20fbe2feb8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "41722298-c541-4b26-b4ab-d09d701855c9",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02262533: Phase 1 Drug Interaction Study of Apixaban and Atenolol in Healthy Subjects",
+      "source_url": "https://clinicaltrials.gov/study/NCT02262533?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/41722298-c541-4b26-b4ab-d09d701855c9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d2461255-2d63-4815-8fba-9b499ed829ad",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02981472: A Study of the Safety and Pharmacokinetics of Apixaban Versus Vitamin K Antagonist (VKA) or Low Molecular Weight Heparin (LMWH) in Pediatric Subjects With Congenital or Acquired Heart Disease Requiring Anticoagulation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02981472?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d2461255-2d63-4815-8fba-9b499ed829ad/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2a6bc5db-1a92-45ee-ace4-e31f18f0e344",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02981472: A Study of the Safety and Pharmacokinetics of Apixaban Versus Vitamin K Antagonist (VKA) or Low Molecular Weight Heparin (LMWH) in Pediatric Subjects With Congenital or Acquired Heart Disease Requiring Anticoagulation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02981472?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2a6bc5db-1a92-45ee-ace4-e31f18f0e344/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a52bdc1b-db8c-4ca4-830a-826b826b9f71",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02981472: A Study of the Safety and Pharmacokinetics of Apixaban Versus Vitamin K Antagonist (VKA) or Low Molecular Weight Heparin (LMWH) in Pediatric Subjects With Congenital or Acquired Heart Disease Requiring Anticoagulation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02981472?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a52bdc1b-db8c-4ca4-830a-826b826b9f71/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2b1b534c-a756-44f3-8a74-8edb78350f99",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02981472: A Study of the Safety and Pharmacokinetics of Apixaban Versus Vitamin K Antagonist (VKA) or Low Molecular Weight Heparin (LMWH) in Pediatric Subjects With Congenital or Acquired Heart Disease Requiring Anticoagulation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02981472?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2b1b534c-a756-44f3-8a74-8edb78350f99/rendered/document.pdf"
+    },
+    {
+      "doc_id": "df3f5f5c-7593-46b1-b01a-79a276add070",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03276143: FactOr XIa inhibiTion for the pRevention of venOus Thromboembolism in Patients Undergoing Total Knee Arthroplasty",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03276143?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/df3f5f5c-7593-46b1-b01a-79a276add070/rendered/document.pdf"
+    },
+    {
+      "doc_id": "af8d7e8e-25f5-4a10-8728-f3f9a8acd434",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03276143: FactOr XIa inhibiTion for the pRevention of venOus Thromboembolism in Patients Undergoing Total Knee Arthroplasty",
+      "source_url": "https://clinicaltrials.gov/study/NCT03276143?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/af8d7e8e-25f5-4a10-8728-f3f9a8acd434/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ae044141-3c01-43c3-a9da-c5e01c712c4a",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03276143: FactOr XIa inhibiTion for the pRevention of venOus Thromboembolism in Patients Undergoing Total Knee Arthroplasty",
+      "source_url": "https://clinicaltrials.gov/study/NCT03276143?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ae044141-3c01-43c3-a9da-c5e01c712c4a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a038cbd8-fada-43aa-b74e-311c71e43a17",
+      "doc_kind": "ru_clinical_permission",
+      "title": "RU clinical registry summary: apixaban",
+      "source_url": "http://api-gateway:8080/v1/ru/drugs/apixaban/clinical",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a038cbd8-fada-43aa-b74e-311c71e43a17/rendered/document.pdf"
+    },
+    {
+      "doc_id": "31ff13ea-ac4b-4feb-8391-b3e7c107dab4",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:41812192 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=41812192",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/31ff13ea-ac4b-4feb-8391-b3e7c107dab4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e6d8a414-ea55-4347-8196-c173fcc46673",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40162636 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40162636",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e6d8a414-ea55-4347-8196-c173fcc46673/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5c55018c-dc4d-4afa-bfd8-7969d5b1db73",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:31089975 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=31089975",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5c55018c-dc4d-4afa-bfd8-7969d5b1db73/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0e911a6d-8d16-46d4-8748-175a90b14f6f",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40888734 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40888734",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0e911a6d-8d16-46d4-8748-175a90b14f6f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "55320dde-859b-4603-8b93-6ab66d50dd1e",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:21870978 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=21870978",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/55320dde-859b-4603-8b93-6ab66d50dd1e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "90863639-870f-476e-979b-147bc084d31f",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23216615 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23216615",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/90863639-870f-476e-979b-147bc084d31f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6321ae14-f98c-472b-9fa4-786bdbd23f91",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:37952132 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=37952132",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6321ae14-f98c-472b-9fa4-786bdbd23f91/rendered/document.pdf"
+    },
+    {
+      "doc_id": "31966a09-3729-40cf-8b2c-c9f0a59bb759",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:38057072 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=38057072",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/31966a09-3729-40cf-8b2c-c9f0a59bb759/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9c581ace-0dbe-4f44-97eb-d94e1e4493d0",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39225267 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39225267",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9c581ace-0dbe-4f44-97eb-d94e1e4493d0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "15aa2b5e-ca8e-4749-86e8-2a28bfc0c4a8",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:32223112 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=32223112",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/15aa2b5e-ca8e-4749-86e8-2a28bfc0c4a8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "aabd5d5c-1590-4bc8-a289-9d9dc7651dab",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:37075273 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=37075273",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/aabd5d5c-1590-4bc8-a289-9d9dc7651dab/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6e5ce0f4-0c39-4761-9913-fa749cb9f539",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:34752568 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=34752568",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6e5ce0f4-0c39-4761-9913-fa749cb9f539/rendered/document.pdf"
+    },
+    {
+      "doc_id": "af0409ff-7aad-43d5-a703-719e373ed643",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23808982 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23808982",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/af0409ff-7aad-43d5-a703-719e373ed643/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f77266b9-ef91-4f1c-88d8-e012ddad1a58",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:21309657 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=21309657",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f77266b9-ef91-4f1c-88d8-e012ddad1a58/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4dae82bc-7036-47f8-bc4a-95df9cedf021",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36335914 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36335914",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4dae82bc-7036-47f8-bc4a-95df9cedf021/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7d0d9897-58d3-43df-b310-0acfc75f0a82",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:35648414 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=35648414",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7d0d9897-58d3-43df-b310-0acfc75f0a82/rendered/document.pdf"
+    },
+    {
+      "doc_id": "befa7100-4744-4c14-95d1-393e5b92d13c",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:34662890 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=34662890",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/befa7100-4744-4c14-95d1-393e5b92d13c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7b11906c-5564-4308-9efb-c87c6b7fe8de",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36940444 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36940444",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7b11906c-5564-4308-9efb-c87c6b7fe8de/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f7901504-1361-4273-803f-4fa5d0481109",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:34279598 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=34279598",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f7901504-1361-4273-803f-4fa5d0481109/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2c89cc88-1055-438e-ab79-ac812964174f",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:34949473 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=34949473",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2c89cc88-1055-438e-ab79-ac812964174f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "79e5f734-9429-4a5e-9cd7-c1e882c8fdf2",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:38320511 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=38320511",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/79e5f734-9429-4a5e-9cd7-c1e882c8fdf2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "34df9f5e-92bc-4211-a669-9048f9324a58",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:31643604 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=31643604",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/34df9f5e-92bc-4211-a669-9048f9324a58/rendered/document.pdf"
+    },
+    {
+      "doc_id": "58e6d46d-1528-4002-b032-096436905193",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:30883055 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=30883055",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/58e6d46d-1528-4002-b032-096436905193/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0589d268-18f8-44d1-bf7c-3cc7c4e6f046",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:38537780 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=38537780",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0589d268-18f8-44d1-bf7c-3cc7c4e6f046/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c343ae64-dcd4-43fa-97d0-2f3e5204f801",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:31630479 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=31630479",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c343ae64-dcd4-43fa-97d0-2f3e5204f801/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a6c80882-9c24-401d-968c-99826166276d",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:29798783 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=29798783",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a6c80882-9c24-401d-968c-99826166276d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5e79139d-dac8-436f-ab3b-8f01b01fdf37",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:35385695 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=35385695",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5e79139d-dac8-436f-ab3b-8f01b01fdf37/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f47ba95d-3c6e-493e-9884-a3a9af07d115",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:28744136 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=28744136",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f47ba95d-3c6e-493e-9884-a3a9af07d115/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c8e73475-0cfa-4edc-b0e6-4563a7df3754",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39019530 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39019530",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c8e73475-0cfa-4edc-b0e6-4563a7df3754/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c14b9b9d-3748-46e4-be56-ae986ea2eda2",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39862882 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39862882",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c14b9b9d-3748-46e4-be56-ae986ea2eda2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0527faaf-7f66-4e22-8049-14e6ad338973",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36252244 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36252244",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0527faaf-7f66-4e22-8049-14e6ad338973/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c7925e7f-d05a-4ce9-bb26-f4db115d1f12",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:35583186 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=35583186",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c7925e7f-d05a-4ce9-bb26-f4db115d1f12/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2f3ef79f-20ac-4642-99c0-a9f8b9a9630f",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36335915 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36335915",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2f3ef79f-20ac-4642-99c0-a9f8b9a9630f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "91989ec6-b0c4-4f79-843b-735551874df0",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39197976 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39197976",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/91989ec6-b0c4-4f79-843b-735551874df0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d7595f35-7b76-4a49-b4e3-fabbfc6c8ea6",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:26982962 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=26982962",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d7595f35-7b76-4a49-b4e3-fabbfc6c8ea6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "378967f1-a996-41c9-88e2-d6db8977c194",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39432704 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39432704",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/378967f1-a996-41c9-88e2-d6db8977c194/rendered/document.pdf"
+    },
+    {
+      "doc_id": "30761d1c-5e5c-4f29-a7cb-833cab4afc01",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:38196077 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=38196077",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/30761d1c-5e5c-4f29-a7cb-833cab4afc01/rendered/document.pdf"
+    },
+    {
+      "doc_id": "90da2016-c0db-4a3e-b920-2419acae2f15",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39229707 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39229707",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/90da2016-c0db-4a3e-b920-2419acae2f15/rendered/document.pdf"
+    },
+    {
+      "doc_id": "205fca69-230d-4d7d-b65f-bbc8a2fcb17b",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:20211292 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=20211292",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/205fca69-230d-4d7d-b65f-bbc8a2fcb17b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "51696277-edef-4c24-893c-6cb3900ae98d",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:28440204 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=28440204",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/51696277-edef-4c24-893c-6cb3900ae98d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "545b87be-cf98-48b1-b4c9-5cc934820c3c",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39355581 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39355581",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/545b87be-cf98-48b1-b4c9-5cc934820c3c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "74827c30-26f6-4267-a3a0-8d46129c734c",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36803700 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36803700",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/74827c30-26f6-4267-a3a0-8d46129c734c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ce1d5168-3361-4664-891f-972d5f53ebba",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:41222953 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=41222953",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ce1d5168-3361-4664-891f-972d5f53ebba/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b1511581-ecb9-431f-a33a-9dd94339a79f",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40891365 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40891365",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b1511581-ecb9-431f-a33a-9dd94339a79f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "909fbede-e87f-4ec2-986d-221c4a30bec3",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40505060 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40505060",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/909fbede-e87f-4ec2-986d-221c4a30bec3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f378f1c8-9b4f-4bfe-be3d-f0c76acd0722",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:25056161 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=25056161",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f378f1c8-9b4f-4bfe-be3d-f0c76acd0722/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c28e1a40-0073-47bf-ac2f-4ea8e9108e6d",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40551722 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40551722",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c28e1a40-0073-47bf-ac2f-4ea8e9108e6d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0186d458-2b4e-4da6-ae5f-4afc5b02dbbd",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39046333 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39046333",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0186d458-2b4e-4da6-ae5f-4afc5b02dbbd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5e40517f-153c-4582-bac6-dc2e0210bfb0",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:37980924 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=37980924",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5e40517f-153c-4582-bac6-dc2e0210bfb0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2fde9d1f-fc77-49ac-b0e0-2f2bf1c57bae",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39918467 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39918467",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2fde9d1f-fc77-49ac-b0e0-2f2bf1c57bae/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9820d8a5-0cda-4636-80bc-183e71671150",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:34229946 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=34229946",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9820d8a5-0cda-4636-80bc-183e71671150/rendered/document.pdf"
+    },
+    {
+      "doc_id": "39eb5c90-7cc4-44ec-aad5-409706a777c6",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39853633 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39853633",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/39eb5c90-7cc4-44ec-aad5-409706a777c6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5cbbb7cd-830e-4e59-9818-e18a4b80c82e",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36318341 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36318341",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5cbbb7cd-830e-4e59-9818-e18a4b80c82e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "693b6e0b-43b8-4e6b-85e3-a441988f496d",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23662974 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23662974",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/693b6e0b-43b8-4e6b-85e3-a441988f496d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "eda8c867-4da0-49a1-8e60-36e634f7d5ba",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:27342651 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=27342651",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/eda8c867-4da0-49a1-8e60-36e634f7d5ba/rendered/document.pdf"
+    },
+    {
+      "doc_id": "54685e74-92b4-4212-ace4-ecceaebac27a",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:22134134 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=22134134",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/54685e74-92b4-4212-ace4-ecceaebac27a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b262eee9-7210-401a-a39e-23e1cd9c0e43",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:25395835 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=25395835",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b262eee9-7210-401a-a39e-23e1cd9c0e43/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0edf91fa-2d6f-47b1-89d6-816681065396",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:35570249 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=35570249",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0edf91fa-2d6f-47b1-89d6-816681065396/rendered/document.pdf"
+    },
+    {
+      "doc_id": "df7d9bc0-1175-41c6-b259-4c11914cd8a9",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:31958251 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=31958251",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/df7d9bc0-1175-41c6-b259-4c11914cd8a9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "55b9f42e-ba33-4f2e-a9bb-7a4f3d189912",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:26966542 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=26966542",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/55b9f42e-ba33-4f2e-a9bb-7a4f3d189912/rendered/document.pdf"
+    },
+    {
+      "doc_id": "daf08b39-8513-4843-add9-29abaae256d1",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:24554904 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=24554904",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/daf08b39-8513-4843-add9-29abaae256d1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c9d4c6f3-4c0e-47e2-bbc6-20553f04db0e",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36134060 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36134060",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c9d4c6f3-4c0e-47e2-bbc6-20553f04db0e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "da9cd366-9a93-48a7-8d7e-69a1327bde42",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39502066 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39502066",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/da9cd366-9a93-48a7-8d7e-69a1327bde42/rendered/document.pdf"
+    },
+    {
+      "doc_id": "eda78bea-a80f-4cc0-8232-a43dfe36c8db",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40464082 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40464082",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/eda78bea-a80f-4cc0-8232-a43dfe36c8db/rendered/document.pdf"
+    },
+    {
+      "doc_id": "57c21589-515a-451d-bd36-02439755c2d8",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39810765 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39810765",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/57c21589-515a-451d-bd36-02439755c2d8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "833adf21-7388-4bcf-9ebf-ec36faa9e61a",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40847528 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40847528",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/833adf21-7388-4bcf-9ebf-ec36faa9e61a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "59e9bd62-521f-4dc3-8acb-ab5fad9c5b32",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:30341244 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=30341244",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/59e9bd62-521f-4dc3-8acb-ab5fad9c5b32/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2eece4c5-d035-4dd1-81df-d41a14ee152b",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23866358 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23866358",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2eece4c5-d035-4dd1-81df-d41a14ee152b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cc3de7ff-beb5-4c43-b554-3c48a275a1b3",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39551132 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39551132",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cc3de7ff-beb5-4c43-b554-3c48a275a1b3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c07c4e06-fe70-4c2c-a6b6-c5f05dbfc160",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40136309 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40136309",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c07c4e06-fe70-4c2c-a6b6-c5f05dbfc160/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e2003548-27f8-4097-878d-c9e1ddc394f4",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:20584229 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=20584229",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e2003548-27f8-4097-878d-c9e1ddc394f4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "69388ce1-9059-48f9-9e26-46791144c416",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40164778 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40164778",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/69388ce1-9059-48f9-9e26-46791144c416/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5fe9c86e-caf3-4139-bed1-70d66921cb12",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:38795110 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=38795110",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5fe9c86e-caf3-4139-bed1-70d66921cb12/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2a39fe2b-d3ca-4e63-8e47-5314893380c8",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39102124 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39102124",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2a39fe2b-d3ca-4e63-8e47-5314893380c8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9e295207-2d46-4267-8760-5d9959685c69",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:28579855 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=28579855",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9e295207-2d46-4267-8760-5d9959685c69/rendered/document.pdf"
+    },
+    {
+      "doc_id": "82212f2c-8eac-4d73-9f03-e66d7c1151ca",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:35801133 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=35801133",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/82212f2c-8eac-4d73-9f03-e66d7c1151ca/rendered/document.pdf"
+    },
+    {
+      "doc_id": "348fd6b0-bb18-4358-9334-fa55aef3e8ab",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:21954450 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=21954450",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/348fd6b0-bb18-4358-9334-fa55aef3e8ab/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c2466b24-38a2-46f9-bf79-ab21371b5e48",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:24617578 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=24617578",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c2466b24-38a2-46f9-bf79-ab21371b5e48/rendered/document.pdf"
+    },
+    {
+      "doc_id": "340c3492-26c7-4096-90c6-6ed4ee733b87",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:25125051 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=25125051",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/340c3492-26c7-4096-90c6-6ed4ee733b87/rendered/document.pdf"
+    },
+    {
+      "doc_id": "baef5023-d657-40cd-8e72-50215e72b68b",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23677804 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23677804",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/baef5023-d657-40cd-8e72-50215e72b68b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "29b59b3a-386b-4fc3-8d2a-e3f44792ed23",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23619611 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23619611",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/29b59b3a-386b-4fc3-8d2a-e3f44792ed23/rendered/document.pdf"
+    },
+    {
+      "doc_id": "424c3e2c-8aa8-46ea-a74e-a31b2e2374b4",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:41218619 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=41218619",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/424c3e2c-8aa8-46ea-a74e-a31b2e2374b4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9fc2fec0-3c83-4d83-ab54-5442a42ec67b",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:26424386 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=26424386",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9fc2fec0-3c83-4d83-ab54-5442a42ec67b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a9e9fe8a-1b18-468a-989b-cc9dfb0d2b8a",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:40302153 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=40302153",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a9e9fe8a-1b18-468a-989b-cc9dfb0d2b8a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f46c3365-e234-46ed-b1e8-6234801430ec",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:35807073 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=35807073",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f46c3365-e234-46ed-b1e8-6234801430ec/rendered/document.pdf"
+    },
+    {
+      "doc_id": "272f9bb7-1043-405a-ab2e-03c34bbb4088",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39869342 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39869342",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/272f9bb7-1043-405a-ab2e-03c34bbb4088/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0cb3b422-0bb8-4641-8964-adc18f68284c",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:29167388 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=29167388",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0cb3b422-0bb8-4641-8964-adc18f68284c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d1c530a7-5a23-485e-829e-618a0db5a74b",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:38320162 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=38320162",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d1c530a7-5a23-485e-829e-618a0db5a74b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "dc8bb0ba-6d79-4092-abbd-88bc22961896",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:27450450 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=27450450",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/dc8bb0ba-6d79-4092-abbd-88bc22961896/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8d3069aa-3319-4ed9-827c-f4a32fce66a7",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:28820069 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=28820069",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8d3069aa-3319-4ed9-827c-f4a32fce66a7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ac7fbe80-4fe1-4f29-807b-d1b7e0117ac5",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:24401533 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=24401533",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ac7fbe80-4fe1-4f29-807b-d1b7e0117ac5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "35018b86-b204-4a89-87f6-525a27571dce",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:36478440 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=36478440",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/35018b86-b204-4a89-87f6-525a27571dce/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9fad4a6e-c9a4-4aca-a619-054e1ae5e121",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:25361361 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=25361361",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9fad4a6e-c9a4-4aca-a619-054e1ae5e121/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6407d1d9-66d2-416f-9831-9766d0fb2426",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:39672198 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=39672198",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6407d1d9-66d2-416f-9831-9766d0fb2426/rendered/document.pdf"
+    },
+    {
+      "doc_id": "971fb048-039f-4e8f-b7e1-2b62e6be4aee",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:22740145 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=22740145",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/971fb048-039f-4e8f-b7e1-2b62e6be4aee/rendered/document.pdf"
+    },
+    {
+      "doc_id": "347ab20f-3c56-43e0-a0b1-a6cda14a9020",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:29846888 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=29846888",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/347ab20f-3c56-43e0-a0b1-a6cda14a9020/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4484b370-c1ac-43ae-91cc-96017db9701c",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:21609670 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=21609670",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4484b370-c1ac-43ae-91cc-96017db9701c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "fdab9fcf-2c42-44b6-b6a1-296c19be22b5",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:23992517 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=23992517",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/fdab9fcf-2c42-44b6-b6a1-296c19be22b5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f330be91-c693-4507-8dc4-aa812d721ba5",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:29577340 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=29577340",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f330be91-c693-4507-8dc4-aa812d721ba5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1c8a5e8a-0e82-4bc6-808c-ba42a5a8619e",
+      "doc_kind": "scientific_pmc",
+      "title": "PubMed PMID:25377080 — apixaban clinical publication",
+      "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/lookup/?pmid=25377080",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1c8a5e8a-0e82-4bc6-808c-ba42a5a8619e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "3f1cceaa-203e-48eb-b97f-ad2b1e429f3b",
+      "doc_kind": "ru_patent_fips",
+      "title": "RU patents registry: apixaban",
+      "source_url": "http://api-gateway:8080/v1/ru/drugs/apixaban/patents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/3f1cceaa-203e-48eb-b97f-ad2b1e429f3b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "542d2fbe-7797-485a-bf71-464766290a08",
+      "doc_kind": "ru_patent_pdf",
+      "title": "RU Patent RU2790375C1_20230217: Диметил 7-метил-2-n-толил-4-фенилпирроло[2,1-f] [2,1,4]триазин-5,6-дикарбоксилат, обладающий антикоагулянтным действием",
+      "source_url": "https://patents.google.com/patent/RU2790375C1/en",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/542d2fbe-7797-485a-bf71-464766290a08/rendered/document.pdf"
+    },
+    {
+      "doc_id": "440e0ae2-7695-4789-9117-0f5fa989710c",
+      "doc_kind": "ru_patent_pdf",
+      "title": "RU Patent RU2671958C2_20181108: АНТАГОНИСТЫ РЕЦЕПТОРА СОМАТОСТАТИНА ПОДТИПА 5 (SSTR5)",
+      "source_url": "https://patents.google.com/patent/RU2671958C2/en",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/440e0ae2-7695-4789-9117-0f5fa989710c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "63616fb6-427d-4675-9c25-d382f3e7f5a9",
+      "doc_kind": "ru_patent_pdf",
+      "title": "RU Patent RU2642983C2_20180129: СПОСОБ ЛЕЧЕНИЯ ТРОМБОТИЧЕСКИХ НАРУШЕНИЙ С ПРИМЕНЕНИЕМ КОМПОЗИЦИЙ, СОДЕРЖАЩИХ КВЕРЦЕТИН",
+      "source_url": "https://patents.google.com/patent/RU2642983C2/en",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/63616fb6-427d-4675-9c25-d382f3e7f5a9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "66b64c90-3445-430c-b492-a7f7437261b0",
+      "doc_kind": "ru_patent_pdf",
+      "title": "RU Patent RU2636050C2_20171120: ЗАМЕЩЕННЫЕ ПИРРОЛИДИНЫ В КАЧЕСТВЕ ИНГИБИТОРОВ ФАКТОРА XIA ДЛЯ ЛЕЧЕНИЯ ТРОМБОЭМБОЛИЧЕСКИХ ЗАБОЛЕВАНИЙ",
+      "source_url": "https://patents.google.com/patent/RU2636050C2/en",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/66b64c90-3445-430c-b492-a7f7437261b0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "30efe619-edf9-4c67-91b3-561ff69eda4d",
+      "doc_kind": "ru_patent_pdf",
+      "title": "RU Patent RU2535964C2_20141220: МОДУЛЯЦИЯ ЭКСПРЕССИИ ФАКТОРА 11",
+      "source_url": "https://patents.google.com/patent/RU2535964C2/en",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/30efe619-edf9-4c67-91b3-561ff69eda4d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "70a48813-e79c-4c20-a5b4-6631de16afd4",
+      "doc_kind": "ru_patent_pdf",
+      "title": "RU Patent RU2489145C1_20130810: ФАРМАЦЕВТИЧЕСКИЕ КОМПОЗИЦИИ, СОДЕРЖАЩИЕ ЕРА И СЕРДЕЧНО-СОСУДИСТОЕ СРЕДСТВО, И СПОСОБ ИХ ПРИМЕНЕНИЯ",
+      "source_url": "https://patents.google.com/patent/RU2489145C1/en",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/70a48813-e79c-4c20-a5b4-6631de16afd4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1d0ce422-5174-4f7b-8253-9ba0ac333c08",
+      "doc_kind": "patent_legal_events",
+      "title": "EPO OPS patent legal events: apixaban",
+      "source_url": "http://api-gateway:8080/api/v1/patents/eu?inn=apixaban&size=50&with_legal=true",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1d0ce422-5174-4f7b-8253-9ba0ac333c08/rendered/document.pdf"
+    },
+    {
+      "doc_id": "82f748d3-0d71-4690-9750-39359ef3f95e",
+      "doc_kind": "patent_expiry_us",
+      "title": "FDA Orange Book patent expiry: apixaban",
+      "source_url": "http://api-gateway:8080/api/v1/orange-book/search?inn=apixaban",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/82f748d3-0d71-4690-9750-39359ef3f95e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "502b79b7-6eed-4e32-8135-c46c6034e987",
+      "doc_kind": "patent_discovery_us",
+      "title": "PatentsView US patent discovery: apixaban",
+      "source_url": "http://api-gateway:8080/api/v1/patents/us?inn=apixaban&size=25",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/502b79b7-6eed-4e32-8135-c46c6034e987/rendered/document.pdf"
+    },
+    {
+      "doc_id": "3acad13c-0efe-4543-8886-82c2127d9b8e",
+      "doc_kind": "eaeu_document",
+      "title": "EAEU SPD registration: apixaban",
+      "source_url": "http://api-gateway:8080/v1/ru/drugs/apixaban/eaeu",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/3acad13c-0efe-4543-8886-82c2127d9b8e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "bc9e9e63-1146-441f-b7f3-813a2e30d455",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4353312: APIXABAN FORMULATIONS",
+      "source_url": "https://patents.google.com/patent/EP4353312",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/bc9e9e63-1146-441f-b7f3-813a2e30d455/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d7be03cf-374d-478a-80ef-62c6bebc4496",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4412586: APIXABAN SUSPENSION AND PREPARATION METHOD",
+      "source_url": "https://patents.google.com/patent/EP4412586",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d7be03cf-374d-478a-80ef-62c6bebc4496/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9056a50d-eecc-4ad7-ad1e-04ed84d9038f",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4731217: A GASTRORETENTIVE COMPOSITION COMPRISING APIXABAN",
+      "source_url": "https://patents.google.com/patent/EP4731217",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9056a50d-eecc-4ad7-ad1e-04ed84d9038f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "94216fda-18b6-400a-be15-bc464b29d88f",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4450064: APIXABAN COMPOSITIONS",
+      "source_url": "https://patents.google.com/patent/EP4450064",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/94216fda-18b6-400a-be15-bc464b29d88f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "afbda758-f8e2-425f-8ef3-70ced2b87173",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4642441: SUSTAINED-RELEASE TABLET COMPRISING APIXABAN",
+      "source_url": "https://patents.google.com/patent/EP4642441",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/afbda758-f8e2-425f-8ef3-70ced2b87173/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e24fc62e-a22e-4652-821b-fcaf594abfa8",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4351557: APIXABAN FILM PRODUCT AND USES THEREOF",
+      "source_url": "https://patents.google.com/patent/EP4351557",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e24fc62e-a22e-4652-821b-fcaf594abfa8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b0684aff-f559-4d5f-a3c4-6222598ea4ae",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4658238: LIQUID PHARMACEUTICAL FORMULATIONS OF APIXABAN",
+      "source_url": "https://patents.google.com/patent/EP4658238",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b0684aff-f559-4d5f-a3c4-6222598ea4ae/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6e980366-c763-4aec-b3a0-9638ed0cd775",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026003874A1: COMPOSITIONS D'APIXABAN INJECTABLES",
+      "source_url": "https://patents.google.com/patent/WO2026003874A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6e980366-c763-4aec-b3a0-9638ed0cd775/rendered/document.pdf"
+    },
+    {
+      "doc_id": "553dc024-14f7-49fb-ae67-754d826f69f2",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4105215: CO-CRYSTAL OF APIXABAN WITH A CARBOXYLIC ACID",
+      "source_url": "https://patents.google.com/patent/EP4105215",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/553dc024-14f7-49fb-ae67-754d826f69f2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f5243d72-fa4c-424b-856a-8ce3d5835702",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4640220: ORALLY DISINTEGRATING PHARMACEUTICAL COMPOSITIONS OF APIXABAN",
+      "source_url": "https://patents.google.com/patent/EP4640220",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f5243d72-fa4c-424b-856a-8ce3d5835702/rendered/document.pdf"
+    },
+    {
+      "doc_id": "26bb3de2-4b06-42e1-b68f-fd582a84def3",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4522123: LIQUID ORAL FORMULATION OF APIXABAN OR PHARMACEUTICALLY ACCEPTABLE SALT THEREOF",
+      "source_url": "https://patents.google.com/patent/EP4522123",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/26bb3de2-4b06-42e1-b68f-fd582a84def3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8c40e9de-dc3e-42ec-bc13-a413c79a9cd9",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121045062A: Apixaban intermediate as well as preparation method and application thereof",
+      "source_url": "https://patents.google.com/patent/CN121045062A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8c40e9de-dc3e-42ec-bc13-a413c79a9cd9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6a36aa38-94d6-4f4d-af86-835ddc502cc5",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121318823A: Preparation method of apixaban pyridone intermediate",
+      "source_url": "https://patents.google.com/patent/CN121318823A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6a36aa38-94d6-4f4d-af86-835ddc502cc5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0d600bdd-3520-4720-a37d-2f7bfd87ba3e",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121064189A: Synthesis method of apixaban",
+      "source_url": "https://patents.google.com/patent/CN121064189A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0d600bdd-3520-4720-a37d-2f7bfd87ba3e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9b3f3197-eef5-4237-bc24-dc0e745393a5",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121270425A: Fully continuous flow chemical synthesis method of apixaban intermediate (Z)-2-chloro [(4-methoxyphenyl) hydrazono] ethyl acetate",
+      "source_url": "https://patents.google.com/patent/CN121270425A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9b3f3197-eef5-4237-bc24-dc0e745393a5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "da0cd486-8549-48c4-acd8-7c82fa75e962",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260049360A1: Therapeutic Strategies To Reduce Thrombotic Risk In Factor V Leiden (FVL) Carriers",
+      "source_url": "https://patents.google.com/patent/US20260049360A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/da0cd486-8549-48c4-acd8-7c82fa75e962/rendered/document.pdf"
+    },
+    {
+      "doc_id": "86c178a8-94a8-4523-803d-eef0dfda7854",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4684818A1: IMPLANTIERBARE VORRICHTUNG MIT MOTORANTRIEB UND OSMOTISCHEM MOTORANTRIEB",
+      "source_url": "https://patents.google.com/patent/EP4684818A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/86c178a8-94a8-4523-803d-eef0dfda7854/rendered/document.pdf"
+    },
+    {
+      "doc_id": "45756b48-496b-4c8d-a71e-71ee9a28ba53",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4685162A1: MENSCHLICHER ANTI-FV-ANTIKÖRPER, THERAPEUTISCHE UND DIAGNOSTISCHE ANWENDUNGEN DAVON",
+      "source_url": "https://patents.google.com/patent/EP4685162A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/45756b48-496b-4c8d-a71e-71ee9a28ba53/rendered/document.pdf"
+    },
+    {
+      "doc_id": "45b29727-c1d5-4c2a-8a66-3e4c5c2fafdb",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4702985A1: ZUSAMMENSETZUNGEN ZUR BEHANDLUNG VON HERZ-KREISLAUF-ERKRANKUNGEN",
+      "source_url": "https://patents.google.com/patent/EP4702985A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/45b29727-c1d5-4c2a-8a66-3e4c5c2fafdb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "17dca2ec-a0dd-448d-8973-d47d7545c9ed",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260022197A1: METHODS OF REVERSING TICAGRELOR ACTIVITY",
+      "source_url": "https://patents.google.com/patent/US20260022197A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/17dca2ec-a0dd-448d-8973-d47d7545c9ed/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7d4d98b0-ef3c-4cb7-bd22-5985ce3c66b9",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260060974A1: THERAPEUTIC TYROSINE KINASE INHIBITORS FOR MULTIPLE SCLEROSIS",
+      "source_url": "https://patents.google.com/patent/US20260060974A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7d4d98b0-ef3c-4cb7-bd22-5985ce3c66b9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "78871d77-b45d-46a8-9416-3426254447cd",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260027215A1: COMPOSITIONS FOR TRANSPORT OF THERAPEUTIC CARGOS USING BINDERS TARGETING CA-IV",
+      "source_url": "https://patents.google.com/patent/US20260027215A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/78871d77-b45d-46a8-9416-3426254447cd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "eda091ff-560e-400e-ba21-e349033067a5",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260042777A1: PIPERIDYLUREA COMPOUNDS AND METHODS OF USE THEREOF",
+      "source_url": "https://patents.google.com/patent/US20260042777A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/eda091ff-560e-400e-ba21-e349033067a5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "39a43078-a17b-4781-9b22-5726410687f3",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260034110A1: LUMACAFTOR FOR TREATING THROMBOSIS AND FOR RESTORING THE AUTOINHIBITORY FUNCTION OF VON WILLEBRAND FACTOR UNDER PRO-THROMBOTIC INFLAMMATORY CONDITIONS WHILE MAINTAINING HEMOSTASIS",
+      "source_url": "https://patents.google.com/patent/US20260034110A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/39a43078-a17b-4781-9b22-5726410687f3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "73550bcd-0d2e-40c0-994f-a8e79f8d0718",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260041778A1: SHEAR RESPONSIVE APTAMER-BASED CONJUGATE FOR TARGETED DRUG DELIVERY",
+      "source_url": "https://patents.google.com/patent/US20260041778A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/73550bcd-0d2e-40c0-994f-a8e79f8d0718/rendered/document.pdf"
+    },
+    {
+      "doc_id": "92907b99-3d1a-48b2-a8c3-d593cbe94072",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260069602A1: COMPOUNDS, COMPOSITIONS, AND METHODS",
+      "source_url": "https://patents.google.com/patent/US20260069602A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/92907b99-3d1a-48b2-a8c3-d593cbe94072/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a7bc317c-bb48-4f74-876e-b52e376a03e8",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260060821A1: DRUG ELUTING COVERED STENT",
+      "source_url": "https://patents.google.com/patent/US20260060821A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a7bc317c-bb48-4f74-876e-b52e376a03e8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "276e4a5d-4dae-4d90-8c90-53cd5ae03f13",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260069710A1: LIPOSOMAL NANOCARRIER DELIVERY SYSTEM FOR TARGETING ACTIVE CD44 MOLECULE, PREPARATION METHOD THEREFOR, AND USES THEREOF",
+      "source_url": "https://patents.google.com/patent/US20260069710A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/276e4a5d-4dae-4d90-8c90-53cd5ae03f13/rendered/document.pdf"
+    },
+    {
+      "doc_id": "fee2a9d6-99a5-4c47-92c5-ceb6e2029953",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026019771A1: ZALUNFIBAN DESTINÉ À ÊTRE UTILISÉ DANS LE TRAITEMENT D'UN TROUBLE THROMBOTIQUE CHEZ DES PATIENTS ATTEINTS D'UNE DÉFICIENCE RÉNALE",
+      "source_url": "https://patents.google.com/patent/WO2026019771A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/fee2a9d6-99a5-4c47-92c5-ceb6e2029953/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9d3c2f7a-52ec-4196-9335-c2afa8f88766",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026050896A1: PRÉPARATION ET UTILISATION DE KIT NANO CIBLÉ",
+      "source_url": "https://patents.google.com/patent/WO2026050896A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9d3c2f7a-52ec-4196-9335-c2afa8f88766/rendered/document.pdf"
+    },
+    {
+      "doc_id": "71f106d9-9892-4b0c-8ca9-a1f14cb8bca8",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026064514A1: COMPOSITIONS D'ARNI DE PLASMINOGÈNE (PLG) ET LEURS PROCÉDÉS D'UTILISATION",
+      "source_url": "https://patents.google.com/patent/WO2026064514A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/71f106d9-9892-4b0c-8ca9-a1f14cb8bca8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "afc3430c-9741-40c3-9d77-4653fcdd983b",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026063944A1: OBICETRAPIB POUR LE TRAITEMENT DE DÉMENCES",
+      "source_url": "https://patents.google.com/patent/WO2026063944A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/afc3430c-9741-40c3-9d77-4653fcdd983b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f7f4521d-320d-4563-bad9-1d72099b0ff5",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026062560A1: MÉTHODES ET COMPOSÉS HAUTEMENT PERMÉABLES ET BIODISPONIBLES POUR LE TRAITEMENT DE MALADIES",
+      "source_url": "https://patents.google.com/patent/WO2026062560A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f7f4521d-320d-4563-bad9-1d72099b0ff5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "68ded4f8-4e45-4fc9-aaee-c8dab4fdb5a1",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026017079A1: ANTICORPS ANTI-FXI ET SON UTILISATION",
+      "source_url": "https://patents.google.com/patent/WO2026017079A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/68ded4f8-4e45-4fc9-aaee-c8dab4fdb5a1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2cd1eac9-5cee-4dd7-b53e-cf6d8284abcd",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026013578A1: COMBINAISONS COMPRENANT DES AGENTS DE DÉGRADATION CIBLANT VAV1",
+      "source_url": "https://patents.google.com/patent/WO2026013578A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2cd1eac9-5cee-4dd7-b53e-cf6d8284abcd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8c1535ac-f402-42fc-a357-08c8fdba2dea",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026015297A1: FORMULATIONS BIPHASIQUES INJECTABLES",
+      "source_url": "https://patents.google.com/patent/WO2026015297A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8c1535ac-f402-42fc-a357-08c8fdba2dea/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b222685a-8f7d-4130-a9db-0f84ab4f293f",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026050513A1: TOLÉBRUTINIB CONTRE LA SCLÉROSE EN PLAQUES",
+      "source_url": "https://patents.google.com/patent/WO2026050513A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b222685a-8f7d-4130-a9db-0f84ab4f293f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a511fd31-1bdd-4ae9-999e-15c78f597955",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026039798A1: CONDENSAT BIOMOLÉCULAIRE SYNTHÉTIQUE POUR UN TRAITEMENT ANTICOAGULANT À LA DEMANDE",
+      "source_url": "https://patents.google.com/patent/WO2026039798A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a511fd31-1bdd-4ae9-999e-15c78f597955/rendered/document.pdf"
+    },
+    {
+      "doc_id": "51644ea8-6f95-49b2-b07b-138b1f553542",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026052765A1: PROCÉDÉ UTILISANT DES NIVEAUX DE NUCLÉOSOMES",
+      "source_url": "https://patents.google.com/patent/WO2026052765A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/51644ea8-6f95-49b2-b07b-138b1f553542/rendered/document.pdf"
+    },
+    {
+      "doc_id": "278d1e8a-8be1-4814-9f17-d1816de17010",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026051998A1: COMPOSÉS, COMPOSITIONS ET PROCÉDÉS",
+      "source_url": "https://patents.google.com/patent/WO2026051998A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/278d1e8a-8be1-4814-9f17-d1816de17010/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d565edb3-62a8-4abf-bdc6-bf3da0a026c9",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026041075A1: AGONISTES DE GPL-1",
+      "source_url": "https://patents.google.com/patent/WO2026041075A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d565edb3-62a8-4abf-bdc6-bf3da0a026c9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "92328bc6-ce88-4720-b3a2-1d2eff2a2c5c",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026057848A2: DOSAGE IMMUNOLOGIQUE POUR DÉTECTER UN FRAGMENT DE COLLAGÈNE I",
+      "source_url": "https://patents.google.com/patent/WO2026057848A2",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/92328bc6-ce88-4720-b3a2-1d2eff2a2c5c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1538e305-e748-49af-b7cf-88ca3b663fde",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026046996A1: COMPOSITION ANTIMICROBIENNE DE HAUTE EFFICACITÉ",
+      "source_url": "https://patents.google.com/patent/WO2026046996A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1538e305-e748-49af-b7cf-88ca3b663fde/rendered/document.pdf"
+    },
+    {
+      "doc_id": "773b1cf3-f6fd-419e-a771-08d99c430391",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026034953A1: COMPOSITION COMPRENANT UN EXTRAIT COMPLEXE DE COPTIS JAPONICA, PHELLODENDRON CHINENSIS, SCUTELLARIA BAICALENSIS, GARDENIA JASMINOIDES ET RHEUM PALMATUM",
+      "source_url": "https://patents.google.com/patent/WO2026034953A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/773b1cf3-f6fd-419e-a771-08d99c430391/rendered/document.pdf"
+    },
+    {
+      "doc_id": "176ca015-5f11-4adf-9b24-5d53ee3feea1",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026046334A1: PROCÉDÉ D'UTILISATION D'UN AGENT D'INVERSION DES ANTICOAGULANTS POUR TRAITER UN SAIGNEMENT PROVOQUÉ PAR LES ANTICOAGULANTS",
+      "source_url": "https://patents.google.com/patent/WO2026046334A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/176ca015-5f11-4adf-9b24-5d53ee3feea1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "86900d35-20ed-413e-84b2-72206c86703c",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF JP2026057205A: アピキサバンを含有する口腔内崩壊錠",
+      "source_url": "https://patents.google.com/patent/JP2026057205A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/86900d35-20ed-413e-84b2-72206c86703c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e0734b0d-7d5d-47f9-8fac-054c50af78d7",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121460134A: 基于智能决策支持技术的血栓高风险人群管理方法及系统",
+      "source_url": "https://patents.google.com/patent/CN121460134A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e0734b0d-7d5d-47f9-8fac-054c50af78d7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "82ab680c-1249-4645-ba67-3af3e44d1b06",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121426708A: Biological thiol activated hemoglobin probe as well as preparation method and application thereof",
+      "source_url": "https://patents.google.com/patent/CN121426708A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/82ab680c-1249-4645-ba67-3af3e44d1b06/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cc8be8bc-3aeb-4d67-a356-ab0e606cdf73",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121545763A: 一种基于人工智能的真实世界医疗数据系统",
+      "source_url": "https://patents.google.com/patent/CN121545763A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cc8be8bc-3aeb-4d67-a356-ab0e606cdf73/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c2d59eee-7ad6-432e-82ff-9866e7f28d16",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121466095A: 左西孟旦在制备治疗永久性脑梗死药物中的应用",
+      "source_url": "https://patents.google.com/patent/CN121466095A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c2d59eee-7ad6-432e-82ff-9866e7f28d16/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e454966e-d866-439c-9c11-c1b9a3943b49",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121360123A: Application of phenyl pyrimidone compound",
+      "source_url": "https://patents.google.com/patent/CN121360123A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e454966e-d866-439c-9c11-c1b9a3943b49/rendered/document.pdf"
+    },
+    {
+      "doc_id": "61dc0b5c-7028-4254-8860-55d5518d098b",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121538316A: PEAR1的SNP标志物在预测抗血栓药物治疗血栓的疗效中的应用",
+      "source_url": "https://patents.google.com/patent/CN121538316A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/61dc0b5c-7028-4254-8860-55d5518d098b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "158833af-e2f8-4f29-98ad-677996ba9900",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121629039A: MIA2的SNP标志物在预测抗血栓药物治疗血栓的疗效中的应用",
+      "source_url": "https://patents.google.com/patent/CN121629039A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/158833af-e2f8-4f29-98ad-677996ba9900/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d5cc935f-ca2e-4889-b9d3-aac4a40589c4",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121613119A: 一种抗Xa因子检测试剂盒",
+      "source_url": "https://patents.google.com/patent/CN121613119A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d5cc935f-ca2e-4889-b9d3-aac4a40589c4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a991c980-03a7-40c2-ace8-0d893fd9b319",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121673287A: 一种嘧啶并环衍生物及其制备方法和应用",
+      "source_url": "https://patents.google.com/patent/CN121673287A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a991c980-03a7-40c2-ace8-0d893fd9b319/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f8c0f278-f514-4a5c-ab72-b60e54ab1c5e",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121622688A: 一种用于治疗抗磷脂综合征的组合物",
+      "source_url": "https://patents.google.com/patent/CN121622688A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f8c0f278-f514-4a5c-ab72-b60e54ab1c5e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "36321216-57bb-4fb0-901b-aec209accda2",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN224026003U: 一种阿哌沙班中间体高精度新型纯化装置",
+      "source_url": "https://patents.google.com/patent/CN224026003U",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/36321216-57bb-4fb0-901b-aec209accda2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "32b21ccc-eea2-41af-8b95-758a86d541e7",
+      "doc_kind": "ctis",
+      "title": "EU clinical trials summary: apixaban",
+      "source_url": "http://api-gateway:8080/v1/aggregate/clinical?facet=false&include=eu&inn=apixaban&limit=5000",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/32b21ccc-eea2-41af-8b95-758a86d541e7/rendered/document.pdf"
+    }
+  ]
+}

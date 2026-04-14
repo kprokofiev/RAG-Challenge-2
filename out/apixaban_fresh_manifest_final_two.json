@@ -1,0 +1,20 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "documents": [
+    {
+      "doc_id": "57db29ac-3d63-4c35-b8c7-58e9cf86df61",
+      "doc_kind": "chembl",
+      "title": "ChEMBL chemistry: apixaban",
+      "source_url": "https://www.ebi.ac.uk/chembl/explore/compound/CHEMBL231779",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/57db29ac-3d63-4c35-b8c7-58e9cf86df61/rendered/document.pdf"
+    },
+    {
+      "doc_id": "bcb0063e-8e42-4a2b-8474-a8ab08c31112",
+      "doc_kind": "byo_document",
+      "title": "apixaban_pubchem_chemistry_summary.txt",
+      "source_url": "byo://apixaban_pubchem_chemistry_summary.txt",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/bcb0063e-8e42-4a2b-8474-a8ab08c31112/rendered/document.pdf"
+    }
+  ]
+}

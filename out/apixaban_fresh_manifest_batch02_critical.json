@@ -1,0 +1,20 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "documents": [
+    {
+      "doc_id": "4f57d817-5014-44fd-998c-7a648034981b",
+      "doc_kind": "pubchem",
+      "title": "PubChem chemistry: apixaban",
+      "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/apixaban/JSON",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4f57d817-5014-44fd-998c-7a648034981b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5987b18b-107e-45b1-a77d-67c6303594cf",
+      "doc_kind": "eu_regulatory_summary",
+      "title": "EU regulatory registration summary: apixaban",
+      "source_url": "http://api-gateway:8080/api/v1/regulation/eu?inn=apixaban",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5987b18b-107e-45b1-a77d-67c6303594cf/rendered/document.pdf"
+    }
+  ]
+}

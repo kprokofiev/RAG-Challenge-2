@@ -1,0 +1,216 @@
+{
+  "case_id": "e3598016-0f03-4680-a9fe-0e1ae69b82a4",
+  "inn": "apixaban",
+  "elapsed_s": 417.2,
+  "registrations": 4,
+  "clinical_studies": 66,
+  "patent_families": 12,
+  "synthesis_steps": 6,
+  "commercial_signals": 7,
+  "unknowns": 0,
+  "evidence_registry": 517,
+  "confidence_counts": {
+    "high": 11,
+    "medium_high": 1
+  },
+  "dossier_quality_v2": {
+    "coverage": {
+      "passport": 1.0,
+      "registrations": 1.0,
+      "clinical": 0.72,
+      "patents": 1.0,
+      "synthesis": 1.0,
+      "commercial": 1.0
+    },
+    "decision_readiness": {
+      "registrations": "GREEN",
+      "clinical": "GREEN",
+      "patents_discovery": "GREEN",
+      "patents_legal": "GREEN",
+      "synthesis": "GREEN",
+      "commercial": "GREEN",
+      "context_integrity": "GREEN"
+    },
+    "critical_unknowns": [],
+    "notes": [
+      "Product contexts: 4 registration_confirmed",
+      "4 regional contexts converge to a single product-context route",
+      "clinical_studies: 66 total, all have study_id (per-NCT assembly), 66/66 with core fields (phase+status+enrollment+countries+conclusion >= 3/5)"
+    ]
+  },
+  "doc_summary": {
+    "status_counts": {
+      "indexed": 461,
+      "skipped": 4
+    },
+    "doc_kind_status_counts": [
+      {
+        "doc_kind": "approval_letter",
+        "status": "indexed",
+        "count": 2
+      },
+      {
+        "doc_kind": "assessment_report",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "chembl",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "ctgov_documents",
+        "status": "indexed",
+        "count": 59
+      },
+      {
+        "doc_kind": "ctgov_protocol",
+        "status": "indexed",
+        "count": 120
+      },
+      {
+        "doc_kind": "ctgov_results",
+        "status": "indexed",
+        "count": 60
+      },
+      {
+        "doc_kind": "ctis",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "eaeu_document",
+        "status": "indexed",
+        "count": 3
+      },
+      {
+        "doc_kind": "eu_regulatory_summary",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "grls",
+        "status": "indexed",
+        "count": 2
+      },
+      {
+        "doc_kind": "label",
+        "status": "skipped",
+        "count": 1
+      },
+      {
+        "doc_kind": "other",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "patent",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "patent_discovery_us",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "patent_expiry_us",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "patent_family_summary",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "patent_legal_events",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "patent_pdf",
+        "status": "indexed",
+        "count": 55
+      },
+      {
+        "doc_kind": "patent_pdf",
+        "status": "skipped",
+        "count": 2
+      },
+      {
+        "doc_kind": "pubchem",
+        "status": "indexed",
+        "count": 2
+      },
+      {
+        "doc_kind": "publication",
+        "status": "indexed",
+        "count": 12
+      },
+      {
+        "doc_kind": "ru_clinical_permission",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "ru_commercial_summary",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "ru_formulary_summary",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "ru_instruction",
+        "status": "indexed",
+        "count": 18
+      },
+      {
+        "doc_kind": "ru_instruction",
+        "status": "skipped",
+        "count": 1
+      },
+      {
+        "doc_kind": "ru_patent_fips",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "ru_patent_pdf",
+        "status": "indexed",
+        "count": 6
+      },
+      {
+        "doc_kind": "ru_policy_act",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "ru_procurement_summary",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "scientific_pmc",
+        "status": "indexed",
+        "count": 100
+      },
+      {
+        "doc_kind": "smpc",
+        "status": "indexed",
+        "count": 1
+      },
+      {
+        "doc_kind": "us_fda",
+        "status": "indexed",
+        "count": 5
+      }
+    ],
+    "total_documents": 465
+  },
+  "evidence_titles": []
+}
