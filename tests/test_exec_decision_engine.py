@@ -2,9 +2,11 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.dossier_schema_v3 import ExecDecisionBlock, ExecWhyClaim
 from src.exec_decision_engine import ExecDecisionEngine
+from src.exec_llm_env import require_exec_openai_api_key
 from src.exec_prompt_builder import ExecReasonerOutput
 from src.exec_retrieval_escalation import ExecRetrievalEscalator
 from src.exec_verifier import ExecVerifier
@@ -116,6 +118,18 @@ def _sample_dossier():
     }
 
 
+def _stub_reasoner_output():
+    return ExecReasonerOutput(
+        verdict="HOLD",
+        confidence="LOW",
+        sufficiency="PARTIAL",
+        short_answer="Need LLM-backed review before decision.",
+        full_answer="Need LLM-backed review before decision.",
+        caveats=["Synthesis route corroboration remains partial."],
+        missing_evidence_classes=[],
+    )
+
+
 class ExecDecisionEngineTests(unittest.TestCase):
     def test_packet_builder_filters_sections_and_regions(self):
         engine = ExecDecisionEngine()
@@ -143,14 +157,24 @@ class ExecDecisionEngineTests(unittest.TestCase):
 
     def test_generate_report_surfaces_partial_route_caveat(self):
         engine = ExecDecisionEngine()
-        report = engine.generate(_sample_dossier(), case_id="case-1")
+        with patch.object(
+            engine,
+            "_invoke_reasoner",
+            return_value=(_stub_reasoner_output(), {"model_selected": "gpt-5.4-mini"}, "stub summary"),
+        ):
+            report = engine.generate(_sample_dossier(), case_id="case-1")
         self.assertEqual(report.report_version, "v1")
         self.assertTrue(any("partial" in caveat.lower() for block in report.decision_blocks for caveat in block.caveats))
 
     @unittest.skipUnless(HAS_REPORTLAB, "reportlab is required")
     def test_render_internal_and_customer_pdf(self):
         engine = ExecDecisionEngine()
-        report = engine.generate(_sample_dossier(), case_id="case-1")
+        with patch.object(
+            engine,
+            "_invoke_reasoner",
+            return_value=(_stub_reasoner_output(), {"model_selected": "gpt-5.4-mini"}, "stub summary"),
+        ):
+            report = engine.generate(_sample_dossier(), case_id="case-1")
         with tempfile.TemporaryDirectory() as td:
             customer = Path(td) / "customer.pdf"
             internal = Path(td) / "internal.pdf"
@@ -160,6 +184,16 @@ class ExecDecisionEngineTests(unittest.TestCase):
             self.assertTrue(internal.exists())
             self.assertGreater(customer.stat().st_size, 0)
             self.assertGreater(internal.stat().st_size, 0)
+
+    def test_invoke_reasoner_requires_exec_llm_key(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        missing_env_path = str(Path(tempfile.gettempdir()) / "missing_exec_llm.env")
+        with patch.dict(os.environ, {"DDKIT_EXEC_OPENAI_ENV_FILE": missing_env_path}, clear=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                engine._invoke_reasoner(block_spec, packet, phase="first_pass")
+        self.assertIn("OPENAI_API_KEY", str(ctx.exception))
 
 
 class ExecVerifierTests(unittest.TestCase):
@@ -192,6 +226,16 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         ]
         ordered = escalator._sort_items(items)
         self.assertEqual(ordered[0]["doc_id"], "doc-native")
+
+
+class ExecLlmEnvTests(unittest.TestCase):
+    def test_require_exec_openai_api_key_loads_explicit_env_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            env_path = Path(td) / ".env"
+            env_path.write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+            with patch.dict(os.environ, {"DDKIT_EXEC_OPENAI_ENV_FILE": str(env_path)}, clear=True):
+                key = require_exec_openai_api_key()
+        self.assertEqual(key, "test-key")
 
 
 if __name__ == "__main__":

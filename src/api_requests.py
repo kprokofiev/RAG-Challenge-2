@@ -27,6 +27,7 @@ from src.openai_model_router import (
     release_routed_reservation,
     reserve_routed_model,
 )
+from src.exec_llm_env import require_exec_openai_api_key
 
 
 
@@ -113,9 +114,9 @@ def call_exec_reasoning_model(
     metadata: Optional[Dict[str, Any]] = None,
     block_class: Optional[str] = None,
 ) -> ExecReasoningCallResult:
-    load_dotenv()
+    api_key = require_exec_openai_api_key()
     client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
+        api_key=api_key,
         timeout=_get_llm_timeout_seconds(),
         max_retries=2,
     )

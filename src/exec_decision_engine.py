@@ -27,6 +27,7 @@ try:
         ExecVerificationReport,
         ModelBudgetTrace,
     )
+    from src.exec_llm_env import require_exec_openai_api_key
     from src.exec_prompt_builder import (
         ExecReasonerOutput,
         build_appendix_question_traces,
@@ -52,6 +53,7 @@ except ImportError:  # pragma: no cover
         ExecVerificationReport,
         ModelBudgetTrace,
     )
+    from exec_llm_env import require_exec_openai_api_key  # type: ignore
     from exec_prompt_builder import (  # type: ignore
         ExecReasonerOutput,
         build_appendix_question_traces,
@@ -335,8 +337,7 @@ class ExecDecisionEngine:
 
     def _invoke_reasoner(self, block_spec: Any, packet: Dict[str, Any], phase: str) -> Tuple[ExecReasonerOutput, Dict[str, Any], str]:
         prompt = build_block_prompt(block_spec, packet, self.model_profile, phase=phase)
-        if not os.getenv("OPENAI_API_KEY"):
-            return self._heuristic_reasoner(block_spec, packet, phase), {"mode": "heuristic"}, ""
+        require_exec_openai_api_key()
         try:
             try:
                 from src.api_requests import call_exec_reasoning_model
@@ -356,8 +357,10 @@ class ExecDecisionEngine:
             if not isinstance(parsed, ExecReasonerOutput):
                 parsed = ExecReasonerOutput.model_validate(parsed)
             return parsed, result.budget_trace, result.reasoning_summary or ""
-        except Exception:
-            return self._heuristic_reasoner(block_spec, packet, phase), {"mode": "heuristic_fallback"}, ""
+        except Exception as exc:
+            raise RuntimeError(
+                f"Exec reasoning failed for block '{block_spec.block_id}' during phase '{phase}': {exc}"
+            ) from exc
 
     def _sufficiency_gate(self, output: ExecReasonerOutput, packet: Dict[str, Any]) -> SufficiencyGateResult:
         reasons: List[str] = []
