@@ -249,6 +249,18 @@ class ExecDecisionEngineTests(unittest.TestCase):
         answer_prompt = build_answer_prompt(block_spec, _stub_question_plan(), snapshot, {"selected_evidence": []}, engine.model_profile)
         self.assertEqual(planner_prompt.thinking_mode, "high")
         self.assertEqual(answer_prompt.thinking_mode, "high")
+        self.assertIsNone(planner_prompt.max_output_tokens)
+        self.assertIsNone(answer_prompt.max_output_tokens)
+
+    def test_dossier_snapshot_is_compact_for_planner_stage(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        snapshot = engine._build_dossier_snapshot(_sample_dossier(), block_spec, packet)
+        self.assertEqual(snapshot["known_facts"]["registrations"]["count"], 1)
+        self.assertIn("samples", snapshot["known_facts"]["registrations"])
+        self.assertNotIsInstance(snapshot["known_facts"]["registrations"], list)
+        self.assertIn("reason_code", snapshot["critical_unknowns"][0])
 
 
 class ExecVerifierTests(unittest.TestCase):

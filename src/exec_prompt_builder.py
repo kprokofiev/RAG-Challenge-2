@@ -96,13 +96,18 @@ class ExecReasonerOutput(BaseModel):
     key_risks: List[str] = Field(default_factory=list)
 
 
+class ExecDocKindLimit(BaseModel):
+    doc_kind: str
+    max_chunks: int = 4
+
+
 class ExecRetrievalPlan(BaseModel):
     doc_kinds: List[str] = Field(default_factory=list)
     queries: List[str] = Field(default_factory=list)
     max_docs: int = 12
     max_chunks: int = 30
     chunk_policy: str = "prefer source-native confirmation chunks"
-    max_per_doc_kind: Dict[str, int] = Field(default_factory=dict)
+    doc_kind_limits: List[ExecDocKindLimit] = Field(default_factory=list)
 
 
 class ExecAnswerContract(BaseModel):
@@ -132,11 +137,21 @@ class PromptPackage(BaseModel):
     block_spec: BlockSpec
     requested_model: str
     thinking_mode: str
-    max_output_tokens: int = 2400
+    max_output_tokens: Optional[int] = None
     system_content: str
     human_content: str
     response_model: Type[BaseModel]
     phase: str = "final"
+
+
+def _optional_env_int(name: str) -> Optional[int]:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
 
 
 def _read_yaml(path: Path) -> Dict[str, Any]:
@@ -275,8 +290,14 @@ def _answer_prompt_contract(block_spec: BlockSpec, plan: ExecQuestionPlan) -> st
     )
 
 
-def _truncate_payload(value: Any, max_chars: int = 12000) -> str:
-    payload = json.dumps(value, ensure_ascii=False, default=str, indent=2)
+def _truncate_payload(value: Any, max_chars: int = 12000, compact: bool = False) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        default=str,
+        indent=None if compact else 2,
+        separators=(",", ":") if compact else None,
+    )
     if len(payload) <= max_chars:
         return payload
     return payload[: max_chars - 32] + "\n...TRUNCATED FOR PROMPT BOUNDING..."
@@ -303,6 +324,7 @@ def build_block_prompt(
         block_spec=block_spec,
         requested_model=requested_model,
         thinking_mode=thinking_mode,
+        max_output_tokens=_optional_env_int("DDKIT_EXEC_BLOCK_MAX_OUTPUT_TOKENS"),
         system_content=system_content,
         human_content=human_content,
         response_model=ExecReasonerOutput,
@@ -324,16 +346,17 @@ def build_planner_prompt(
         f"Question title: {block_spec.title}\n"
         "Produce an execution contract for retrieval and answering.\n"
         "Question trace:\n"
-        f"{_truncate_payload(question_trace, max_chars=3000)}\n"
+        f"{_truncate_payload(question_trace, max_chars=900, compact=True)}\n"
         "Compact dossier snapshot:\n"
-        f"{_truncate_payload(dossier_snapshot, max_chars=6000)}\n"
+        f"{_truncate_payload(dossier_snapshot, max_chars=2600, compact=True)}\n"
         "Corpus inventory:\n"
-        f"{_truncate_payload(corpus_inventory, max_chars=4000)}"
+        f"{_truncate_payload(corpus_inventory, max_chars=1400, compact=True)}"
     )
     return PromptPackage(
         block_spec=block_spec,
         requested_model=planner_requested_model(active_profile),
         thinking_mode=planner_thinking_mode(active_profile),
+        max_output_tokens=_optional_env_int("DDKIT_EXEC_PLANNER_MAX_OUTPUT_TOKENS"),
         system_content=system_content,
         human_content=human_content,
         response_model=ExecQuestionPlan,
@@ -356,16 +379,17 @@ def build_answer_prompt(
         f"Phase: {phase}\n"
         "Answer using the contract and the assembled evidence packet.\n"
         "Question contract:\n"
-        f"{_truncate_payload(plan.model_dump(), max_chars=5000)}\n"
+        f"{_truncate_payload(plan.model_dump(), max_chars=2500, compact=True)}\n"
         "Compact dossier snapshot:\n"
-        f"{_truncate_payload(dossier_snapshot, max_chars=4000)}\n"
+        f"{_truncate_payload(dossier_snapshot, max_chars=2200, compact=True)}\n"
         "Evidence packet:\n"
-        f"{_truncate_payload(evidence_packet, max_chars=12000)}"
+        f"{_truncate_payload(evidence_packet, max_chars=8000, compact=True)}"
     )
     return PromptPackage(
         block_spec=block_spec,
         requested_model=answerer_requested_model(block_spec, active_profile),
         thinking_mode=answerer_thinking_mode(active_profile),
+        max_output_tokens=_optional_env_int("DDKIT_EXEC_ANSWERER_MAX_OUTPUT_TOKENS"),
         system_content=system_content,
         human_content=human_content,
         response_model=ExecReasonerOutput,

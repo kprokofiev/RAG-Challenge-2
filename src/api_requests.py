@@ -71,6 +71,32 @@ def _extract_response_text(response: Any) -> str:
     return "\n".join(parts)
 
 
+def _extract_response_parsed(response: Any, response_format: Type[BaseModel]) -> Optional[BaseModel]:
+    parsed_output = getattr(response, "output_parsed", None)
+    if parsed_output is not None:
+        return parsed_output
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            parsed = getattr(content, "parsed", None)
+            if parsed is not None:
+                return response_format.model_validate(parsed)
+            if isinstance(content, dict) and content.get("parsed") is not None:
+                return response_format.model_validate(content.get("parsed"))
+    return None
+
+
+def _response_incomplete_reason(response: Any) -> str:
+    incomplete = getattr(response, "incomplete_details", None)
+    if incomplete is None and isinstance(response, dict):
+        incomplete = response.get("incomplete_details")
+    if not incomplete:
+        return ""
+    reason = getattr(incomplete, "reason", None)
+    if reason is None and isinstance(incomplete, dict):
+        reason = incomplete.get("reason")
+    return str(reason or "").strip().lower()
+
+
 def _extract_reasoning_summary(response: Any) -> str:
     reasoning = getattr(response, "reasoning", None)
     if reasoning is None and isinstance(response, dict):
@@ -93,6 +119,23 @@ def _extract_reasoning_summary(response: Any) -> str:
     elif isinstance(summary, str):
         parts.append(summary)
     return "\n".join(parts)
+
+
+def _reasoning_summary_mode() -> str:
+    value = str(os.getenv("DDKIT_EXEC_REASONING_SUMMARY") or "concise").strip().lower()
+    if value in {"auto", "concise", "detailed"}:
+        return value
+    return "concise"
+
+
+def _estimated_exec_completion_tokens(max_output_tokens: Optional[int]) -> int:
+    if max_output_tokens is not None:
+        return max(256, int(max_output_tokens))
+    raw = (os.getenv("DDKIT_EXEC_REASONING_ESTIMATED_OUTPUT_TOKENS") or "8000").strip()
+    try:
+        return max(256, int(raw))
+    except ValueError:
+        return 8000
 
 
 @dataclass
@@ -121,11 +164,25 @@ def call_exec_reasoning_model(
         max_retries=2,
     )
     prompt_tokens = _estimate_text_tokens(system_content) + _estimate_text_tokens(human_content)
-    estimated_total_tokens = prompt_tokens + max(0, int(max_output_tokens or 0))
     reasoning_effort = _map_thinking_mode_to_effort(thinking_mode)
     minimum_tier_index = 0
+    current_max_output_tokens = (
+        max(256, int(max_output_tokens))
+        if max_output_tokens is not None
+        else None
+    )
+    max_attempts = max(1, int(os.getenv("DDKIT_EXEC_REASONING_MAX_ATTEMPTS", "3") or 3))
+    retry_token_increment = max(400, int(os.getenv("DDKIT_EXEC_REASONING_RETRY_TOKEN_INCREMENT", "1600") or 1600))
+    retry_token_cap = max(
+        _estimated_exec_completion_tokens(current_max_output_tokens),
+        int(os.getenv("DDKIT_EXEC_REASONING_MAX_OUTPUT_TOKEN_CAP", "7200") or 7200),
+    )
+    reasoning_summary_mode = _reasoning_summary_mode()
+    attempt = 0
 
     while True:
+        attempt += 1
+        estimated_total_tokens = prompt_tokens + _estimated_exec_completion_tokens(current_max_output_tokens)
         routed = reserve_routed_model(
             requested_model=requested_model,
             estimated_total_tokens=estimated_total_tokens,
@@ -138,19 +195,48 @@ def call_exec_reasoning_model(
             "model": routed.model,
             "instructions": system_content,
             "input": [{"role": "user", "content": [{"type": "input_text", "text": human_content}]}],
-            "max_output_tokens": max_output_tokens,
             "metadata": metadata or {},
-            "reasoning": {"effort": reasoning_effort, "summary": "auto"},
+            "reasoning": {"effort": reasoning_effort, "summary": reasoning_summary_mode},
         }
+        if current_max_output_tokens is not None:
+            params["max_output_tokens"] = current_max_output_tokens
         try:
             if hasattr(client.responses, "parse"):
                 response = client.responses.parse(
                     text_format=response_format,
                     **params,
                 )
-                parsed_output = getattr(response, "output_parsed", None)
+                parsed_output = _extract_response_parsed(response, response_format)
                 if parsed_output is None:
+                    incomplete_reason = _response_incomplete_reason(response)
+                    usage = extract_usage_metrics(response)
+                    budget_after = commit_routed_usage(routed, usage)
+                    if (
+                        incomplete_reason == "max_output_tokens"
+                        and current_max_output_tokens is not None
+                        and attempt < max_attempts
+                        and current_max_output_tokens < retry_token_cap
+                    ):
+                        current_max_output_tokens = min(
+                            retry_token_cap,
+                            current_max_output_tokens + retry_token_increment,
+                        )
+                        minimum_tier_index = 0
+                        continue
                     parsed_output = response_format.model_validate_json(repair_json(_extract_response_text(response)))
+                    budget_trace = build_budget_trace(
+                        routed,
+                        usage_actual=usage,
+                        budget_snapshot_after=budget_after,
+                        reasoning_effort_actual=reasoning_effort,
+                    )
+                    return ExecReasoningCallResult(
+                        parsed_output=parsed_output,
+                        raw_response=response,
+                        model_selected=routed.model,
+                        budget_trace=budget_trace,
+                        reasoning_summary=_extract_reasoning_summary(response),
+                    )
             else:  # pragma: no cover
                 response = client.responses.create(
                     text={

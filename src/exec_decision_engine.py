@@ -100,6 +100,109 @@ def _normalize_region(value: Any) -> str:
     return text
 
 
+def _scalar_text(value: Any, limit: int = 80) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        for key in ("value", "label", "title", "summary", "description", "message", "status"):
+            nested = value.get(key)
+            if nested is not None:
+                text = _scalar_text(nested, limit=limit)
+                if text:
+                    return text
+        return ""
+    if isinstance(value, list):
+        parts = [_scalar_text(item, limit=limit) for item in value[:3]]
+        text = ", ".join(part for part in parts if part)
+    else:
+        text = str(value).strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def _compact_unknowns(items: List[Dict[str, Any]], limit: int = 4) -> List[Dict[str, str]]:
+    compacted: List[Dict[str, str]] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        compacted.append(
+            {
+                "field_path": _scalar_text(item.get("field_path"), limit=80),
+                "reason_code": _scalar_text(item.get("reason_code"), limit=50),
+                "message": _scalar_text(item.get("message"), limit=120),
+            }
+        )
+    return compacted
+
+
+def _sample_registrations(items: List[Dict[str, Any]], limit: int = 3) -> Dict[str, Any]:
+    samples: List[Dict[str, str]] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        samples.append(
+            {
+                "region": _normalize_region(item.get("region")),
+                "verdict": _scalar_text(item.get("verdict") or item.get("registration_verdict"), limit=32),
+                "status": _scalar_text(item.get("status"), limit=80),
+                "identifier": _scalar_text(item.get("identifiers"), limit=80),
+            }
+        )
+    return {
+        "count": len(items),
+        "regions": sorted({_normalize_region(item.get("region")) for item in items if isinstance(item, dict)}),
+        "confirmed_count": sum(1 for item in items if isinstance(item, dict) and _infer_registration_positive(item)),
+        "samples": samples,
+    }
+
+
+def _sample_commercial_signals(items: List[Dict[str, Any]], limit: int = 3) -> Dict[str, Any]:
+    samples: List[Dict[str, str]] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        samples.append(
+            {
+                "region": _normalize_region(item.get("region") or item.get("jurisdiction")),
+                "category": _scalar_text(item.get("category"), limit=40),
+                "verdict": _scalar_text(item.get("verdict"), limit=32),
+                "summary": _scalar_text(item.get("summary"), limit=90),
+            }
+        )
+    return {
+        "count": len(items),
+        "regions": sorted(
+            {
+                _normalize_region(item.get("region") or item.get("jurisdiction"))
+                for item in items
+                if isinstance(item, dict)
+            }
+        ),
+        "samples": samples,
+    }
+
+
+def _sample_product_contexts(items: List[Dict[str, Any]], limit: int = 3) -> Dict[str, Any]:
+    samples: List[Dict[str, str]] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        samples.append(
+            {
+                "region": _normalize_region(item.get("region")),
+                "label": _scalar_text(item.get("label"), limit=60),
+                "dosage_forms": _scalar_text(item.get("dosage_forms"), limit=60),
+                "strengths": _scalar_text(item.get("strengths"), limit=60),
+            }
+        )
+    return {
+        "count": len(items),
+        "regions": sorted({_normalize_region(item.get("region")) for item in items if isinstance(item, dict)}),
+        "samples": samples,
+    }
+
+
 def _iter_evidence_refs(value: Any) -> Iterable[str]:
     if isinstance(value, dict):
         refs = value.get("evidence_refs", [])
@@ -248,39 +351,46 @@ class ExecDecisionEngine:
             "question_trace": question_trace,
             "regions": list(block_spec.regions),
             "known_facts": {
-                "registrations": registrations[:6],
-                "commercial_signals": commercial[:6],
-                "product_contexts": product_contexts[:6],
+                "registrations": _sample_registrations(registrations),
+                "commercial_signals": _sample_commercial_signals(commercial),
+                "product_contexts": _sample_product_contexts(product_contexts),
                 "clinical_summary": {
                     "count": len(clinical),
                     "sample_titles": [
-                        str(((item.get("title") or {}).get("value")) or "")
+                        _scalar_text(item.get("title"), limit=80)
                         for item in clinical[:5]
                         if isinstance(item, dict)
+                        and _scalar_text(item.get("title"), limit=80)
                     ],
                 },
                 "patent_summary": {
                     "count": len(patents),
                     "sample_statuses": [
-                        str(((item.get("legal_status_snapshot") or {}).get("value")) or "")
+                        _scalar_text(item.get("legal_status_snapshot"), limit=80)
                         for item in patents[:5]
                         if isinstance(item, dict)
+                        and _scalar_text(item.get("legal_status_snapshot"), limit=80)
                     ],
                 },
                 "synthesis_summary": {
                     "count": len(synthesis),
                     "kinds": [
-                        str(item.get("kind") or "")
+                        _scalar_text(item.get("kind"), limit=40)
                         for item in synthesis[:6]
                         if isinstance(item, dict)
+                        and _scalar_text(item.get("kind"), limit=40)
                     ],
                 },
             },
-            "known_unknowns": (packet.get("unknowns") or [])[:8],
-            "critical_unknowns": (packet.get("critical_unknowns") or [])[:8],
+            "known_unknowns": _compact_unknowns(packet.get("unknowns") or []),
+            "critical_unknowns": _compact_unknowns(packet.get("critical_unknowns") or []),
             "coverage": ((packet.get("dossier_quality_v2") or {}).get("coverage") or {}),
             "decision_readiness": ((packet.get("dossier_quality_v2") or {}).get("decision_readiness") or {}),
-            "notes": ((packet.get("dossier_quality_v2") or {}).get("notes") or [])[:8],
+            "notes": [
+                _scalar_text(item, limit=120)
+                for item in ((packet.get("dossier_quality_v2") or {}).get("notes") or [])[:4]
+                if _scalar_text(item, limit=120)
+            ],
             "coverage_ledger_totals": ((packet.get("coverage_ledger") or {}).get("totals") or {}),
             "partial_route_corroboration": packet.get("partial_route_corroboration"),
         }
@@ -307,7 +417,7 @@ class ExecDecisionEngine:
             },
             "evidence_registry_count": len(evidence_registry),
             "available_doc_kinds": sorted(doc_kind_counts.keys()),
-            "doc_kind_counts": doc_kind_counts,
+            "doc_kind_counts": dict(sorted(doc_kind_counts.items(), key=lambda item: (-item[1], item[0]))[:12]),
             "regions_with_data": sorted(region for region in regions if region),
             "retrieval_budget": {
                 "max_docs": int(os.getenv("DDKIT_EXEC_PLAN_MAX_DOCS", "12")),

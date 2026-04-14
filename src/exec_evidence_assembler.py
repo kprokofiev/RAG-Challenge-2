@@ -143,8 +143,9 @@ class ExecEvidenceAssembler:
             "max_docs": max(1, int(retrieval.max_docs or 12)),
             "max_chunks": max(1, int(retrieval.max_chunks or 30)),
             "max_per_doc_kind": {
-                str(key): max(1, int(value))
-                for key, value in (retrieval.max_per_doc_kind or {}).items()
+                str(item.doc_kind): max(1, int(item.max_chunks))
+                for item in (retrieval.doc_kind_limits or [])
+                if str(item.doc_kind or "").strip()
             },
         }
 
