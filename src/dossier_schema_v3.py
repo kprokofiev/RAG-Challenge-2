@@ -313,6 +313,26 @@ class DossierCommercialSignal(BaseModel):
         default_factory=list,
         description="Named supporting metrics extracted from commercial support docs"
     )
+    source_name: Optional[str] = Field(
+        None,
+        description="Highest-priority source label backing this commercial signal"
+    )
+    source_tier: Optional[str] = Field(
+        None,
+        description="Source tier for this signal: primary | support_summary | secondary | discovery_only"
+    )
+    source_priority: Optional[int] = Field(
+        None,
+        description="Relative source priority used when multiple sources support the same signal"
+    )
+    dataset_date: Optional[str] = Field(
+        None,
+        description="Dataset snapshot date associated with the signal, when available"
+    )
+    retrieved_at: Optional[str] = Field(
+        None,
+        description="Timestamp when the supporting commercial source was generated or retrieved"
+    )
     evidence_refs: List[str] = Field(
         default_factory=list,
         description="All evidence_ids backing this commercial signal"

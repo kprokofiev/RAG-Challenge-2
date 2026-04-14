@@ -459,7 +459,16 @@ def _build_synthesis_overview_claims(
     for fam in families:
         tech_focus = (_ev_value(fam.get("technical_focus")) or "").strip().lower()
         process_rel = (_ev_value(fam.get("process_relevance")) or "").strip().lower()
-        if tech_focus in {"process_manufacturing", "intermediate_synthesis"} or process_rel in {"moderate", "strong"}:
+        what_blocks = (_ev_value(fam.get("what_blocks")) or "").strip().lower()
+        if (
+            tech_focus in {"process_manufacturing", "intermediate_synthesis"}
+            or what_blocks == "synthesis"
+            or (
+                process_rel == "strong"
+                and tech_focus not in {"formulation", "dosage_form_delivery", "composition", "combination"}
+                and what_blocks not in {"formulation", "method_of_use"}
+            )
+        ):
             process_families.append(fam)
 
     route_is_corroborated = len(api_steps) >= 2 or len(process_families) >= 2
@@ -1207,6 +1216,12 @@ class ClaimBuilder:
                 step for step in (dossier.get("synthesis_steps") or [])
                 if _normalize_step_kind(step) == "api_synthesis"
             ]
+            route_docs = {
+                str(doc_id).strip()
+                for step in api_steps
+                for doc_id in (step.get("source_patent_refs") or [])
+                if str(doc_id).strip()
+            }
             if not api_steps:
                 derived.append({
                     "field_path": "synthesis_steps.api_route",
@@ -1216,6 +1231,20 @@ class ClaimBuilder:
                         "a verified API synthesis route is not directly evidenced in the corpus."
                     ),
                     "suggested_next_action": "Attach process-chemistry/API synthesis patents or CMC sources before treating synthesis as closed.",
+                })
+            elif len(api_steps) < 2 or len(route_docs) < 2:
+                derived.append({
+                    "field_path": "synthesis_steps.api_route",
+                    "reason_code": "PARTIAL_ROUTE_CORROBORATION",
+                    "message": (
+                        f"Current dossier has only {len(api_steps)} API synthesis step(s) "
+                        f"supported by {len(route_docs)} corroborating process document(s); "
+                        "route remains partial and should not be treated as GREEN."
+                    ),
+                    "suggested_next_action": (
+                        "Attach at least one more independent process-chemistry/API source "
+                        "with explicit intermediates or reaction sequence."
+                    ),
                 })
 
         return derived

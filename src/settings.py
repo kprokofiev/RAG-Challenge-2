@@ -156,7 +156,11 @@ class WorkerSettings(BaseSettings):
         env="DDKIT_SYNTHESIS_PATENT_CORPUS_MERGE_K",
     )
     ddkit_commercial_signal_doc_kinds: str = Field(
-        "ru_commercial_summary,ru_formulary_summary,ru_procurement_summary,ru_policy_act,formulary,pricing,payer_policy",
+        (
+            "ru_registration_export,ru_esklp_snapshot,ru_procurement_snapshot,ru_official_act,"
+            "ru_commercial_summary,ru_formulary_summary,ru_procurement_summary,ru_policy_act,"
+            "formulary,pricing,payer_policy"
+        ),
         env="DDKIT_COMMERCIAL_SIGNAL_DOC_KINDS",
     )
     ddkit_commercial_signal_max: int = Field(
