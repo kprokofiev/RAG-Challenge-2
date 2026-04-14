@@ -58,9 +58,13 @@ class _FakeRedis:
     def pipeline(self):
         return _FakePipeline(self)
 
+    def ping(self):
+        return True
+
 
 class OpenAIModelRouterExecTests(unittest.TestCase):
     def setUp(self):
+        router._redis_client_cache.clear()
         self.redis = _FakeRedis()
         self.redis_patcher = mock.patch.object(router, "_redis_client", return_value=self.redis)
         self.redis_patcher.start()
@@ -78,8 +82,12 @@ class OpenAIModelRouterExecTests(unittest.TestCase):
         self.env.start()
 
     def tearDown(self):
-        self.redis_patcher.stop()
+        try:
+            self.redis_patcher.stop()
+        except RuntimeError:
+            pass
         self.env.stop()
+        router._redis_client_cache.clear()
 
     def test_elite_exhausted_falls_back_to_mini(self):
         state_key = router._redis_state_key(router._utc_day_key())
@@ -128,6 +136,34 @@ class OpenAIModelRouterExecTests(unittest.TestCase):
             thinking_mode="medium",
         )
         self.assertEqual(routed.tier, "nano")
+
+    def test_router_tries_localhost_when_env_uses_container_hostname(self):
+        self.redis_patcher.stop()
+
+        attempts = []
+
+        class _FailingRedis:
+            def ping(self):
+                raise OSError("name resolution failed")
+
+        def _from_url(url, decode_responses=True):
+            attempts.append(url)
+            if url == "redis://redis:6379/0":
+                return _FailingRedis()
+            self.assertEqual(url, "redis://localhost:6379/0")
+            return self.redis
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "REDIS_URL": "redis://redis:6379/0",
+            },
+            clear=False,
+        ), mock.patch.object(router.redis_lib.Redis, "from_url", side_effect=_from_url):
+            snapshot = router.get_budget_snapshot()
+
+        self.assertEqual(snapshot["mini"]["remaining_tokens"], 2500000)
+        self.assertEqual(attempts, ["redis://redis:6379/0", "redis://localhost:6379/0"])
 
 
 if __name__ == "__main__":

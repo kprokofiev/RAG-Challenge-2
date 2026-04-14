@@ -6,6 +6,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 try:
     import redis as redis_lib
@@ -14,6 +15,7 @@ except ImportError:  # pragma: no cover
 
 
 _log = logging.getLogger(__name__)
+_redis_client_cache: Dict[str, Any] = {}
 
 
 @dataclass(frozen=True)
@@ -63,17 +65,70 @@ def _redis_url() -> Optional[str]:
     return None
 
 
+def _rebuild_netloc(parsed: ParseResult, host: str, port: Optional[int]) -> str:
+    userinfo = ""
+    if parsed.username:
+        userinfo = parsed.username
+        if parsed.password:
+            userinfo += f":{parsed.password}"
+        userinfo += "@"
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    if port:
+        return f"{userinfo}{host}:{port}"
+    return f"{userinfo}{host}"
+
+
+def _host_fallback_redis_url(url: str) -> Optional[str]:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    hostname = (parsed.hostname or "").strip().lower()
+    if hostname not in {"redis", "host.docker.internal"}:
+        return None
+    port = parsed.port or 6379
+    rebuilt = parsed._replace(netloc=_rebuild_netloc(parsed, "localhost", port))
+    return urlunparse(rebuilt)
+
+
+def _redis_url_candidates() -> list[str]:
+    raw = _redis_url()
+    if not raw:
+        return []
+    candidates: list[str] = []
+    for candidate in (
+        raw,
+        (os.getenv("OPENAI_MODEL_ROUTER_HOST_REDIS_URL") or "").strip(),
+        _host_fallback_redis_url(raw),
+    ):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
+
 def _redis_client():
     if redis_lib is None:
         return None
-    url = _redis_url()
-    if not url:
+    urls = _redis_url_candidates()
+    if not urls:
         return None
-    try:
-        return redis_lib.Redis.from_url(url, decode_responses=True)
-    except Exception as exc:  # pragma: no cover
-        _log.warning("openai_model_router_redis_init_failed: %s", exc)
-        return None
+    last_exc: Optional[Exception] = None
+    for url in urls:
+        cached = _redis_client_cache.get(url)
+        if cached is not None:
+            return cached
+        try:
+            client = redis_lib.Redis.from_url(url, decode_responses=True)
+            client.ping()
+            _redis_client_cache[url] = client
+            return client
+        except Exception as exc:  # pragma: no cover
+            last_exc = exc
+            continue
+    if last_exc is not None:
+        _log.warning("openai_model_router_redis_init_failed: %s", last_exc)
+    return None
 
 
 def _utc_now() -> dt.datetime:
