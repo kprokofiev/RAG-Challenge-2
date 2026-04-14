@@ -641,6 +641,15 @@ class ModelBudgetTrace(BaseModel):
     reset_at_utc: Optional[str] = None
 
 
+class ExecModelStageTrace(BaseModel):
+    """Trace for one LLM stage inside the exec pipeline."""
+    model_config = ConfigDict(protected_namespaces=())
+    model_selected: Optional[str] = None
+    thinking_mode: Optional[str] = None
+    reasoning_summary: Optional[str] = None
+    budget_trace: Optional[ModelBudgetTrace] = None
+
+
 class ExecBlockTrace(BaseModel):
     """Internal per-block trace; safe for internal artifacts only."""
     model_config = ConfigDict(protected_namespaces=())
@@ -653,6 +662,10 @@ class ExecBlockTrace(BaseModel):
     thinking_mode: Optional[str] = None
     reasoning_summary: Optional[str] = None
     budget_trace: Optional[ModelBudgetTrace] = None
+    planner_trace: Optional[ExecModelStageTrace] = None
+    answer_trace: Optional[ExecModelStageTrace] = None
+    contract_summary: Dict[str, Any] = Field(default_factory=dict)
+    evidence_packet_summary: Dict[str, Any] = Field(default_factory=dict)
     verifier_verdict: Optional[str] = None
 
 

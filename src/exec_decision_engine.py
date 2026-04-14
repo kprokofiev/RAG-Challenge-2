@@ -20,6 +20,7 @@ try:
         ExecDecisionBlock,
         ExecDecisionReportV1,
         ExecEvidenceSufficiency,
+        ExecModelStageTrace,
         ExecNextAction,
         ExecRunManifest,
         ExecToplineSummary,
@@ -27,15 +28,18 @@ try:
         ExecVerificationReport,
         ModelBudgetTrace,
     )
+    from src.exec_evidence_assembler import ExecEvidenceAssembler
     from src.exec_llm_env import require_exec_openai_api_key
     from src.exec_prompt_builder import (
+        ExecQuestionPlan,
         ExecReasonerOutput,
+        build_answer_prompt,
         build_appendix_question_traces,
-        build_block_prompt,
+        build_planner_prompt,
         get_model_profile,
         load_exec_decision_library,
+        resolve_primary_question_trace,
     )
-    from src.exec_retrieval_escalation import ExecRetrievalEscalator
     from src.exec_verifier import ExecVerifier
 except ImportError:  # pragma: no cover
     from dossier_schema_v3 import (  # type: ignore
@@ -46,6 +50,7 @@ except ImportError:  # pragma: no cover
         ExecDecisionBlock,
         ExecDecisionReportV1,
         ExecEvidenceSufficiency,
+        ExecModelStageTrace,
         ExecNextAction,
         ExecRunManifest,
         ExecToplineSummary,
@@ -53,15 +58,18 @@ except ImportError:  # pragma: no cover
         ExecVerificationReport,
         ModelBudgetTrace,
     )
+    from exec_evidence_assembler import ExecEvidenceAssembler  # type: ignore
     from exec_llm_env import require_exec_openai_api_key  # type: ignore
     from exec_prompt_builder import (  # type: ignore
+        ExecQuestionPlan,
         ExecReasonerOutput,
+        build_answer_prompt,
         build_appendix_question_traces,
-        build_block_prompt,
+        build_planner_prompt,
         get_model_profile,
         load_exec_decision_library,
+        resolve_primary_question_trace,
     )
-    from exec_retrieval_escalation import ExecRetrievalEscalator  # type: ignore
     from exec_verifier import ExecVerifier  # type: ignore
 
 
@@ -135,7 +143,7 @@ class ExecDecisionEngine:
     def __init__(self, retriever: Any = None):
         self.block_specs = load_exec_decision_library()
         self.model_profile = get_model_profile()
-        self.escalator = ExecRetrievalEscalator(retriever=retriever)
+        self.assembler = ExecEvidenceAssembler(retriever=retriever)
         self.verifier = ExecVerifier()
 
     def _budget_snapshot(self) -> Dict[str, Any]:
@@ -222,6 +230,91 @@ class ExecDecisionEngine:
             packet.get("dossier_quality_v2", {}) or {}
         ).get("critical_unknowns", [])
         return packet
+
+    def _build_dossier_snapshot(self, dossier: Dict[str, Any], block_spec: Any, packet: Dict[str, Any]) -> Dict[str, Any]:
+        registrations = packet.get("registrations", []) or []
+        commercial = packet.get("commercial_signals", []) or []
+        clinical = packet.get("clinical_studies", []) or []
+        patents = packet.get("patent_families", []) or []
+        synthesis = packet.get("synthesis_steps", []) or []
+        product_contexts = packet.get("product_contexts", []) or []
+        question_trace = resolve_primary_question_trace(block_spec)
+        return {
+            "case_id": packet.get("case_id"),
+            "inn": packet.get("inn"),
+            "block_id": block_spec.block_id,
+            "title": block_spec.title,
+            "verdict_family": block_spec.verdict_family,
+            "question_trace": question_trace,
+            "regions": list(block_spec.regions),
+            "known_facts": {
+                "registrations": registrations[:6],
+                "commercial_signals": commercial[:6],
+                "product_contexts": product_contexts[:6],
+                "clinical_summary": {
+                    "count": len(clinical),
+                    "sample_titles": [
+                        str(((item.get("title") or {}).get("value")) or "")
+                        for item in clinical[:5]
+                        if isinstance(item, dict)
+                    ],
+                },
+                "patent_summary": {
+                    "count": len(patents),
+                    "sample_statuses": [
+                        str(((item.get("legal_status_snapshot") or {}).get("value")) or "")
+                        for item in patents[:5]
+                        if isinstance(item, dict)
+                    ],
+                },
+                "synthesis_summary": {
+                    "count": len(synthesis),
+                    "kinds": [
+                        str(item.get("kind") or "")
+                        for item in synthesis[:6]
+                        if isinstance(item, dict)
+                    ],
+                },
+            },
+            "known_unknowns": (packet.get("unknowns") or [])[:8],
+            "critical_unknowns": (packet.get("critical_unknowns") or [])[:8],
+            "coverage": ((packet.get("dossier_quality_v2") or {}).get("coverage") or {}),
+            "decision_readiness": ((packet.get("dossier_quality_v2") or {}).get("decision_readiness") or {}),
+            "notes": ((packet.get("dossier_quality_v2") or {}).get("notes") or [])[:8],
+            "coverage_ledger_totals": ((packet.get("coverage_ledger") or {}).get("totals") or {}),
+            "partial_route_corroboration": packet.get("partial_route_corroboration"),
+        }
+
+    def _build_corpus_inventory(self, dossier: Dict[str, Any], block_spec: Any, packet: Dict[str, Any]) -> Dict[str, Any]:
+        evidence_registry = packet.get("evidence_registry", []) or []
+        doc_kind_counts: Dict[str, int] = {}
+        for item in evidence_registry:
+            doc_kind = str(item.get("doc_kind") or "unknown")
+            doc_kind_counts[doc_kind] = doc_kind_counts.get(doc_kind, 0) + 1
+        regions = set()
+        for section_name in ("registrations", "commercial_signals", "product_contexts"):
+            for item in packet.get(section_name, []) or []:
+                if isinstance(item, dict):
+                    regions.add(_normalize_region(item.get("region") or item.get("jurisdiction") or item.get("country")))
+        return {
+            "available_sections": {
+                section: (
+                    len(packet.get(section, []) or [])
+                    if isinstance(packet.get(section), list)
+                    else bool(packet.get(section))
+                )
+                for section in block_spec.sections
+            },
+            "evidence_registry_count": len(evidence_registry),
+            "available_doc_kinds": sorted(doc_kind_counts.keys()),
+            "doc_kind_counts": doc_kind_counts,
+            "regions_with_data": sorted(region for region in regions if region),
+            "retrieval_budget": {
+                "max_docs": int(os.getenv("DDKIT_EXEC_PLAN_MAX_DOCS", "12")),
+                "max_chunks": int(os.getenv("DDKIT_EXEC_PLAN_MAX_CHUNKS", "30")),
+                "max_per_source_kind": int(os.getenv("DDKIT_EXEC_PLAN_MAX_PER_DOC_KIND", "6")),
+            },
+        }
 
     def _missing_evidence_classes(self, packet: Dict[str, Any], block_spec: Any) -> List[str]:
         missing: List[str] = []
@@ -335,8 +428,12 @@ class ExecDecisionEngine:
             key_risks=[item["title"] for item in blockers],
         )
 
-    def _invoke_reasoner(self, block_spec: Any, packet: Dict[str, Any], phase: str) -> Tuple[ExecReasonerOutput, Dict[str, Any], str]:
-        prompt = build_block_prompt(block_spec, packet, self.model_profile, phase=phase)
+    def _call_reasoning_prompt(
+        self,
+        prompt: Any,
+        block_spec: Any,
+        phase: str,
+    ) -> Tuple[Any, Dict[str, Any], str]:
         require_exec_openai_api_key()
         try:
             try:
@@ -353,14 +450,49 @@ class ExecDecisionEngine:
                 metadata={"block_id": block_spec.block_id, "phase": phase},
                 block_class=block_spec.block_class,
             )
-            parsed = result.parsed_output
-            if not isinstance(parsed, ExecReasonerOutput):
-                parsed = ExecReasonerOutput.model_validate(parsed)
-            return parsed, result.budget_trace, result.reasoning_summary or ""
+            return result.parsed_output, result.budget_trace, result.reasoning_summary or ""
         except Exception as exc:
             raise RuntimeError(
                 f"Exec reasoning failed for block '{block_spec.block_id}' during phase '{phase}': {exc}"
             ) from exc
+
+    def _invoke_planner(
+        self,
+        block_spec: Any,
+        dossier_snapshot: Dict[str, Any],
+        corpus_inventory: Dict[str, Any],
+    ) -> Tuple[ExecQuestionPlan, Dict[str, Any], str]:
+        prompt = build_planner_prompt(
+            block_spec=block_spec,
+            dossier_snapshot=dossier_snapshot,
+            corpus_inventory=corpus_inventory,
+            profile=self.model_profile,
+        )
+        parsed, budget_trace, reasoning_summary = self._call_reasoning_prompt(prompt, block_spec, phase="planner")
+        if not isinstance(parsed, ExecQuestionPlan):
+            parsed = ExecQuestionPlan.model_validate(parsed)
+        return parsed, budget_trace, reasoning_summary
+
+    def _invoke_answerer(
+        self,
+        block_spec: Any,
+        plan: ExecQuestionPlan,
+        dossier_snapshot: Dict[str, Any],
+        evidence_packet: Dict[str, Any],
+        phase: str = "answerer",
+    ) -> Tuple[ExecReasonerOutput, Dict[str, Any], str]:
+        prompt = build_answer_prompt(
+            block_spec=block_spec,
+            plan=plan,
+            dossier_snapshot=dossier_snapshot,
+            evidence_packet=evidence_packet,
+            profile=self.model_profile,
+            phase=phase,
+        )
+        parsed, budget_trace, reasoning_summary = self._call_reasoning_prompt(prompt, block_spec, phase=phase)
+        if not isinstance(parsed, ExecReasonerOutput):
+            parsed = ExecReasonerOutput.model_validate(parsed)
+        return parsed, budget_trace, reasoning_summary
 
     def _sufficiency_gate(self, output: ExecReasonerOutput, packet: Dict[str, Any]) -> SufficiencyGateResult:
         reasons: List[str] = []
@@ -382,13 +514,28 @@ class ExecDecisionEngine:
             reasons=reasons,
         )
 
+    def _hydrate_answer_output(
+        self,
+        output: ExecReasonerOutput,
+        evidence_packet: Dict[str, Any],
+    ) -> ExecReasonerOutput:
+        if not output.top_evidence_refs:
+            output.top_evidence_refs = list(evidence_packet.get("selected_evidence_ids", [])[:8])
+        if not output.missing_evidence_classes:
+            output.missing_evidence_classes = list(evidence_packet.get("missing_evidence_classes", [])[:8])
+        if not output.caveats and evidence_packet.get("contradictions"):
+            output.caveats = [item.get("summary", "") for item in evidence_packet.get("contradictions", [])[:3] if item.get("summary")]
+        return output
+
     def _to_block(
         self,
         block_spec: Any,
         packet: Dict[str, Any],
+        plan: ExecQuestionPlan,
+        evidence_packet: Dict[str, Any],
         output: ExecReasonerOutput,
-        budget_trace: Dict[str, Any],
-        reasoning_summary: str,
+        planner_trace: ExecModelStageTrace,
+        answer_trace: ExecModelStageTrace,
         phase: str,
         escalated: bool,
     ) -> ExecDecisionBlock:
@@ -434,13 +581,23 @@ class ExecDecisionEngine:
             model_trace=ExecBlockTrace(
                 stage=phase,
                 input_packet_hash=_hash_payload(packet),
-                selected_evidence_ids=list(packet.get("evidence_ids", [])[:20]),
+                selected_evidence_ids=list(evidence_packet.get("selected_evidence_ids", [])[:20]),
                 missing_evidence_classes=list(output.missing_evidence_classes),
                 escalation_performed=escalated,
-                model_selected=str(budget_trace.get("model_selected") or budget_trace.get("mode") or ""),
-                thinking_mode=str(budget_trace.get("thinking_mode_requested") or ""),
-                reasoning_summary=reasoning_summary or None,
-                budget_trace=ModelBudgetTrace.model_validate(budget_trace or {}),
+                model_selected=answer_trace.model_selected,
+                thinking_mode=answer_trace.thinking_mode,
+                reasoning_summary=answer_trace.reasoning_summary,
+                budget_trace=answer_trace.budget_trace,
+                planner_trace=planner_trace,
+                answer_trace=answer_trace,
+                contract_summary={
+                    "question_id": plan.question_id,
+                    "answer_type": plan.answer_type,
+                    "needed_facts": list(plan.needed_facts),
+                    "doc_kinds": list(plan.retrieval_plan.doc_kinds),
+                    "positive_verdict_requires": list(plan.gates.positive_verdict_requires),
+                },
+                evidence_packet_summary=dict(evidence_packet.get("evidence_packet_summary", {})),
             ),
         )
 
@@ -473,59 +630,99 @@ class ExecDecisionEngine:
 
         for block_spec in self.block_specs.values():
             packet = self._build_packet(payload, case_id, block_spec)
-            first_output, first_budget_trace, first_reasoning_summary = self._invoke_reasoner(block_spec, packet, phase="first_pass")
-            gate = self._sufficiency_gate(first_output, packet)
-            final_output = first_output
-            final_budget_trace = first_budget_trace
-            final_reasoning_summary = first_reasoning_summary
+            dossier_snapshot = self._build_dossier_snapshot(payload, block_spec, packet)
+            corpus_inventory = self._build_corpus_inventory(payload, block_spec, packet)
+            plan, planner_budget_trace, planner_reasoning_summary = self._invoke_planner(
+                block_spec,
+                dossier_snapshot,
+                corpus_inventory,
+            )
+
+            evidence_packet = self.assembler.assemble(
+                base_packet=packet,
+                plan=plan,
+                case_id=case_id,
+                allow_retrieval=False,
+            )
+            answer_output, answer_budget_trace, answer_reasoning_summary = self._invoke_answerer(
+                block_spec,
+                plan,
+                dossier_snapshot,
+                evidence_packet,
+                phase="answerer",
+            )
+            answer_output = self._hydrate_answer_output(answer_output, evidence_packet)
+            gate_packet = dict(packet)
+            gate_packet["critical_unknowns"] = list(evidence_packet.get("critical_unknowns", packet.get("critical_unknowns", [])))
+            gate = self._sufficiency_gate(answer_output, gate_packet)
+            final_output = answer_output
+            final_answer_budget_trace = answer_budget_trace
+            final_answer_reasoning_summary = answer_reasoning_summary
+            final_evidence_packet = evidence_packet
             escalated = False
 
             if gate.needs_escalation:
-                escalation = self.escalator.escalate(
-                    block_spec,
-                    packet,
-                    first_output.missing_evidence_classes or self._missing_evidence_classes(packet, block_spec),
+                escalated_packet = self.assembler.assemble(
+                    base_packet=packet,
+                    plan=plan,
                     case_id=case_id,
+                    allow_retrieval=True,
                 )
                 escalation_triggers.append(
                     {
                         "block_id": block_spec.block_id,
                         "reasons": gate.reasons,
-                        "trace": escalation.trace,
+                        "contract": {
+                            "needed_facts": list(plan.needed_facts),
+                            "doc_kinds": list(plan.retrieval_plan.doc_kinds),
+                            "queries": list(plan.retrieval_plan.queries),
+                        },
+                        "trace": {
+                            "retrieved_extra_count": (escalated_packet.get("evidence_packet_summary", {}) or {}).get("retrieved_extra_count", 0),
+                            "missing_evidence_classes": list(escalated_packet.get("missing_evidence_classes", [])),
+                        },
                     }
                 )
-                if escalation.performed:
+                if (escalated_packet.get("evidence_packet_summary", {}) or {}).get("retrieved_extra_count", 0):
                     escalated = True
-                    normalized_extra = []
-                    synthetic_refs = []
-                    for idx, item in enumerate(escalation.retrieved_items, start=1):
-                        evidence_id = f"extra_{block_spec.block_id}_{idx}"
-                        normalized = dict(item)
-                        normalized["evidence_id"] = evidence_id
-                        normalized_extra.append(normalized)
-                        synthetic_refs.append(evidence_id)
-                    packet["extra_retrieval"] = normalized_extra
-                    packet["evidence_ids"] = list(dict.fromkeys(list(packet.get("evidence_ids", [])) + synthetic_refs))
-                    packet["evidence_registry"] = list(packet.get("evidence_registry", [])) + [
-                        {
-                            "evidence_id": item["evidence_id"],
-                            "doc_id": item.get("doc_id"),
-                            "page": item.get("page"),
-                            "snippet": item.get("snippet", ""),
-                            "doc_kind": item.get("doc_kind"),
-                            "source_url": item.get("source_url"),
-                        }
-                        for item in normalized_extra
-                    ]
-                    retrieved_extra_doc_ids.extend(escalation.retrieved_doc_ids)
-                    final_output, final_budget_trace, final_reasoning_summary = self._invoke_reasoner(block_spec, packet, phase="final")
+                    final_evidence_packet = escalated_packet
+                    retrieved_extra_doc_ids.extend(
+                        [
+                            str(item.get("doc_id") or "")
+                            for item in escalated_packet.get("selected_evidence", [])
+                            if item.get("doc_id")
+                        ]
+                    )
+                    final_output, final_answer_budget_trace, final_answer_reasoning_summary = self._invoke_answerer(
+                        block_spec,
+                        plan,
+                        dossier_snapshot,
+                        final_evidence_packet,
+                        phase="final_answerer",
+                    )
+                    final_output = self._hydrate_answer_output(final_output, final_evidence_packet)
+
+            planner_trace = ExecModelStageTrace(
+                model_selected=str(planner_budget_trace.get("model_selected") or ""),
+                thinking_mode=str(planner_budget_trace.get("thinking_mode_requested") or ""),
+                reasoning_summary=planner_reasoning_summary or None,
+                budget_trace=ModelBudgetTrace.model_validate(planner_budget_trace or {}),
+            )
+            answer_trace = ExecModelStageTrace(
+                model_selected=str(final_answer_budget_trace.get("model_selected") or ""),
+                thinking_mode=str(final_answer_budget_trace.get("thinking_mode_requested") or ""),
+                reasoning_summary=final_answer_reasoning_summary or None,
+                budget_trace=ModelBudgetTrace.model_validate(final_answer_budget_trace or {}),
+            )
 
             block = self._to_block(
                 block_spec,
                 packet,
+                plan,
+                final_evidence_packet,
                 final_output,
-                final_budget_trace,
-                final_reasoning_summary,
+                planner_trace,
+                answer_trace,
                 phase="final" if escalated else "single_pass",
                 escalated=escalated,
             )
@@ -573,6 +770,9 @@ class ExecDecisionEngine:
                 "engine_enabled": _env_bool("DDKIT_EXEC_ENGINE_ENABLED", True),
                 "engine_version": os.getenv("DDKIT_EXEC_ENGINE_VERSION", "v1"),
                 "output_mode": os.getenv("DDKIT_EXEC_OUTPUT_MODE", "both"),
+                "question_first_pipeline": True,
+                "planner_reasoning_mode": self.model_profile.thinking_defaults.get("planner", "high"),
+                "answerer_reasoning_mode": self.model_profile.thinking_defaults.get("answerer", "high"),
             },
             model_profile=self.model_profile.model_dump(),
             budget_snapshot=budget_snapshot,

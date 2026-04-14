@@ -5,11 +5,15 @@ profiles:
   smart:
     model_ladder: [gpt-5.4, gpt-5.4-mini, gpt-5.4-nano]
     default_requested_model: gpt-5.4-mini
+    planner_model: gpt-5.4-mini
+    answerer_model: gpt-5.4-mini
     summary_model: gpt-5.4-mini
     verifier_model: gpt-5.4-mini
     thinking_defaults:
+      planner: high
+      answerer: high
       critical: high
-      secondary: medium
+      secondary: high
       summary: "off"
       verifier: medium
     block_classes:

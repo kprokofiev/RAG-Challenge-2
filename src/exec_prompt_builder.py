@@ -45,6 +45,8 @@ class ModelProfile(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     model_ladder: List[str] = Field(default_factory=list)
     default_requested_model: str = "gpt-5.4-mini"
+    planner_model: str = "gpt-5.4-mini"
+    answerer_model: str = "gpt-5.4-mini"
     summary_model: str = "gpt-5.4-mini"
     verifier_model: str = "gpt-5.4-mini"
     thinking_defaults: Dict[str, str] = Field(default_factory=dict)
@@ -92,6 +94,38 @@ class ExecReasonerOutput(BaseModel):
     top_evidence_refs: List[str] = Field(default_factory=list)
     missing_evidence_classes: List[str] = Field(default_factory=list)
     key_risks: List[str] = Field(default_factory=list)
+
+
+class ExecRetrievalPlan(BaseModel):
+    doc_kinds: List[str] = Field(default_factory=list)
+    queries: List[str] = Field(default_factory=list)
+    max_docs: int = 12
+    max_chunks: int = 30
+    chunk_policy: str = "prefer source-native confirmation chunks"
+    max_per_doc_kind: Dict[str, int] = Field(default_factory=dict)
+
+
+class ExecAnswerContract(BaseModel):
+    verdict: List[str] = Field(default_factory=list)
+    must_include: List[str] = Field(default_factory=list)
+
+
+class ExecPolicyGates(BaseModel):
+    positive_verdict_requires: List[str] = Field(default_factory=list)
+    hold_requires: List[str] = Field(default_factory=list)
+    no_go_triggers: List[str] = Field(default_factory=list)
+
+
+class ExecQuestionPlan(BaseModel):
+    question_id: str
+    answer_type: str
+    business_lens: str = ""
+    needed_facts: List[str] = Field(default_factory=list)
+    needed_dossier_sections: List[str] = Field(default_factory=list)
+    retrieval_plan: ExecRetrievalPlan = Field(default_factory=ExecRetrievalPlan)
+    answer_schema: ExecAnswerContract = Field(default_factory=ExecAnswerContract)
+    gates: ExecPolicyGates = Field(default_factory=ExecPolicyGates)
+    policy_notes: List[str] = Field(default_factory=list)
 
 
 class PromptPackage(BaseModel):
@@ -151,6 +185,16 @@ def block_thinking_mode(block_spec: BlockSpec, profile: Optional[ModelProfile] =
     return os.getenv("DDKIT_EXEC_THINKING_DEFAULT", defaults.get("secondary", "medium"))
 
 
+def planner_thinking_mode(profile: Optional[ModelProfile] = None) -> str:
+    active_profile = profile or get_model_profile()
+    return os.getenv("DDKIT_EXEC_THINKING_PLANNER", active_profile.thinking_defaults.get("planner", "high"))
+
+
+def answerer_thinking_mode(profile: Optional[ModelProfile] = None) -> str:
+    active_profile = profile or get_model_profile()
+    return os.getenv("DDKIT_EXEC_THINKING_ANSWERER", active_profile.thinking_defaults.get("answerer", "high"))
+
+
 def block_requested_model(block_spec: BlockSpec, profile: Optional[ModelProfile] = None, phase: str = "final") -> str:
     active_profile = profile or get_model_profile()
     if phase == "summary":
@@ -161,6 +205,19 @@ def block_requested_model(block_spec: BlockSpec, profile: Optional[ModelProfile]
     if policy:
         return policy.preferred_model
     return active_profile.default_requested_model
+
+
+def planner_requested_model(profile: Optional[ModelProfile] = None) -> str:
+    active_profile = profile or get_model_profile()
+    return (os.getenv("DDKIT_EXEC_PLANNER_MODEL") or active_profile.planner_model or active_profile.default_requested_model).strip()
+
+
+def answerer_requested_model(block_spec: BlockSpec, profile: Optional[ModelProfile] = None) -> str:
+    active_profile = profile or get_model_profile()
+    explicit = (os.getenv("DDKIT_EXEC_ANSWERER_MODEL") or active_profile.answerer_model or "").strip()
+    if explicit:
+        return explicit
+    return block_requested_model(block_spec, active_profile, phase="final")
 
 
 def _prompt_contract(block_spec: BlockSpec) -> str:
@@ -180,6 +237,41 @@ def _prompt_contract(block_spec: BlockSpec) -> str:
         f"Allowed doc kinds for extra escalation context: {allowed_doc_kinds}.\n"
         f"Potential escalation classes: {escalation}.\n"
         "Return only the structured schema."
+    )
+
+
+def _planner_prompt_contract(block_spec: BlockSpec, question_trace: Dict[str, Any]) -> str:
+    verdicts = ", ".join(block_spec.verdicts)
+    return (
+        f"You are planning evidence requirements for the '{block_spec.title}' executive question.\n"
+        f"Verdict family: {block_spec.verdict_family}. Allowed verdicts later: {verdicts}.\n"
+        f"Business lens: {question_trace.get('business_lens', '') or 'exec'}.\n"
+        "Return a strict data contract, not prose.\n"
+        "Rules:\n"
+        "1. Use compact dossier state only to identify what is already known vs unknown.\n"
+        "2. Ask for the minimum evidence needed to answer the question safely.\n"
+        "3. Positive verdict requirements must be explicit in gates. Do not allow optimistic contracts.\n"
+        "4. Retrieval plan must prefer source-native, jurisdiction-specific evidence.\n"
+        "5. Reuse dossier sections only as compressed memory, not as the primary evidence base.\n"
+        "6. Return only the structured schema."
+    )
+
+
+def _answer_prompt_contract(block_spec: BlockSpec, plan: ExecQuestionPlan) -> str:
+    verdicts = ", ".join(block_spec.verdicts)
+    positive_gates = ", ".join(plan.gates.positive_verdict_requires) or "none"
+    return (
+        f"You are answering the '{block_spec.title}' executive question.\n"
+        f"Verdict family: {block_spec.verdict_family}. Allowed verdicts: {verdicts}.\n"
+        f"Question contract answer type: {plan.answer_type}.\n"
+        f"Positive verdict gates: {positive_gates}.\n"
+        "Rules:\n"
+        "1. Base reasoning on the evidence packet first; dossier snapshot is only supporting memory.\n"
+        "2. Do not invent evidence. Use source-backed claims where possible.\n"
+        "3. If a positive verdict gate is not satisfied, do not return a positive verdict.\n"
+        "4. Unknowns, contradictions, and missing evidence classes must surface in blockers/caveats/actions.\n"
+        "5. Translate evidence into decision language, not signal counting prose.\n"
+        "6. Return only the structured schema."
     )
 
 
@@ -216,6 +308,96 @@ def build_block_prompt(
         response_model=ExecReasonerOutput,
         phase=phase,
     )
+
+
+def build_planner_prompt(
+    block_spec: BlockSpec,
+    dossier_snapshot: Dict[str, Any],
+    corpus_inventory: Dict[str, Any],
+    profile: Optional[ModelProfile] = None,
+) -> PromptPackage:
+    active_profile = profile or get_model_profile()
+    question_trace = resolve_primary_question_trace(block_spec)
+    system_content = _planner_prompt_contract(block_spec, question_trace)
+    human_content = (
+        f"Question ID: {block_spec.block_id}\n"
+        f"Question title: {block_spec.title}\n"
+        "Produce an execution contract for retrieval and answering.\n"
+        "Question trace:\n"
+        f"{_truncate_payload(question_trace, max_chars=3000)}\n"
+        "Compact dossier snapshot:\n"
+        f"{_truncate_payload(dossier_snapshot, max_chars=6000)}\n"
+        "Corpus inventory:\n"
+        f"{_truncate_payload(corpus_inventory, max_chars=4000)}"
+    )
+    return PromptPackage(
+        block_spec=block_spec,
+        requested_model=planner_requested_model(active_profile),
+        thinking_mode=planner_thinking_mode(active_profile),
+        system_content=system_content,
+        human_content=human_content,
+        response_model=ExecQuestionPlan,
+        phase="planner",
+    )
+
+
+def build_answer_prompt(
+    block_spec: BlockSpec,
+    plan: ExecQuestionPlan,
+    dossier_snapshot: Dict[str, Any],
+    evidence_packet: Dict[str, Any],
+    profile: Optional[ModelProfile] = None,
+    phase: str = "answerer",
+) -> PromptPackage:
+    active_profile = profile or get_model_profile()
+    system_content = _answer_prompt_contract(block_spec, plan)
+    human_content = (
+        f"Question ID: {block_spec.block_id}\n"
+        f"Phase: {phase}\n"
+        "Answer using the contract and the assembled evidence packet.\n"
+        "Question contract:\n"
+        f"{_truncate_payload(plan.model_dump(), max_chars=5000)}\n"
+        "Compact dossier snapshot:\n"
+        f"{_truncate_payload(dossier_snapshot, max_chars=4000)}\n"
+        "Evidence packet:\n"
+        f"{_truncate_payload(evidence_packet, max_chars=12000)}"
+    )
+    return PromptPackage(
+        block_spec=block_spec,
+        requested_model=answerer_requested_model(block_spec, active_profile),
+        thinking_mode=answerer_thinking_mode(active_profile),
+        system_content=system_content,
+        human_content=human_content,
+        response_model=ExecReasonerOutput,
+        phase=phase,
+    )
+
+
+def resolve_primary_question_trace(block_spec: BlockSpec) -> Dict[str, Any]:
+    library = load_exec_question_library()
+    for question_id in block_spec.appendix_question_ids:
+        question = library.get(question_id)
+        if question:
+            return {
+                "question_id": question_id,
+                "title": question.get("title", block_spec.title),
+                "question_type": question.get("question_type", block_spec.verdict_family),
+                "business_lens": question.get("business_lens", ""),
+                "required_jurisdictions": question.get("required_jurisdictions", []),
+                "required_sections": question.get("required_sections", []),
+                "must_have_fields": question.get("must_have_fields", []),
+                "fallback_policy": question.get("fallback_policy", ""),
+            }
+    return {
+        "question_id": block_spec.block_id,
+        "title": block_spec.title,
+        "question_type": block_spec.verdict_family,
+        "business_lens": "",
+        "required_jurisdictions": list(block_spec.regions),
+        "required_sections": list(block_spec.sections),
+        "must_have_fields": [],
+        "fallback_policy": "",
+    }
 
 
 def build_appendix_question_traces(block_spec: BlockSpec) -> List[Dict[str, Any]]:

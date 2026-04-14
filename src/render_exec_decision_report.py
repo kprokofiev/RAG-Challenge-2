@@ -126,8 +126,25 @@ def render_exec_decision_report(report: Any, output_path: str, mode: str = "cust
                 story.append(Paragraph(f"- {_esc(issue.get('severity', ''))}: {_esc(issue.get('message', ''))}", styles["MemoMeta"]))
             model_trace = block.get("model_trace", {})
             if model_trace:
-                story.append(Paragraph(f"Model: {_esc(model_trace.get('model_selected', ''))} | thinking={_esc(model_trace.get('thinking_mode', ''))}", styles["MemoMeta"]))
-                budget_trace = model_trace.get("budget_trace", {})
+                planner_trace = model_trace.get("planner_trace", {})
+                answer_trace = model_trace.get("answer_trace", {})
+                if planner_trace:
+                    story.append(
+                        Paragraph(
+                            f"Planner model: {_esc(planner_trace.get('model_selected', ''))} | thinking={_esc(planner_trace.get('thinking_mode', ''))}",
+                            styles["MemoMeta"],
+                        )
+                    )
+                if answer_trace:
+                    story.append(
+                        Paragraph(
+                            f"Answerer model: {_esc(answer_trace.get('model_selected', ''))} | thinking={_esc(answer_trace.get('thinking_mode', ''))}",
+                            styles["MemoMeta"],
+                        )
+                    )
+                if not planner_trace and not answer_trace:
+                    story.append(Paragraph(f"Model: {_esc(model_trace.get('model_selected', ''))} | thinking={_esc(model_trace.get('thinking_mode', ''))}", styles["MemoMeta"]))
+                budget_trace = answer_trace.get("budget_trace", {}) if answer_trace else model_trace.get("budget_trace", {})
                 if budget_trace:
                     story.append(
                         Paragraph(

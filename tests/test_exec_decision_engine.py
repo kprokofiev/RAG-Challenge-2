@@ -6,8 +6,14 @@ from unittest.mock import patch
 
 from src.dossier_schema_v3 import ExecDecisionBlock, ExecWhyClaim
 from src.exec_decision_engine import ExecDecisionEngine
+from src.exec_evidence_assembler import ExecEvidenceAssembler
 from src.exec_llm_env import require_exec_openai_api_key
-from src.exec_prompt_builder import ExecReasonerOutput
+from src.exec_prompt_builder import (
+    ExecQuestionPlan,
+    ExecReasonerOutput,
+    build_answer_prompt,
+    build_planner_prompt,
+)
 from src.exec_retrieval_escalation import ExecRetrievalEscalator
 from src.exec_verifier import ExecVerifier
 from src.render_exec_decision_report import HAS_REPORTLAB, render_exec_decision_report
@@ -130,6 +136,28 @@ def _stub_reasoner_output():
     )
 
 
+def _stub_question_plan():
+    return ExecQuestionPlan(
+        question_id="rf_entry",
+        answer_type="geo_decision",
+        business_lens="regulatory",
+        needed_facts=["direct_ru_registration_confirmation"],
+        needed_dossier_sections=["registrations", "unknowns", "dossier_quality_v2"],
+        retrieval_plan={
+            "doc_kinds": ["ru_registration_export", "grls_card"],
+            "queries": ["apixaban RU registration"],
+            "max_docs": 8,
+            "max_chunks": 12,
+            "chunk_policy": "prefer source-native confirmation chunks",
+        },
+        answer_schema={
+            "verdict": ["GO", "HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE"],
+            "must_include": ["what_is_confirmed", "critical_gap", "next_action"],
+        },
+        gates={"positive_verdict_requires": ["direct_ru_registration_confirmation"]},
+    )
+
+
 class ExecDecisionEngineTests(unittest.TestCase):
     def test_packet_builder_filters_sections_and_regions(self):
         engine = ExecDecisionEngine()
@@ -159,20 +187,35 @@ class ExecDecisionEngineTests(unittest.TestCase):
         engine = ExecDecisionEngine()
         with patch.object(
             engine,
-            "_invoke_reasoner",
-            return_value=(_stub_reasoner_output(), {"model_selected": "gpt-5.4-mini"}, "stub summary"),
+            "_invoke_planner",
+            return_value=(_stub_question_plan(), {"model_selected": "gpt-5.4-mini", "thinking_mode_requested": "high"}, "planner summary"),
+        ), patch.object(
+            engine,
+            "_invoke_answerer",
+            return_value=(_stub_reasoner_output(), {"model_selected": "gpt-5.4-mini", "thinking_mode_requested": "high"}, "answerer summary"),
         ):
             report = engine.generate(_sample_dossier(), case_id="case-1")
         self.assertEqual(report.report_version, "v1")
         self.assertTrue(any("partial" in caveat.lower() for block in report.decision_blocks for caveat in block.caveats))
+        self.assertTrue(
+            all(
+                block.model_trace.answer_trace.thinking_mode == "high"
+                for block in report.decision_blocks
+                if block.model_trace and block.model_trace.answer_trace
+            )
+        )
 
     @unittest.skipUnless(HAS_REPORTLAB, "reportlab is required")
     def test_render_internal_and_customer_pdf(self):
         engine = ExecDecisionEngine()
         with patch.object(
             engine,
-            "_invoke_reasoner",
-            return_value=(_stub_reasoner_output(), {"model_selected": "gpt-5.4-mini"}, "stub summary"),
+            "_invoke_planner",
+            return_value=(_stub_question_plan(), {"model_selected": "gpt-5.4-mini", "thinking_mode_requested": "high"}, "planner summary"),
+        ), patch.object(
+            engine,
+            "_invoke_answerer",
+            return_value=(_stub_reasoner_output(), {"model_selected": "gpt-5.4-mini", "thinking_mode_requested": "high"}, "answerer summary"),
         ):
             report = engine.generate(_sample_dossier(), case_id="case-1")
         with tempfile.TemporaryDirectory() as td:
@@ -188,12 +231,24 @@ class ExecDecisionEngineTests(unittest.TestCase):
     def test_invoke_reasoner_requires_exec_llm_key(self):
         engine = ExecDecisionEngine()
         block_spec = engine.block_specs["rf_entry"]
-        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        snapshot = engine._build_dossier_snapshot(_sample_dossier(), block_spec, engine._build_packet(_sample_dossier(), "case-1", block_spec))
+        inventory = engine._build_corpus_inventory(_sample_dossier(), block_spec, engine._build_packet(_sample_dossier(), "case-1", block_spec))
         missing_env_path = str(Path(tempfile.gettempdir()) / "missing_exec_llm.env")
         with patch.dict(os.environ, {"DDKIT_EXEC_OPENAI_ENV_FILE": missing_env_path}, clear=True):
             with self.assertRaises(RuntimeError) as ctx:
-                engine._invoke_reasoner(block_spec, packet, phase="first_pass")
+                engine._invoke_planner(block_spec, snapshot, inventory)
         self.assertIn("OPENAI_API_KEY", str(ctx.exception))
+
+    def test_planner_and_answerer_prompts_default_to_high_reasoning(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        snapshot = engine._build_dossier_snapshot(_sample_dossier(), block_spec, packet)
+        inventory = engine._build_corpus_inventory(_sample_dossier(), block_spec, packet)
+        planner_prompt = build_planner_prompt(block_spec, snapshot, inventory, engine.model_profile)
+        answer_prompt = build_answer_prompt(block_spec, _stub_question_plan(), snapshot, {"selected_evidence": []}, engine.model_profile)
+        self.assertEqual(planner_prompt.thinking_mode, "high")
+        self.assertEqual(answer_prompt.thinking_mode, "high")
 
 
 class ExecVerifierTests(unittest.TestCase):
@@ -226,6 +281,16 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         ]
         ordered = escalator._sort_items(items)
         self.assertEqual(ordered[0]["doc_id"], "doc-native")
+
+    def test_evidence_assembler_builds_contract_driven_packet(self):
+        engine = ExecDecisionEngine()
+        assembler = ExecEvidenceAssembler(retriever=None)
+        block_spec = engine.block_specs["rf_entry"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        evidence_packet = assembler.assemble(packet, _stub_question_plan(), case_id="case-1", allow_retrieval=False)
+        self.assertIn("selected_evidence", evidence_packet)
+        self.assertTrue(any(item["doc_kind"] == "ru_registration_export" for item in evidence_packet["selected_evidence"]))
+        self.assertIn("direct_ru_registration_confirmation", evidence_packet["missing_evidence_classes"])
 
 
 class ExecLlmEnvTests(unittest.TestCase):
