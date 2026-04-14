@@ -1,7 +1,8 @@
 import os
 import json
+from dataclasses import dataclass
 from dotenv import load_dotenv
-from typing import Union, List, Dict, Type, Optional, Literal
+from typing import Any, Union, List, Dict, Type, Optional, Literal
 from openai import OpenAI
 import asyncio
 from src.api_request_parallel_processor import process_api_requests_from_file
@@ -15,12 +16,16 @@ import google.generativeai as genai
 from copy import deepcopy
 from tenacity import retry, stop_after_attempt, wait_fixed
 from src.openai_model_router import (
+    build_budget_trace,
+    commit_routed_usage,
     choose_routed_model,
     extract_usage_metrics,
     is_quota_exhausted_error,
     mark_tier_exhausted,
     next_tier_index,
     record_usage,
+    release_routed_reservation,
+    reserve_routed_model,
 )
 
 
@@ -31,6 +36,155 @@ def _get_llm_timeout_seconds() -> float:
         return float(raw)
     except (TypeError, ValueError):
         return 120.0
+
+
+def _estimate_text_tokens(value: str) -> int:
+    try:
+        encoding = tiktoken.get_encoding("o200k_base")
+        return len(encoding.encode(value or ""))
+    except Exception:
+        return max(1, len(value or "") // 4)
+
+
+def _map_thinking_mode_to_effort(thinking_mode: Optional[str]) -> Optional[str]:
+    mode = str(thinking_mode or "").strip().lower()
+    if mode in {"", "off"}:
+        return "none"
+    if mode in {"low", "medium", "high", "xhigh", "minimal", "none"}:
+        return mode
+    return "medium"
+
+
+def _extract_response_text(response: Any) -> str:
+    output_text = getattr(response, "output_text", None)
+    if output_text:
+        return str(output_text)
+    parts: List[str] = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            text = getattr(content, "text", None)
+            if text:
+                parts.append(str(text))
+            elif isinstance(content, dict) and content.get("text"):
+                parts.append(str(content.get("text")))
+    return "\n".join(parts)
+
+
+def _extract_reasoning_summary(response: Any) -> str:
+    reasoning = getattr(response, "reasoning", None)
+    if reasoning is None and isinstance(response, dict):
+        reasoning = response.get("reasoning")
+    if not reasoning:
+        return ""
+    summary = getattr(reasoning, "summary", None)
+    if summary is None and isinstance(reasoning, dict):
+        summary = reasoning.get("summary")
+    if not summary:
+        return ""
+    parts: List[str] = []
+    if isinstance(summary, list):
+        for item in summary:
+            text = getattr(item, "text", None)
+            if text:
+                parts.append(str(text))
+            elif isinstance(item, dict) and item.get("text"):
+                parts.append(str(item.get("text")))
+    elif isinstance(summary, str):
+        parts.append(summary)
+    return "\n".join(parts)
+
+
+@dataclass
+class ExecReasoningCallResult:
+    parsed_output: Any
+    raw_response: Any
+    model_selected: str
+    budget_trace: Dict[str, Any]
+    reasoning_summary: str = ""
+
+
+def call_exec_reasoning_model(
+    system_content: str,
+    human_content: str,
+    response_format: Type[BaseModel],
+    requested_model: Optional[str] = None,
+    thinking_mode: Optional[str] = None,
+    max_output_tokens: int = 2400,
+    metadata: Optional[Dict[str, Any]] = None,
+    block_class: Optional[str] = None,
+) -> ExecReasoningCallResult:
+    load_dotenv()
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        timeout=_get_llm_timeout_seconds(),
+        max_retries=2,
+    )
+    prompt_tokens = _estimate_text_tokens(system_content) + _estimate_text_tokens(human_content)
+    estimated_total_tokens = prompt_tokens + max(0, int(max_output_tokens or 0))
+    reasoning_effort = _map_thinking_mode_to_effort(thinking_mode)
+    minimum_tier_index = 0
+
+    while True:
+        routed = reserve_routed_model(
+            requested_model=requested_model,
+            estimated_total_tokens=estimated_total_tokens,
+            minimum_tier_index=minimum_tier_index,
+            block_class=block_class,
+            thinking_mode=thinking_mode,
+            allow_nano_final=block_class != "critical",
+        )
+        params = {
+            "model": routed.model,
+            "instructions": system_content,
+            "input": [{"role": "user", "content": [{"type": "input_text", "text": human_content}]}],
+            "max_output_tokens": max_output_tokens,
+            "metadata": metadata or {},
+            "reasoning": {"effort": reasoning_effort, "summary": "auto"},
+        }
+        try:
+            if hasattr(client.responses, "parse"):
+                response = client.responses.parse(
+                    text_format=response_format,
+                    **params,
+                )
+                parsed_output = getattr(response, "output_parsed", None)
+                if parsed_output is None:
+                    parsed_output = response_format.model_validate_json(repair_json(_extract_response_text(response)))
+            else:  # pragma: no cover
+                response = client.responses.create(
+                    text={
+                        "format": {
+                            "type": "json_schema",
+                            "name": response_format.__name__,
+                            "schema": response_format.model_json_schema(),
+                            "strict": True,
+                        }
+                    },
+                    **params,
+                )
+                parsed_output = response_format.model_validate_json(repair_json(_extract_response_text(response)))
+            usage = extract_usage_metrics(response)
+            budget_after = commit_routed_usage(routed, usage)
+            budget_trace = build_budget_trace(
+                routed,
+                usage_actual=usage,
+                budget_snapshot_after=budget_after,
+                reasoning_effort_actual=reasoning_effort,
+            )
+            return ExecReasoningCallResult(
+                parsed_output=parsed_output,
+                raw_response=response,
+                model_selected=routed.model,
+                budget_trace=budget_trace,
+                reasoning_summary=_extract_reasoning_summary(response),
+            )
+        except Exception as exc:
+            release_routed_reservation(routed)
+            if is_quota_exhausted_error(exc) and routed.tier in {"elite", "mini"}:
+                mark_tier_exhausted(routed, str(exc))
+                minimum_tier_index = next_tier_index(routed.tier)
+                continue
+            raise
 
 
 class BaseOpenaiProcessor:

@@ -1,0 +1,406 @@
+version: "v1"
+updated_at: "2026-04-14"
+
+blocks:
+  - block_id: asset_attractiveness
+    title: "Asset attractiveness"
+    block_class: critical
+    verdict_family: go_no_go
+    verdicts: [GO, CONDITIONAL_GO, HOLD, NO_GO, INSUFFICIENT_EVIDENCE]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - passport
+      - registrations
+      - clinical_studies
+      - patent_families
+      - synthesis_steps
+      - commercial_signals
+      - product_contexts
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+      - run_manifest
+    field_prefixes:
+      - passport
+      - registrations
+      - clinical_studies
+      - patent_families
+      - synthesis_steps
+      - commercial_signals
+    allowed_doc_kinds:
+      - label
+      - smpc
+      - us_fda
+      - grls
+      - grls_card
+      - eaeu_registration
+      - ctgov
+      - ctgov_results
+      - patent_family_summary
+      - patent_legal_events
+      - patent_expiry_us
+      - ru_registration_export
+      - ru_esklp_snapshot
+      - ru_procurement_snapshot
+      - ru_official_act
+    escalation_classes:
+      - registrations_authority
+      - clinical_maturity
+      - patent_expiry
+      - commercial_access
+    appendix_question_ids: [q_commercial_opportunity, q_data_completeness]
+    topline_key: asset_attractiveness
+
+  - block_id: rf_entry
+    title: "RF entry decision"
+    block_class: critical
+    verdict_family: go_no_go
+    verdicts: [GO, CONDITIONAL_GO, HOLD, NO_GO, INSUFFICIENT_EVIDENCE]
+    regions: [RU]
+    sections:
+      - registrations
+      - commercial_signals
+      - product_contexts
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+      - evidence_registry
+    field_prefixes:
+      - registrations
+      - commercial_signals
+      - product_contexts
+    allowed_doc_kinds:
+      - grls
+      - grls_card
+      - ru_instruction
+      - ru_registration_export
+      - ru_esklp_snapshot
+      - ru_procurement_snapshot
+      - ru_official_act
+      - ru_commercial_summary
+      - ru_formulary_summary
+      - ru_procurement_summary
+      - ru_policy_act
+    escalation_classes:
+      - ru_registration_confirmation
+      - ru_formulary_signal
+      - ru_procurement_signal
+      - official_act_linkage
+    appendix_question_ids: [q_reg_4geo, q_reg_status_detail, q_commercial_opportunity]
+    topline_key: rf_entry
+
+  - block_id: eaeu_entry
+    title: "EAEU entry decision"
+    block_class: critical
+    verdict_family: go_no_go
+    verdicts: [GO, CONDITIONAL_GO, HOLD, NO_GO, INSUFFICIENT_EVIDENCE]
+    regions: [EAEU]
+    sections:
+      - registrations
+      - commercial_signals
+      - product_contexts
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+      - evidence_registry
+    field_prefixes:
+      - registrations
+      - commercial_signals
+      - product_contexts
+    allowed_doc_kinds:
+      - eaeu_document
+      - eaeu_registration
+      - ru_registration_export
+      - ru_official_act
+      - ru_commercial_summary
+    escalation_classes:
+      - eaeu_registration_confirmation
+      - eaeu_market_signal
+      - eaeu_policy_signal
+    appendix_question_ids: [q_reg_4geo, q_reg_status_detail, q_commercial_opportunity]
+    topline_key: eaeu_entry
+
+  - block_id: generic_opportunity
+    title: "Generic opportunity"
+    block_class: critical
+    verdict_family: opportunity
+    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - passport
+      - registrations
+      - patent_families
+      - synthesis_steps
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - passport
+      - patent_families
+      - synthesis_steps
+      - registrations
+    allowed_doc_kinds:
+      - patent_family_summary
+      - patent_legal_events
+      - patent_expiry_us
+      - ru_patent_fips
+      - patent_discovery_us
+      - grls
+      - label
+    escalation_classes:
+      - patent_expiry
+      - legal_status
+      - process_relevance
+    appendix_question_ids: [q_patent_expiry, q_patent_types, q_synthesis_overview]
+    topline_key: generic_opportunity
+
+  - block_id: licensing_opportunity
+    title: "Licensing opportunity"
+    block_class: secondary
+    verdict_family: opportunity
+    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - passport
+      - registrations
+      - clinical_studies
+      - commercial_signals
+      - unknowns
+      - dossier_quality_v2
+    field_prefixes:
+      - registrations
+      - clinical_studies
+      - commercial_signals
+    allowed_doc_kinds:
+      - label
+      - smpc
+      - us_fda
+      - ctgov
+      - ctgov_results
+      - ru_registration_export
+      - ru_commercial_summary
+    escalation_classes:
+      - out_of_region_registration
+      - clinical_maturity
+      - market_access_signal
+    appendix_question_ids: [q_clinical_overview, q_commercial_opportunity]
+    topline_key: licensing_opportunity
+
+  - block_id: portfolio_opportunity
+    title: "Portfolio opportunity"
+    block_class: secondary
+    verdict_family: opportunity
+    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - passport
+      - registrations
+      - clinical_studies
+      - patent_families
+      - commercial_signals
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - passport
+      - registrations
+      - clinical_studies
+      - patent_families
+      - commercial_signals
+    allowed_doc_kinds:
+      - label
+      - smpc
+      - ctgov
+      - patent_family_summary
+      - ru_registration_export
+      - ru_esklp_snapshot
+      - ru_procurement_snapshot
+    escalation_classes:
+      - clinical_maturity
+      - market_window
+      - ip_window
+    appendix_question_ids: [q_commercial_opportunity, q_data_completeness]
+    topline_key: portfolio_opportunity
+
+  - block_id: ip_legal_window
+    title: "IP / legal window"
+    block_class: critical
+    verdict_family: window
+    verdicts: [OPEN, NARROW, LIMITED, CLOSED, UNRESOLVED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - patent_families
+      - synthesis_steps
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - patent_families
+      - synthesis_steps
+    allowed_doc_kinds:
+      - patent_family_summary
+      - patent_legal_events
+      - patent_expiry_us
+      - patent_discovery_us
+      - ru_patent_fips
+    escalation_classes:
+      - patent_expiry
+      - legal_status
+      - process_patents
+    appendix_question_ids: [q_ip_blockers, q_patent_expiry, q_patent_types]
+    topline_key: ip_legal_window
+
+  - block_id: market_reimbursement_window
+    title: "Market / reimbursement window"
+    block_class: secondary
+    verdict_family: window
+    verdicts: [OPEN, NARROW, LIMITED, CLOSED, UNRESOLVED]
+    regions: [RU, EAEU]
+    sections:
+      - commercial_signals
+      - registrations
+      - product_contexts
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - commercial_signals
+      - registrations
+      - product_contexts
+    allowed_doc_kinds:
+      - ru_registration_export
+      - ru_esklp_snapshot
+      - ru_procurement_snapshot
+      - ru_official_act
+      - ru_commercial_summary
+      - ru_formulary_summary
+      - ru_policy_act
+      - formulary
+      - pricing
+      - payer_policy
+    escalation_classes:
+      - formulary_signal
+      - reimbursement_signal
+      - procurement_signal
+    appendix_question_ids: [q_commercial_opportunity]
+    topline_key: market_reimbursement_window
+
+  - block_id: key_risks
+    title: "Key risks"
+    block_class: secondary
+    verdict_family: risks
+    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - registrations
+      - clinical_studies
+      - patent_families
+      - synthesis_steps
+      - commercial_signals
+      - unknowns
+      - dossier_quality_v2
+    field_prefixes:
+      - registrations
+      - clinical_studies
+      - patent_families
+      - synthesis_steps
+      - commercial_signals
+    allowed_doc_kinds:
+      - label
+      - smpc
+      - ctgov
+      - patent_family_summary
+      - ru_registration_export
+      - ru_official_act
+    escalation_classes:
+      - unresolved_contradiction
+      - legal_gap
+      - market_gap
+    appendix_question_ids: [q_ip_blockers, q_clinical_overview, q_data_completeness]
+
+  - block_id: decision_blockers
+    title: "Decision blockers"
+    block_class: critical
+    verdict_family: blocker_set
+    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+      - registrations
+      - patent_families
+      - commercial_signals
+      - synthesis_steps
+    field_prefixes:
+      - unknowns
+      - registrations
+      - patent_families
+      - commercial_signals
+      - synthesis_steps
+    allowed_doc_kinds:
+      - patent_legal_events
+      - ru_registration_export
+      - ru_official_act
+      - ctgov
+      - label
+    escalation_classes:
+      - blocker_validation
+      - unresolved_unknowns
+    appendix_question_ids: [q_ip_blockers, q_data_completeness]
+
+  - block_id: recommended_next_step
+    title: "Recommended next step"
+    block_class: secondary
+    verdict_family: action
+    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+      - registrations
+      - patent_families
+      - commercial_signals
+      - synthesis_steps
+    field_prefixes:
+      - unknowns
+      - registrations
+      - patent_families
+      - commercial_signals
+      - synthesis_steps
+    allowed_doc_kinds:
+      - patent_legal_events
+      - ru_registration_export
+      - ru_official_act
+      - ctgov
+      - label
+    escalation_classes:
+      - action_justification
+      - unresolved_unknowns
+    appendix_question_ids: [q_data_completeness]
+
+  - block_id: evidence_sufficiency_note
+    title: "Evidence sufficiency note"
+    block_class: secondary
+    verdict_family: sufficiency
+    verdicts: [SUFFICIENT, PARTIAL, INSUFFICIENT]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+      - run_manifest
+      - evidence_registry
+    field_prefixes:
+      - unknowns
+    allowed_doc_kinds:
+      - label
+      - smpc
+      - ctgov
+      - patent_family_summary
+      - ru_registration_export
+    escalation_classes:
+      - coverage_gap
+      - unsupported_claim_review
+    appendix_question_ids: [q_data_completeness]

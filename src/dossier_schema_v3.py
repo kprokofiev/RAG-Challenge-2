@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import time
 from typing import Any, Dict, List, Literal, Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, validator
 
 from src.registration_truth import (
     VERDICT_CONFIRMED,
@@ -580,6 +580,181 @@ class DossierReport(BaseModel):
     class Config:
         # Allows extra fields from legacy reports — forward-compat
         extra = "allow"
+
+
+# ── Exec Decision Engine v1 ───────────────────────────────────────────────────
+
+ExecClaimType = Literal["hard_evidence_backed", "inference", "tentative"]
+ExecConfidenceEnum = Literal["HIGH", "MEDIUM", "LOW"]
+ExecSufficiencyEnum = Literal["SUFFICIENT", "PARTIAL", "INSUFFICIENT"]
+ExecBlockerSeverity = Literal["NON_BLOCKING", "IMPORTANT", "DECISION_BLOCKING", "MUST_VERIFY_NOW"]
+ExecThinkingMode = Literal["off", "low", "medium", "high", "xhigh"]
+
+
+class ExecWhyClaim(BaseModel):
+    """Evidence-grounded reason behind a decision verdict."""
+    claim: str
+    claim_type: ExecClaimType = Field(
+        "inference",
+        description="Whether the statement is a hard evidence-backed fact, inference, or tentative note",
+    )
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecContradiction(BaseModel):
+    """Named contradiction or unresolved tension affecting a decision block."""
+    summary: str
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecBlocker(BaseModel):
+    """Decision blocker with explicit severity and evidence linkage."""
+    blocker_id: str = Field(default="", description="Deterministic blocker ID if available")
+    title: str = Field(description="Short blocker label")
+    severity: ExecBlockerSeverity = Field("IMPORTANT")
+    rationale: Optional[str] = Field(None, description="Why this blocker matters for the verdict")
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecNextAction(BaseModel):
+    """Recommended action flowing from blockers or missing evidence."""
+    action_id: str = Field(default="", description="Deterministic action ID if available")
+    action: str = Field(description="Action phrased for an operator or decision-maker")
+    priority: str = Field("NEXT", description="Priority bucket, e.g. NOW / NEXT / LATER")
+    rationale: Optional[str] = Field(None)
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ModelBudgetTrace(BaseModel):
+    """Trace emitted by the exec-aware router for one model call."""
+    model_config = ConfigDict(protected_namespaces=())
+    budget_date_utc: Optional[str] = None
+    budget_snapshot_before: Dict[str, Any] = Field(default_factory=dict)
+    reservation_estimate: Dict[str, Any] = Field(default_factory=dict)
+    model_requested: Optional[str] = None
+    model_selected: Optional[str] = None
+    fallback_reason: Optional[str] = None
+    thinking_mode_requested: Optional[str] = None
+    reasoning_effort_actual: Optional[str] = None
+    usage_actual: Dict[str, Any] = Field(default_factory=dict)
+    budget_snapshot_after: Dict[str, Any] = Field(default_factory=dict)
+    reset_at_utc: Optional[str] = None
+
+
+class ExecBlockTrace(BaseModel):
+    """Internal per-block trace; safe for internal artifacts only."""
+    model_config = ConfigDict(protected_namespaces=())
+    stage: Optional[str] = None
+    input_packet_hash: Optional[str] = None
+    selected_evidence_ids: List[str] = Field(default_factory=list)
+    missing_evidence_classes: List[str] = Field(default_factory=list)
+    escalation_performed: bool = False
+    model_selected: Optional[str] = None
+    thinking_mode: Optional[str] = None
+    reasoning_summary: Optional[str] = None
+    budget_trace: Optional[ModelBudgetTrace] = None
+    verifier_verdict: Optional[str] = None
+
+
+class ExecVerificationIssue(BaseModel):
+    """Single verifier or reviewer finding."""
+    issue_type: str
+    severity: str
+    message: str
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecVerificationReport(BaseModel):
+    """Combined factual + decision + reviewer verification result."""
+    block_id: Optional[str] = None
+    overall_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    factual_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    decision_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    reviewer_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    issues: List[ExecVerificationIssue] = Field(default_factory=list)
+    repair_applied: bool = False
+    repair_reason: Optional[str] = None
+    notes: List[str] = Field(default_factory=list)
+
+
+class ExecEvidenceSufficiency(BaseModel):
+    """Aggregated evidence sufficiency across the memo."""
+    overall_verdict: str = Field("PARTIAL", description="SUFFICIENT | PARTIAL | INSUFFICIENT")
+    topline_confidence: ExecConfidenceEnum = Field("LOW")
+    notes: List[str] = Field(default_factory=list)
+    by_block: Dict[str, str] = Field(default_factory=dict)
+
+
+class ExecDecisionBlock(BaseModel):
+    """Decision-grade block replacing old fixed-question answers."""
+    model_config = ConfigDict(protected_namespaces=())
+    block_id: str
+    title: str
+    verdict: str
+    confidence: ExecConfidenceEnum = Field("LOW")
+    sufficiency: ExecSufficiencyEnum = Field("INSUFFICIENT")
+    short_answer: str = Field(default="")
+    full_answer: str = Field(default="")
+    why_this_verdict: List[ExecWhyClaim] = Field(default_factory=list)
+    contradictions: List[ExecContradiction] = Field(default_factory=list)
+    unknowns: List[str] = Field(default_factory=list)
+    decision_blockers: List[ExecBlocker] = Field(default_factory=list)
+    next_actions: List[ExecNextAction] = Field(default_factory=list)
+    caveats: List[str] = Field(default_factory=list)
+    top_evidence_refs: List[str] = Field(default_factory=list)
+    missing_evidence_classes: List[str] = Field(default_factory=list)
+    model_trace: Optional[ExecBlockTrace] = None
+    verification: Optional[ExecVerificationReport] = None
+
+
+class ExecToplineSummary(BaseModel):
+    """Compact top-line summary for a major memo decision."""
+    verdict: str
+    confidence: ExecConfidenceEnum = Field("LOW")
+    sufficiency: ExecSufficiencyEnum = Field("INSUFFICIENT")
+    short_answer: str = Field(default="")
+
+
+class ExecRunManifest(BaseModel):
+    """Audit-grade execution manifest for one exec engine run."""
+    model_config = ConfigDict(protected_namespaces=())
+    run_id: str
+    case_id: Optional[str] = None
+    dossier_hash: str
+    exec_config: Dict[str, Any] = Field(default_factory=dict)
+    model_profile: Dict[str, Any] = Field(default_factory=dict)
+    budget_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    decision_blocks: List[str] = Field(default_factory=list)
+    escalation_triggers: List[Dict[str, Any]] = Field(default_factory=list)
+    retrieved_extra_doc_ids: List[str] = Field(default_factory=list)
+    verifier_results: List[Dict[str, Any]] = Field(default_factory=list)
+    repair_pass_results: List[Dict[str, Any]] = Field(default_factory=list)
+    final_verdict_summary: Dict[str, Any] = Field(default_factory=dict)
+    block_traces: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ExecAppendix(BaseModel):
+    """Appendix/debug bundle for internal audit and reruns."""
+    source_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    budget_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    question_traces: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ExecDecisionReportV1(BaseModel):
+    """Top-level decision memo contract for the new exec engine."""
+    report_version: str = Field("v1")
+    case_id: Optional[str] = None
+    inn: Optional[str] = None
+    generated_at: str
+    engine_manifest: ExecRunManifest
+    topline: Dict[str, ExecToplineSummary] = Field(default_factory=dict)
+    decision_blocks: List[ExecDecisionBlock] = Field(default_factory=list)
+    key_risks: List[str] = Field(default_factory=list)
+    decision_blockers: List[ExecBlocker] = Field(default_factory=list)
+    recommended_next_actions: List[ExecNextAction] = Field(default_factory=list)
+    evidence_sufficiency: ExecEvidenceSufficiency = Field(default_factory=ExecEvidenceSufficiency)
+    verification: ExecVerificationReport = Field(default_factory=ExecVerificationReport)
+    appendix: ExecAppendix = Field(default_factory=ExecAppendix)
 
 
 # ── Quality scorer ────────────────────────────────────────────────────────────
@@ -2089,3 +2264,8 @@ def compute_dossier_quality_v2(
 def get_json_schema() -> Dict[str, Any]:
     """Return the JSON Schema for DossierReport v3.0 (for validation tooling)."""
     return DossierReport.model_json_schema()
+
+
+def get_exec_json_schema() -> Dict[str, Any]:
+    """Return the JSON Schema for the exec decision memo contract."""
+    return ExecDecisionReportV1.model_json_schema()

@@ -1,0 +1,32 @@
+version: "v1"
+updated_at: "2026-04-14"
+
+profiles:
+  smart:
+    model_ladder: [gpt-5.4, gpt-5.4-mini, gpt-5.4-nano]
+    default_requested_model: gpt-5.4-mini
+    summary_model: gpt-5.4-mini
+    verifier_model: gpt-5.4-mini
+    thinking_defaults:
+      critical: high
+      secondary: medium
+      summary: "off"
+      verifier: medium
+    block_classes:
+      critical:
+        preferred_model: gpt-5.4-mini
+        fallback_model: gpt-5.4-nano
+        allow_nano_final: true
+      secondary:
+        preferred_model: gpt-5.4-mini
+        fallback_model: gpt-5.4-nano
+        allow_nano_final: true
+      summary_only:
+        preferred_model: gpt-5.4-mini
+        fallback_model: gpt-5.4-nano
+        allow_nano_final: true
+    reserve_thresholds:
+      elite_min_remaining: 40000
+      mini_min_remaining: 300000
+    manual_overrides:
+      elite_requires_manual_override: true
