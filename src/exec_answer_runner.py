@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,44 @@ def _report_summary(report: Dict[str, Any]) -> str:
     if not parts:
         return "No topline verdicts available."
     return "; ".join(parts)
+
+
+def _resolve_optional_path(path_value: Optional[Union[str, Path]]) -> Optional[Path]:
+    if path_value is None:
+        return None
+    text = str(path_value).strip()
+    if not text:
+        return None
+    return Path(text)
+
+
+def _build_exec_retriever(
+    retriever: Any = None,
+    vector_db_dir: Optional[Union[str, Path]] = None,
+    documents_dir: Optional[Union[str, Path]] = None,
+) -> Any:
+    if retriever is not None:
+        return retriever
+    resolved_vector_db_dir = _resolve_optional_path(vector_db_dir) or _resolve_optional_path(os.getenv("DDKIT_EXEC_VECTOR_DB_DIR"))
+    resolved_documents_dir = _resolve_optional_path(documents_dir) or _resolve_optional_path(os.getenv("DDKIT_EXEC_DOCUMENTS_DIR"))
+    if not resolved_vector_db_dir or not resolved_documents_dir:
+        return None
+    if not resolved_vector_db_dir.exists() or not resolved_documents_dir.exists():
+        logger.warning(
+            "exec_retriever_not_initialized vector_db_dir=%s documents_dir=%s",
+            resolved_vector_db_dir,
+            resolved_documents_dir,
+        )
+        return None
+    try:
+        try:
+            from src.retrieval import HybridRetriever
+        except ImportError:  # pragma: no cover
+            from retrieval import HybridRetriever  # type: ignore
+        return HybridRetriever(resolved_vector_db_dir, resolved_documents_dir)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("exec_retriever_init_failed: %s", exc)
+        return None
 
 
 def _render_report_bundle(report: Dict[str, Any], output_dir: Optional[str]) -> Dict[str, str]:
@@ -134,11 +172,20 @@ def run_exec_pipeline(
     lens: str = "",
     allow_ws1: bool = False,
     output_dir: Optional[str] = None,
+    retriever: Any = None,
+    vector_db_dir: Optional[Union[str, Path]] = None,
+    documents_dir: Optional[Union[str, Path]] = None,
 ) -> dict:
     if not _engine_enabled():
         return _run_legacy_exec_pipeline(dossier, question_id, case_id, lens=lens, allow_ws1=allow_ws1)
 
-    engine = ExecDecisionEngine()
+    engine = ExecDecisionEngine(
+        retriever=_build_exec_retriever(
+            retriever=retriever,
+            vector_db_dir=vector_db_dir,
+            documents_dir=documents_dir,
+        )
+    )
     report = engine.generate(dossier, case_id=case_id or None)
     report_dict = report.model_dump()
     rendered = _render_report_bundle(report_dict, output_dir)
@@ -168,6 +215,8 @@ def main():
     parser.add_argument("--lens", default="")
     parser.add_argument("--allow-ws1", action="store_true")
     parser.add_argument("--output-dir", default="")
+    parser.add_argument("--vector-db-dir", default="")
+    parser.add_argument("--documents-dir", default="")
     args = parser.parse_args()
 
     dossier_json = sys.stdin.read()
@@ -189,6 +238,8 @@ def main():
             lens=args.lens,
             allow_ws1=args.allow_ws1,
             output_dir=args.output_dir or None,
+            vector_db_dir=args.vector_db_dir or None,
+            documents_dir=args.documents_dir or None,
         )
         print(json.dumps(result, ensure_ascii=False, default=str), file=sys.stdout)
     except KeyError as exc:

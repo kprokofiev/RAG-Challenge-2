@@ -267,8 +267,10 @@ def _planner_prompt_contract(block_spec: BlockSpec, question_trace: Dict[str, An
         "2. Ask for the minimum evidence needed to answer the question safely.\n"
         "3. Positive verdict requirements must be explicit in gates. Do not allow optimistic contracts.\n"
         "4. Retrieval plan must prefer source-native, jurisdiction-specific evidence.\n"
-        "5. Reuse dossier sections only as compressed memory, not as the primary evidence base.\n"
-        "6. Return only the structured schema."
+        "5. Retrieval plan doc_kinds must stay inside the deterministic block allowlist supplied in the prompt.\n"
+        "6. Needed dossier sections must stay inside the deterministic block section list supplied in the prompt.\n"
+        "7. Reuse dossier sections only as compressed memory, not as the primary evidence base.\n"
+        "8. Return only the structured schema."
     )
 
 
@@ -301,6 +303,30 @@ def _truncate_payload(value: Any, max_chars: int = 12000, compact: bool = False)
     if len(payload) <= max_chars:
         return payload
     return payload[: max_chars - 32] + "\n...TRUNCATED FOR PROMPT BOUNDING..."
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return max(256, int(raw))
+    except ValueError:
+        return default
+
+
+def _answer_prompt_limits(block_spec: BlockSpec, phase: str) -> Dict[str, int]:
+    contract_default = 3200
+    snapshot_default = 5200 if block_spec.block_class == "critical" else 3200
+    evidence_default = 14000 if block_spec.block_class == "critical" else 10000
+    if phase == "final_answerer":
+        snapshot_default += 1200
+        evidence_default += 2000
+    return {
+        "contract": _int_env("DDKIT_EXEC_PROMPT_CONTRACT_MAX_CHARS", contract_default),
+        "snapshot": _int_env("DDKIT_EXEC_PROMPT_DOSSIER_MAX_CHARS", snapshot_default),
+        "evidence": _int_env("DDKIT_EXEC_PROMPT_EVIDENCE_MAX_CHARS", evidence_default),
+    }
 
 
 def build_block_prompt(
@@ -345,6 +371,8 @@ def build_planner_prompt(
         f"Question ID: {block_spec.block_id}\n"
         f"Question title: {block_spec.title}\n"
         "Produce an execution contract for retrieval and answering.\n"
+        "Deterministic block contract:\n"
+        f"{_truncate_payload({'regions': block_spec.regions, 'required_sections': block_spec.sections, 'allowed_doc_kinds': block_spec.allowed_doc_kinds, 'verdict_family': block_spec.verdict_family}, max_chars=1200, compact=True)}\n"
         "Question trace:\n"
         f"{_truncate_payload(question_trace, max_chars=900, compact=True)}\n"
         "Compact dossier snapshot:\n"
@@ -374,16 +402,17 @@ def build_answer_prompt(
 ) -> PromptPackage:
     active_profile = profile or get_model_profile()
     system_content = _answer_prompt_contract(block_spec, plan)
+    limits = _answer_prompt_limits(block_spec, phase)
     human_content = (
         f"Question ID: {block_spec.block_id}\n"
         f"Phase: {phase}\n"
         "Answer using the contract and the assembled evidence packet.\n"
         "Question contract:\n"
-        f"{_truncate_payload(plan.model_dump(), max_chars=2500, compact=True)}\n"
+        f"{_truncate_payload(plan.model_dump(), max_chars=limits['contract'], compact=True)}\n"
         "Compact dossier snapshot:\n"
-        f"{_truncate_payload(dossier_snapshot, max_chars=2200, compact=True)}\n"
+        f"{_truncate_payload(dossier_snapshot, max_chars=limits['snapshot'], compact=True)}\n"
         "Evidence packet:\n"
-        f"{_truncate_payload(evidence_packet, max_chars=8000, compact=True)}"
+        f"{_truncate_payload(evidence_packet, max_chars=limits['evidence'], compact=True)}"
     )
     return PromptPackage(
         block_spec=block_spec,
@@ -399,19 +428,45 @@ def build_answer_prompt(
 
 def resolve_primary_question_trace(block_spec: BlockSpec) -> Dict[str, Any]:
     library = load_exec_question_library()
+    block_regions = {str(region or "").strip().upper() for region in block_spec.regions if str(region or "").strip()}
+    block_sections = {str(section or "").strip() for section in block_spec.sections if str(section or "").strip()}
+    best_match: Optional[Dict[str, Any]] = None
+    best_score = -1
     for question_id in block_spec.appendix_question_ids:
         question = library.get(question_id)
-        if question:
-            return {
-                "question_id": question_id,
-                "title": question.get("title", block_spec.title),
-                "question_type": question.get("question_type", block_spec.verdict_family),
-                "business_lens": question.get("business_lens", ""),
-                "required_jurisdictions": question.get("required_jurisdictions", []),
-                "required_sections": question.get("required_sections", []),
-                "must_have_fields": question.get("must_have_fields", []),
-                "fallback_policy": question.get("fallback_policy", ""),
-            }
+        if not question:
+            continue
+        question_regions = {
+            str(region or "").strip().upper()
+            for region in question.get("required_jurisdictions", []) or []
+            if str(region or "").strip()
+        }
+        if question_regions and block_regions and not question_regions.issubset(block_regions):
+            continue
+        question_sections = {
+            str(section or "").strip()
+            for section in question.get("required_sections", []) or []
+            if str(section or "").strip()
+        }
+        overlap = len(question_sections.intersection(block_sections))
+        if question_sections and overlap == 0:
+            continue
+        score = overlap + (4 if question_regions else 1)
+        if score <= best_score:
+            continue
+        best_score = score
+        best_match = {
+            "question_id": question_id,
+            "title": question.get("title", block_spec.title),
+            "question_type": question.get("question_type", block_spec.verdict_family),
+            "business_lens": question.get("business_lens", ""),
+            "required_jurisdictions": question.get("required_jurisdictions", []),
+            "required_sections": question.get("required_sections", []),
+            "must_have_fields": question.get("must_have_fields", []),
+            "fallback_policy": question.get("fallback_policy", ""),
+        }
+    if best_match:
+        return best_match
     return {
         "question_id": block_spec.block_id,
         "title": block_spec.title,

@@ -31,9 +31,13 @@ blocks:
       - label
       - smpc
       - us_fda
+      - approval_letter
+      - eu_regulatory_summary
+      - assessment_report
       - grls
       - grls_card
       - eaeu_registration
+      - eaeu_document
       - ctgov
       - ctgov_results
       - patent_family_summary
@@ -175,8 +179,11 @@ blocks:
       - label
       - smpc
       - us_fda
+      - approval_letter
+      - eu_regulatory_summary
       - ctgov
       - ctgov_results
+      - eaeu_document
       - ru_registration_export
       - ru_commercial_summary
     escalation_classes:
@@ -210,6 +217,9 @@ blocks:
     allowed_doc_kinds:
       - label
       - smpc
+      - us_fda
+      - eu_regulatory_summary
+      - eaeu_document
       - ctgov
       - patent_family_summary
       - ru_registration_export

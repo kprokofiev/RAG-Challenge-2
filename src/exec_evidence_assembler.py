@@ -33,6 +33,10 @@ _DOC_KIND_LABELS = {
     "smpc": "SmPC",
     "label": "Label",
     "us_fda": "US FDA source",
+    "approval_letter": "FDA approval letter",
+    "eu_regulatory_summary": "EU regulatory summary",
+    "epar": "EPAR",
+    "assessment_report": "Assessment report",
     "patent_family_summary": "Patent family summary",
     "patent_legal_events": "Patent legal events",
     "patent_expiry_us": "US patent expiry",
@@ -41,9 +45,78 @@ _DOC_KIND_LABELS = {
     "payer_policy": "Payer policy",
 }
 
+_DOC_KIND_ALIASES = {
+    "fda_drugs_at_fda": "us_fda",
+    "drugs_at_fda": "us_fda",
+    "openfda": "us_fda",
+    "ema_epar": "eu_regulatory_summary",
+    "epar": "eu_regulatory_summary",
+    "assessment_report": "eu_regulatory_summary",
+    "ema_smpc": "smpc",
+    "eaeu_register": "eaeu_document",
+    "eaeu_portal": "eaeu_document",
+    "eaeu_registration": "eaeu_document",
+    "orange_book": "patent_expiry_us",
+    "epo_register": "patent_legal_events",
+    "epo_legal": "patent_legal_events",
+    "spc": "patent_legal_events",
+}
+
+_DOC_KIND_EXPANSIONS = {
+    "us_fda": ["us_fda", "label", "approval_letter"],
+    "eu_regulatory_summary": ["eu_regulatory_summary", "epar", "assessment_report", "smpc"],
+    "eaeu_document": ["eaeu_document", "eaeu_registration"],
+    "grls": ["grls", "grls_card", "ru_instruction"],
+    "patent_legal_events": ["patent_legal_events"],
+    "patent_expiry_us": ["patent_expiry_us"],
+}
+
+
+def normalize_exec_doc_kind(value: Any) -> str:
+    doc_kind = str(value or "").strip().lower()
+    return _DOC_KIND_ALIASES.get(doc_kind, doc_kind)
+
+
+def normalize_exec_doc_kind_list(values: Iterable[Any]) -> List[str]:
+    normalized: List[str] = []
+    seen = set()
+    for value in values or []:
+        doc_kind = normalize_exec_doc_kind(value)
+        if not doc_kind or doc_kind in seen:
+            continue
+        seen.add(doc_kind)
+        normalized.append(doc_kind)
+    return normalized
+
+
+def expand_exec_doc_kinds(values: Iterable[Any]) -> List[str]:
+    expanded: List[str] = []
+    seen = set()
+    for doc_kind in normalize_exec_doc_kind_list(values):
+        candidates = _DOC_KIND_EXPANSIONS.get(doc_kind, [doc_kind])
+        for candidate in candidates:
+            text = str(candidate or "").strip().lower()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            expanded.append(text)
+    return expanded
+
+
+def reconcile_exec_doc_kinds(
+    base_allowed_doc_kinds: Iterable[Any],
+    planned_doc_kinds: Iterable[Any],
+) -> List[str]:
+    base_allowed = normalize_exec_doc_kind_list(base_allowed_doc_kinds)
+    planned = normalize_exec_doc_kind_list(planned_doc_kinds)
+    if base_allowed and planned:
+        intersection = [doc_kind for doc_kind in planned if doc_kind in set(base_allowed)]
+        return intersection or list(base_allowed)
+    return list(base_allowed or planned)
+
 
 def _source_label(item: Dict[str, Any]) -> str:
-    doc_kind = str(item.get("doc_kind") or "").strip().lower()
+    doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
     return _DOC_KIND_LABELS.get(doc_kind, doc_kind or "evidence")
 
 
@@ -99,18 +172,37 @@ class ExecEvidenceAssembler:
     def __init__(self, retriever: Any = None):
         self.retriever = retriever
 
+    def _resolved_allowed_doc_kinds(
+        self,
+        base_packet: Dict[str, Any],
+        plan: ExecQuestionPlan,
+    ) -> List[str]:
+        return reconcile_exec_doc_kinds(
+            base_packet.get("allowed_doc_kinds", []),
+            plan.retrieval_plan.doc_kinds or [],
+        )
+
     def _selected_sections(
         self,
         base_packet: Dict[str, Any],
         plan: ExecQuestionPlan,
     ) -> Dict[str, Any]:
         selected: Dict[str, Any] = {}
-        for section in plan.needed_dossier_sections:
+        ordered_sections = []
+        seen_sections = set()
+        for section in list(base_packet.get("required_sections", []) or []) + list(plan.needed_dossier_sections or []):
+            section_name = str(section or "").strip()
+            if not section_name or section_name in seen_sections:
+                continue
+            seen_sections.add(section_name)
+            ordered_sections.append(section_name)
+        for section in ordered_sections:
             if section not in base_packet:
                 continue
             value = base_packet.get(section)
             if isinstance(value, list):
-                selected[section] = [_compact_value(item) for item in value[:6]]
+                sample_limit = 12 if section in {"clinical_studies", "patent_families", "commercial_signals"} else 8
+                selected[section] = [_compact_value(item) for item in value[:sample_limit]]
             elif isinstance(value, dict):
                 if section == "dossier_quality_v2":
                     selected[section] = {
@@ -143,9 +235,9 @@ class ExecEvidenceAssembler:
             "max_docs": max(1, int(retrieval.max_docs or 12)),
             "max_chunks": max(1, int(retrieval.max_chunks or 30)),
             "max_per_doc_kind": {
-                str(item.doc_kind): max(1, int(item.max_chunks))
+                normalize_exec_doc_kind(item.doc_kind): max(1, int(item.max_chunks))
                 for item in (retrieval.doc_kind_limits or [])
-                if str(item.doc_kind or "").strip()
+                if normalize_exec_doc_kind(item.doc_kind)
             },
         }
 
@@ -155,16 +247,12 @@ class ExecEvidenceAssembler:
         plan: ExecQuestionPlan,
     ) -> List[Dict[str, Any]]:
         limits = self._contract_limits(plan)
-        allowed_doc_kinds = {
-            str(kind).strip()
-            for kind in (plan.retrieval_plan.doc_kinds or base_packet.get("allowed_doc_kinds", []))
-            if str(kind).strip()
-        }
+        allowed_doc_kinds = set(self._resolved_allowed_doc_kinds(base_packet, plan))
         per_kind_limit = limits["max_per_doc_kind"]
         counts = Counter()
         selected: List[Dict[str, Any]] = []
         for item in base_packet.get("evidence_registry", []) or []:
-            doc_kind = str(item.get("doc_kind") or "").strip()
+            doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
             if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
                 continue
             if per_kind_limit.get(doc_kind) and counts[doc_kind] >= per_kind_limit[doc_kind]:
@@ -187,6 +275,7 @@ class ExecEvidenceAssembler:
 
     def _retrieve_additional_evidence(
         self,
+        base_packet: Dict[str, Any],
         plan: ExecQuestionPlan,
         case_id: Optional[str],
     ) -> List[Dict[str, Any]]:
@@ -194,7 +283,8 @@ class ExecEvidenceAssembler:
             return []
         limits = self._contract_limits(plan)
         selected: List[Dict[str, Any]] = []
-        allowed_doc_kinds = list(plan.retrieval_plan.doc_kinds or [])
+        canonical_doc_kinds = self._resolved_allowed_doc_kinds(base_packet, plan)
+        allowed_doc_kinds = expand_exec_doc_kinds(canonical_doc_kinds)
         per_kind_limit = limits["max_per_doc_kind"]
         counts = Counter()
         for query in (plan.retrieval_plan.queries or [])[: limits["max_docs"]]:
@@ -215,8 +305,8 @@ class ExecEvidenceAssembler:
                 continue
             for item in raw_items or []:
                 normalized = normalize_retrieval_item(item)
-                doc_kind = str(normalized.get("doc_kind") or "").strip()
-                if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+                doc_kind = normalize_exec_doc_kind(normalized.get("doc_kind"))
+                if canonical_doc_kinds and doc_kind not in canonical_doc_kinds:
                     continue
                 if per_kind_limit.get(doc_kind) and counts[doc_kind] >= per_kind_limit[doc_kind]:
                     continue
@@ -256,7 +346,7 @@ class ExecEvidenceAssembler:
                 by_geo[region]["evidence_refs"].extend(list(_iter_evidence_refs(item)))
         by_doc_kind: Dict[str, List[str]] = defaultdict(list)
         for item in selected_evidence:
-            doc_kind = str(item.get("doc_kind") or "").strip() or "unknown"
+            doc_kind = normalize_exec_doc_kind(item.get("doc_kind")) or "unknown"
             by_doc_kind[doc_kind].append(str(item.get("evidence_id") or item.get("doc_id") or ""))
             for region, payload in by_geo.items():
                 if item.get("evidence_id") and item["evidence_id"] in payload["evidence_refs"]:
@@ -332,7 +422,7 @@ class ExecEvidenceAssembler:
     ) -> Dict[str, Any]:
         selected_sections = self._selected_sections(base_packet, plan)
         selected_evidence = self._select_existing_evidence(base_packet, plan)
-        retrieved_evidence = self._retrieve_additional_evidence(plan, case_id) if allow_retrieval else []
+        retrieved_evidence = self._retrieve_additional_evidence(base_packet, plan, case_id) if allow_retrieval else []
         all_evidence = list(selected_evidence)
         seen = {
             (

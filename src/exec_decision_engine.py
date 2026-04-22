@@ -29,6 +29,10 @@ try:
         ModelBudgetTrace,
     )
     from src.exec_evidence_assembler import ExecEvidenceAssembler
+    from src.exec_evidence_assembler import (
+        normalize_exec_doc_kind,
+        reconcile_exec_doc_kinds,
+    )
     from src.exec_llm_env import require_exec_openai_api_key
     from src.exec_prompt_builder import (
         ExecQuestionPlan,
@@ -59,6 +63,7 @@ except ImportError:  # pragma: no cover
         ModelBudgetTrace,
     )
     from exec_evidence_assembler import ExecEvidenceAssembler  # type: ignore
+    from exec_evidence_assembler import normalize_exec_doc_kind, reconcile_exec_doc_kinds  # type: ignore
     from exec_llm_env import require_exec_openai_api_key  # type: ignore
     from exec_prompt_builder import (  # type: ignore
         ExecQuestionPlan,
@@ -307,7 +312,8 @@ class ExecDecisionEngine:
             "title": block_spec.title,
             "block_class": block_spec.block_class,
             "verdict_family": block_spec.verdict_family,
-            "allowed_doc_kinds": list(block_spec.allowed_doc_kinds),
+            "allowed_doc_kinds": reconcile_exec_doc_kinds(block_spec.allowed_doc_kinds, []),
+            "required_sections": list(block_spec.sections),
             "budget_snapshot": self._budget_snapshot(),
             "prior_exec_trace": prior_trace or {},
             "partial_route_corroboration": self._partial_route_corroboration(dossier),
@@ -320,10 +326,11 @@ class ExecDecisionEngine:
             selected_refs.update(_iter_evidence_refs(packet.get(section)))
         evidence_registry = dossier.get("evidence_registry", []) or []
         filtered_evidence = []
+        allowed_doc_kinds = set(packet["allowed_doc_kinds"])
         for item in evidence_registry:
             evidence_id = str(item.get("evidence_id") or "")
-            doc_kind = str(item.get("doc_kind") or "")
-            if evidence_id in selected_refs or doc_kind in block_spec.allowed_doc_kinds:
+            doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+            if evidence_id in selected_refs or doc_kind in allowed_doc_kinds:
                 filtered_evidence.append(item)
                 if evidence_id:
                     selected_refs.add(evidence_id)
@@ -425,6 +432,35 @@ class ExecDecisionEngine:
                 "max_per_source_kind": int(os.getenv("DDKIT_EXEC_PLAN_MAX_PER_DOC_KIND", "6")),
             },
         }
+
+    def _normalize_plan(
+        self,
+        block_spec: Any,
+        plan: ExecQuestionPlan,
+    ) -> ExecQuestionPlan:
+        plan.question_id = block_spec.block_id
+        if not plan.answer_type:
+            plan.answer_type = block_spec.verdict_family
+        ordered_sections: List[str] = []
+        seen_sections = set()
+        for section in list(block_spec.sections) + list(plan.needed_dossier_sections or []):
+            section_name = str(section or "").strip()
+            if not section_name or section_name in seen_sections:
+                continue
+            seen_sections.add(section_name)
+            ordered_sections.append(section_name)
+        plan.needed_dossier_sections = ordered_sections
+        reconciled_doc_kinds = reconcile_exec_doc_kinds(
+            block_spec.allowed_doc_kinds,
+            plan.retrieval_plan.doc_kinds or [],
+        )
+        plan.retrieval_plan.doc_kinds = reconciled_doc_kinds
+        plan.retrieval_plan.doc_kind_limits = [
+            item
+            for item in (plan.retrieval_plan.doc_kind_limits or [])
+            if normalize_exec_doc_kind(item.doc_kind) in set(reconciled_doc_kinds)
+        ]
+        return plan
 
     def _missing_evidence_classes(self, packet: Dict[str, Any], block_spec: Any) -> List[str]:
         missing: List[str] = []
@@ -747,6 +783,7 @@ class ExecDecisionEngine:
                 dossier_snapshot,
                 corpus_inventory,
             )
+            plan = self._normalize_plan(block_spec, plan)
 
             evidence_packet = self.assembler.assemble(
                 base_packet=packet,

@@ -5,14 +5,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.dossier_schema_v3 import ExecDecisionBlock, ExecWhyClaim
+from src.exec_answer_runner import _build_exec_retriever
 from src.exec_decision_engine import ExecDecisionEngine
 from src.exec_evidence_assembler import ExecEvidenceAssembler
 from src.exec_llm_env import require_exec_openai_api_key
 from src.exec_prompt_builder import (
+    ExecDocKindLimit,
     ExecQuestionPlan,
     ExecReasonerOutput,
+    ExecRetrievalPlan,
     build_answer_prompt,
     build_planner_prompt,
+    resolve_primary_question_trace,
 )
 from src.exec_retrieval_escalation import ExecRetrievalEscalator
 from src.exec_verifier import ExecVerifier
@@ -262,6 +266,75 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertNotIsInstance(snapshot["known_facts"]["registrations"], list)
         self.assertIn("reason_code", snapshot["critical_unknowns"][0])
 
+    def test_rf_entry_trace_prefers_ru_specific_contract(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        trace = resolve_primary_question_trace(block_spec)
+        self.assertEqual(trace["question_id"], "rf_entry")
+        self.assertEqual(trace["required_jurisdictions"], ["RU"])
+
+    def test_normalize_plan_restores_block_sections_and_doc_kinds(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        plan = ExecQuestionPlan(
+            question_id="wrong_question",
+            answer_type="",
+            needed_dossier_sections=["registrations"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["fda_drugs_at_fda", "ema_epar", "eaeu_register"],
+                queries=["apixaban entry readiness"],
+                doc_kind_limits=[
+                    ExecDocKindLimit(doc_kind="fda_drugs_at_fda", max_chunks=2),
+                    ExecDocKindLimit(doc_kind="ema_epar", max_chunks=2),
+                ],
+            ),
+        )
+        normalized = engine._normalize_plan(block_spec, plan)
+        self.assertEqual(normalized.question_id, "rf_entry")
+        self.assertEqual(normalized.answer_type, block_spec.verdict_family)
+        self.assertEqual(normalized.needed_dossier_sections, list(block_spec.sections))
+        self.assertEqual(normalized.retrieval_plan.doc_kinds, list(block_spec.allowed_doc_kinds))
+        self.assertEqual(normalized.retrieval_plan.doc_kind_limits, [])
+
+    def test_asset_packet_keeps_required_sections_when_planner_omits_them(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["asset_attractiveness"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        plan = ExecQuestionPlan(
+            question_id="asset_attractiveness",
+            answer_type="opportunity",
+            needed_dossier_sections=["registrations"],
+            retrieval_plan=ExecRetrievalPlan(doc_kinds=["label"], queries=["apixaban asset"]),
+        )
+        normalized = engine._normalize_plan(block_spec, plan)
+        evidence_packet = engine.assembler.assemble(packet, normalized, case_id="case-1", allow_retrieval=False)
+        selected_sections = evidence_packet["selected_sections"]
+        self.assertIn("clinical_studies", selected_sections)
+        self.assertIn("patent_families", selected_sections)
+        self.assertIn("unknowns", selected_sections)
+        self.assertEqual(len(selected_sections["clinical_studies"]), 1)
+        self.assertEqual(len(selected_sections["patent_families"]), 1)
+
+    def test_rf_entry_alias_doc_kinds_select_existing_ru_evidence(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        plan = ExecQuestionPlan(
+            question_id="rf_entry",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["fda_drugs_at_fda", "ema_epar", "eaeu_register"],
+                queries=["apixaban russian federation registration"],
+            ),
+        )
+        normalized = engine._normalize_plan(block_spec, plan)
+        evidence_packet = engine.assembler.assemble(packet, normalized, case_id="case-1", allow_retrieval=False)
+        self.assertTrue(evidence_packet["selected_evidence"])
+        self.assertTrue(
+            any(item["doc_kind"] in {"grls", "grls_card", "ru_instruction", "ru_registration_export"} for item in evidence_packet["selected_evidence"])
+        )
+
 
 class ExecVerifierTests(unittest.TestCase):
     def test_verifier_catches_unsupported_claim_and_repairs(self):
@@ -304,6 +377,49 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertTrue(any(item["doc_kind"] == "ru_registration_export" for item in evidence_packet["selected_evidence"]))
         self.assertIn("direct_ru_registration_confirmation", evidence_packet["missing_evidence_classes"])
 
+    def test_retrieval_assembler_expands_queries_but_keeps_canonical_filter(self):
+        class FakeRetriever:
+            def __init__(self):
+                self.calls = []
+
+            def retrieve_by_case(self, query, case_id=None, doc_kind=None, top_n=None):
+                self.calls.append(
+                    {
+                        "query": query,
+                        "case_id": case_id,
+                        "doc_kind": list(doc_kind or []),
+                        "top_n": top_n,
+                    }
+                )
+                return [
+                    {"doc_id": "doc-approval", "doc_kind": "approval_letter", "snippet": "FDA approval", "score": 0.95},
+                    {"doc_id": "doc-grls", "doc_kind": "grls_card", "snippet": "GRLS card", "score": 0.90},
+                    {"doc_id": "doc-eaeu", "doc_kind": "eaeu_register", "snippet": "EAEU register", "score": 0.85},
+                ]
+
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["rf_entry"]
+        packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
+        plan = ExecQuestionPlan(
+            question_id="rf_entry",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["fda_drugs_at_fda", "ema_epar", "eaeu_register"],
+                queries=["apixaban russian federation registration"],
+            ),
+        )
+        normalized = engine._normalize_plan(block_spec, plan)
+        retriever = FakeRetriever()
+        assembler = ExecEvidenceAssembler(retriever=retriever)
+        evidence_packet = assembler.assemble(packet, normalized, case_id="case-1", allow_retrieval=True)
+        self.assertTrue(retriever.calls)
+        self.assertIn("grls_card", retriever.calls[0]["doc_kind"])
+        self.assertNotIn("approval_letter", retriever.calls[0]["doc_kind"])
+        self.assertEqual(evidence_packet["evidence_packet_summary"]["retrieved_extra_count"], 1)
+        self.assertTrue(any(item["doc_id"] == "doc-grls" for item in evidence_packet["selected_evidence"]))
+        self.assertFalse(any(item["doc_id"] == "doc-approval" for item in evidence_packet["selected_evidence"]))
+
 
 class ExecLlmEnvTests(unittest.TestCase):
     def test_require_exec_openai_api_key_loads_explicit_env_file(self):
@@ -313,6 +429,12 @@ class ExecLlmEnvTests(unittest.TestCase):
             with patch.dict(os.environ, {"DDKIT_EXEC_OPENAI_ENV_FILE": str(env_path)}, clear=True):
                 key = require_exec_openai_api_key()
         self.assertEqual(key, "test-key")
+
+
+class ExecAnswerRunnerTests(unittest.TestCase):
+    def test_build_exec_retriever_returns_injected_instance(self):
+        marker = object()
+        self.assertIs(_build_exec_retriever(retriever=marker), marker)
 
 
 if __name__ == "__main__":
