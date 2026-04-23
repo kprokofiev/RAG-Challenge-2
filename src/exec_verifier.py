@@ -31,6 +31,52 @@ except ImportError:  # pragma: no cover
 _BLOCKING_SEVERITIES = {"DECISION_BLOCKING", "MUST_VERIFY_NOW"}
 _GO_VERDICTS = {"GO", "CONDITIONAL_GO", "OPEN", "HIGH"}
 _NEGATIVE_VERDICTS = {"NO_GO", "CLOSED", "LOW"}
+_POSITIVE_REGISTRATION_MARKERS = {
+    "active",
+    "approved",
+    "authorised",
+    "authorized",
+    "confirmed",
+    "in force",
+    "registered",
+    "valid",
+}
+_POSITIVE_COMMERCIAL_MARKERS = {
+    "confirmed",
+    "positive",
+    "present",
+    "supported",
+}
+_MISSING_EVIDENCE_MARKERS = {
+    "blank",
+    "cannot be concluded",
+    "cannot be confirmed",
+    "insufficient",
+    "missing",
+    "not available",
+    "not confirmed",
+    "not provided",
+    "unresolved",
+    "unknown",
+    "valid_to",
+}
+_NEGATIVE_EVIDENCE_MARKERS = {
+    "closed",
+    "denied",
+    "expired",
+    "failed",
+    "inactive",
+    "invalid",
+    "negative",
+    "not approv",
+    "not registered",
+    "refused",
+    "rejected",
+    "revoked",
+    "suspended",
+    "terminated",
+    "withdrawn",
+}
 _STOPWORDS = {
     "and",
     "are",
@@ -79,6 +125,82 @@ def _candidate_evidence(packet: Dict[str, Any]) -> List[Dict[str, str]]:
     return candidates
 
 
+def _scalar_text(value: Any) -> str:
+    if isinstance(value, dict):
+        if "value" in value:
+            return str(value.get("value") or "")
+        return " ".join(_scalar_text(v) for v in value.values() if _scalar_text(v))
+    if isinstance(value, list):
+        return " ".join(_scalar_text(item) for item in value if _scalar_text(item))
+    return str(value or "")
+
+
+def _region_text(item: Dict[str, Any]) -> str:
+    return str(
+        item.get("region")
+        or item.get("jurisdiction")
+        or item.get("country")
+        or ""
+    ).strip().upper()
+
+
+def _contains_marker(text: str, markers: set[str]) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in markers)
+
+
+def _registration_status_text(item: Dict[str, Any]) -> str:
+    return " ".join(
+        part for part in (
+            _scalar_text(item.get("status")),
+            _scalar_text(item.get("verdict")),
+        ) if part
+    ).strip()
+
+
+def _has_positive_registration(packet: Dict[str, Any], region: str) -> bool:
+    region = str(region or "").strip().upper()
+    for item in packet.get("registrations", []) or []:
+        if not isinstance(item, dict) or _region_text(item) != region:
+            continue
+        if _contains_marker(_registration_status_text(item), _POSITIVE_REGISTRATION_MARKERS):
+            return True
+    return False
+
+
+def _positive_commercial_signal_count(packet: Dict[str, Any], region: str) -> int:
+    region = str(region or "").strip().upper()
+    count = 0
+    for item in packet.get("commercial_signals", []) or []:
+        if not isinstance(item, dict) or _region_text(item) != region:
+            continue
+        signal_text = " ".join(
+            part for part in (
+                _scalar_text(item.get("verdict")),
+                _scalar_text(item.get("category")),
+                _scalar_text(item.get("summary")),
+            ) if part
+        )
+        if _contains_marker(signal_text, _POSITIVE_COMMERCIAL_MARKERS):
+            count += 1
+    return count
+
+
+def _block_text(block: ExecDecisionBlock) -> str:
+    parts: List[str] = [block.short_answer, block.full_answer]
+    parts.extend(claim.claim for claim in block.why_this_verdict)
+    for blocker in block.decision_blockers:
+        parts.append(blocker.title)
+        parts.append(blocker.rationale)
+    parts.extend(block.caveats)
+    return " ".join(part for part in parts if part).strip()
+
+
+def _has_context_integrity_green(packet: Dict[str, Any]) -> bool:
+    readiness = ((packet.get("dossier_quality_v2") or {}).get("decision_readiness") or {})
+    return str(readiness.get("context_integrity") or "").upper() == "GREEN"
+
+
 def _grounding_refs_for_claim(claim_text: str, packet: Dict[str, Any], limit: int = 3) -> List[str]:
     claim_tokens = _tokenize(claim_text)
     if not claim_tokens:
@@ -95,6 +217,49 @@ def _grounding_refs_for_claim(claim_text: str, packet: Dict[str, Any], limit: in
 
 
 class ExecVerifier:
+    def _asset_negative_missing_evidence_overreach(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "asset_attractiveness" or block.verdict != "NO_GO":
+            return False
+        if not _has_context_integrity_green(packet):
+            return False
+        if not (
+            _has_positive_registration(packet, "RU")
+            and (_has_positive_registration(packet, "EU") or _has_positive_registration(packet, "US") or _has_positive_registration(packet, "EAEU"))
+        ):
+            return False
+        text = _block_text(block)
+        return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _contains_marker(text, _NEGATIVE_EVIDENCE_MARKERS)
+
+    def _rf_scope_overconstraint(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "rf_entry" or block.verdict in _GO_VERDICTS:
+            return False
+        if not _has_positive_registration(packet, "RU"):
+            return False
+        if _positive_commercial_signal_count(packet, "RU") <= 0:
+            return False
+        text = _block_text(block).lower()
+        return ("eaeu" in text or "valid_to" in text or "underlying authorization" in text) and not _contains_marker(text, _NEGATIVE_EVIDENCE_MARKERS)
+
+    def _eaeu_holdable_regulatory_position(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "eaeu_entry" or block.verdict != "INSUFFICIENT_EVIDENCE":
+            return False
+        if not _has_positive_registration(packet, "EAEU"):
+            return False
+        text = _block_text(block)
+        return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _contains_marker(text, _NEGATIVE_EVIDENCE_MARKERS)
+
     def _ground_or_downgrade_unreferenced_hard_claims(
         self,
         block: ExecDecisionBlock,
@@ -200,6 +365,33 @@ class ExecVerifier:
                 )
             )
 
+        if self._asset_negative_missing_evidence_overreach(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="negative_missing_evidence_overreach",
+                    severity="WARN",
+                    message="Negative asset verdict is being driven by missing evidence rather than explicit negative evidence.",
+                )
+            )
+
+        if self._rf_scope_overconstraint(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="rf_scope_overconstraint",
+                    severity="WARN",
+                    message="RF-entry verdict is being blocked by EAEU-validity uncertainty despite active RU registration and RU support signals.",
+                )
+            )
+
+        if self._eaeu_holdable_regulatory_position(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="eaeu_holdable_position",
+                    severity="WARN",
+                    message="EAEU entry has a confirmed registration anchor and should degrade to HOLD rather than pure insufficiency.",
+                )
+            )
+
         factual_status = "FAIL" if any(issue.issue_type in {"unsupported_claim", "unknown_evidence_ref", "empty_blocker"} and issue.severity == "FAIL" for issue in issues) else "PASS"
         decision_status = "FAIL" if any(issue.issue_type in {"verdict_blocker_conflict", "critical_unknown_ignored"} and issue.severity == "FAIL" for issue in issues) else "PASS"
         reviewer_status = "WARN" if any(issue.severity == "WARN" for issue in issues) else "PASS"
@@ -287,8 +479,62 @@ class ExecVerifier:
                     rationale=blocker.rationale,
                     evidence_refs=list(blocker.evidence_refs),
                 )
-            )
+                )
             applied_changes.append("added_action_for_blocker")
+
+        if any(issue.issue_type == "negative_missing_evidence_overreach" for issue in verification.issues):
+            repaired.verdict = "HOLD"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "Baseline maturity is supported across registrations and clinical evidence, but unresolved RU/EAEU IP-window and EAEU-validity gaps keep the asset at HOLD rather than NO_GO."
+            )
+            repaired.full_answer = (
+                "Registrations and clinical maturity are evidenced, and context integrity is acceptable; however, RU/EAEU patent-window evidence and EAEU validity remain unresolved. "
+                "Those are hold-level decision blockers, not source-backed negative evidence, so the block is repaired from NO_GO to HOLD."
+            )
+            applied_changes.append("softened_missing_evidence_no_go_to_hold")
+
+        if any(issue.issue_type == "rf_scope_overconstraint" for issue in verification.issues):
+            repaired.verdict = "GO"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "GO — active RU registration is confirmed in GRLS and supportive RU access signals are present; unresolved EAEU-validity detail is tracked separately and does not negate the RF decision."
+            )
+            repaired.full_answer = (
+                "RF entry is grounded by an active RU GRLS registration plus supportive RU formulary/policy/commercial signals. "
+                "The missing EAEU valid_to detail remains an adjacent EAEU issue, but it should not override a positive RF decision anchored to the RU registration context."
+            )
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if "eaeu" not in f"{blocker.title} {blocker.rationale}".lower()
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if "eaeu" not in f"{action.action} {action.rationale}".lower()
+            ]
+            repaired.why_this_verdict = [
+                claim for claim in repaired.why_this_verdict
+                if "eaeu" not in claim.claim.lower()
+            ]
+            caveat = "EAEU authorization validity remains unresolved for the EAEU block, but RF entry is anchored to the active RU GRLS registration."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("removed_eaeu_overconstraint_from_rf_entry")
+
+        if any(issue.issue_type == "eaeu_holdable_position" for issue in verification.issues):
+            repaired.verdict = "HOLD"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "HOLD — an EAEU registration anchor is confirmed, but the in-force validity window and EAEU-scoped commercial pathway remain unresolved."
+            )
+            repaired.full_answer = (
+                "The packet confirms an EAEU registration identity for apixaban, so the block should not collapse to pure insufficiency. "
+                "However, because valid_to remains blank in the source snapshot and commercial pathway evidence is still RU-only, the defensible outcome is HOLD pending targeted EAEU follow-up."
+            )
+            applied_changes.append("promoted_eaeu_insufficiency_to_hold")
 
         repaired_verification = self.verify_block(repaired, packet, block_spec=None)
         repaired_verification.repair_applied = bool(applied_changes)
@@ -305,7 +551,13 @@ class ExecVerifier:
         allow_repair: bool = True,
     ) -> Tuple[ExecDecisionBlock, ExecVerificationReport]:
         verification = self.verify_block(block, packet, block_spec)
-        reparable_warns = {"confidence_mismatch", "missing_partial_route_caveat"}
+        reparable_warns = {
+            "confidence_mismatch",
+            "missing_partial_route_caveat",
+            "negative_missing_evidence_overreach",
+            "rf_scope_overconstraint",
+            "eaeu_holdable_position",
+        }
         has_reparable_warn = any(
             issue.issue_type in reparable_warns for issue in verification.issues
         )

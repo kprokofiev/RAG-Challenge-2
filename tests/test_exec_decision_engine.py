@@ -481,6 +481,87 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.confidence, "LOW")
 
+    def test_verifier_softens_asset_no_go_when_only_missing_evidence_drives_block(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="NO_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="NO_GO because RU/EAEU IP window is missing and validity is not confirmed.",
+            full_answer="The packet shows registrations and clinical maturity, but RU/EAEU IP window evidence is unresolved and valid_to is blank, so the model returned NO_GO.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["dossier_quality_v2"]["decision_readiness"]["context_integrity"] = "GREEN"
+        packet["registrations"].append(
+            {
+                "region": "US",
+                "verdict": "confirmed",
+                "status": {"value": "approved", "evidence_refs": ["ev-reg-us"]},
+                "evidence_refs": ["ev-reg-us"],
+            }
+        )
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "HOLD")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+
+    def test_verifier_repairs_rf_entry_when_only_eaeu_validity_blocks_ru_go(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="INSUFFICIENT_EVIDENCE",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="RU entry cannot be concluded because EAEU valid_to is missing.",
+            full_answer="RU GRLS is active, but the answer is blocked only because EAEU validity is not confirmed.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["registrations"][0]["status"] = {"value": "active", "evidence_refs": ["ev-reg-ru"]}
+        packet["commercial_signals"][0]["verdict"] = "confirmed"
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertTrue(any("EAEU" in caveat for caveat in repaired.caveats))
+
+    def test_verifier_promotes_eaeu_insufficiency_to_hold_when_reg_anchor_exists(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="INSUFFICIENT_EVIDENCE",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="Insufficient because valid_to is blank and commercial pathway is missing.",
+            full_answer="An EAEU registration exists, but valid_to is blank and commercial evidence is RU-only.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["registrations"].append(
+            {
+                "region": "EAEU",
+                "verdict": "confirmed",
+                "status": {"value": "Authorised", "evidence_refs": ["ev-eaeu"]},
+                "identifiers": [{"value": "LP-EAEU-1", "evidence_refs": ["ev-eaeu"]}],
+                "evidence_refs": ["ev-eaeu"],
+            }
+        )
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "HOLD")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+
 
 class ExecRetrievalEscalationTests(unittest.TestCase):
     def test_commercial_priority_prefers_source_native(self):
