@@ -4,6 +4,7 @@ Verification and bounded repair for exec decision blocks.
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any, Dict, List, Tuple
 
@@ -30,13 +31,88 @@ except ImportError:  # pragma: no cover
 _BLOCKING_SEVERITIES = {"DECISION_BLOCKING", "MUST_VERIFY_NOW"}
 _GO_VERDICTS = {"GO", "CONDITIONAL_GO", "OPEN", "HIGH"}
 _NEGATIVE_VERDICTS = {"NO_GO", "CLOSED", "LOW"}
+_STOPWORDS = {
+    "and",
+    "are",
+    "but",
+    "for",
+    "from",
+    "has",
+    "have",
+    "into",
+    "not",
+    "that",
+    "the",
+    "this",
+    "with",
+    "without",
+}
 
 
 def _severity_rank(confidence: str) -> int:
     return {"LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(str(confidence or "").upper(), 1)
 
 
+def _tokenize(value: Any) -> set[str]:
+    text = str(value or "").lower()
+    tokens = {token for token in re.findall(r"[a-zа-я0-9]{3,}", text) if token not in _STOPWORDS}
+    return tokens
+
+
+def _candidate_evidence(packet: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Return evidence candidates that can be used for bounded claim repair."""
+    candidates: List[Dict[str, str]] = []
+    seen = set()
+    for collection_name in ("selected_evidence", "evidence_registry"):
+        for item in packet.get(collection_name, []) or []:
+            if not isinstance(item, dict):
+                continue
+            ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+            if not ref or ref in seen:
+                continue
+            seen.add(ref)
+            searchable = " ".join(
+                str(item.get(key) or "")
+                for key in ("doc_kind", "source_label", "title", "snippet", "source_url")
+            )
+            candidates.append({"ref": ref, "searchable": searchable})
+    return candidates
+
+
+def _grounding_refs_for_claim(claim_text: str, packet: Dict[str, Any], limit: int = 3) -> List[str]:
+    claim_tokens = _tokenize(claim_text)
+    if not claim_tokens:
+        return []
+    scored: List[Tuple[int, str]] = []
+    for candidate in _candidate_evidence(packet):
+        evidence_tokens = _tokenize(candidate.get("searchable"))
+        overlap = claim_tokens & evidence_tokens
+        if len(overlap) >= 2:
+            scored.append((len(overlap), candidate["ref"]))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    valid_refs = set(packet.get("evidence_ids", [])) or {candidate["ref"] for candidate in _candidate_evidence(packet)}
+    return [ref for _, ref in scored if ref in valid_refs][:limit]
+
+
 class ExecVerifier:
+    def _ground_or_downgrade_unreferenced_hard_claims(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> List[str]:
+        applied_changes: List[str] = []
+        for claim in block.why_this_verdict:
+            if claim.claim_type != "hard_evidence_backed" or claim.evidence_refs:
+                continue
+            refs = _grounding_refs_for_claim(claim.claim, packet)
+            if refs:
+                claim.evidence_refs = refs
+                applied_changes.append("attached_refs_to_unreferenced_hard_claim")
+            else:
+                claim.claim_type = "inference"
+                applied_changes.append("downgraded_unreferenced_hard_claim")
+        return applied_changes
+
     def verify_block(
         self,
         block: ExecDecisionBlock,
@@ -53,7 +129,7 @@ class ExecVerifier:
                     ExecVerificationIssue(
                         issue_type="unsupported_claim",
                         severity="FAIL",
-                        message="Hard evidence backed claim is missing evidence refs.",
+                        message=f"Hard evidence backed claim is missing evidence refs: {claim.claim[:160]}",
                     )
                 )
             missing_refs = [ref for ref in claim.evidence_refs if ref not in evidence_ids]
@@ -147,10 +223,9 @@ class ExecVerifier:
         applied_changes: List[str] = []
 
         if any(issue.issue_type == "unsupported_claim" for issue in verification.issues):
-            for claim in repaired.why_this_verdict:
-                if claim.claim_type == "hard_evidence_backed" and not claim.evidence_refs:
-                    claim.claim_type = "inference"
-                    applied_changes.append("downgraded_unreferenced_hard_claim")
+            applied_changes.extend(
+                self._ground_or_downgrade_unreferenced_hard_claims(repaired, packet)
+            )
 
         if any(issue.issue_type == "unknown_evidence_ref" for issue in verification.issues):
             valid_refs = set(packet.get("evidence_ids", []))
@@ -162,6 +237,9 @@ class ExecVerifier:
             for action in repaired.next_actions:
                 action.evidence_refs = [ref for ref in action.evidence_refs if ref in valid_refs]
             applied_changes.append("removed_unknown_evidence_refs")
+            applied_changes.extend(
+                self._ground_or_downgrade_unreferenced_hard_claims(repaired, packet)
+            )
 
         if any(issue.issue_type == "verdict_blocker_conflict" for issue in verification.issues):
             if repaired.verdict == "GO":

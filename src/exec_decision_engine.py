@@ -673,6 +673,26 @@ class ExecDecisionEngine:
             output.caveats = [item.get("summary", "") for item in evidence_packet.get("contradictions", [])[:3] if item.get("summary")]
         return output
 
+    def _build_verification_packet(
+        self,
+        packet: Dict[str, Any],
+        evidence_packet: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        verification_packet = dict(packet)
+        packet_ids = [str(ref) for ref in packet.get("evidence_ids", []) or [] if str(ref or "").strip()]
+        selected_ids = [
+            str(ref)
+            for ref in evidence_packet.get("selected_evidence_ids", []) or []
+            if str(ref or "").strip()
+        ]
+        verification_packet["evidence_ids"] = list(dict.fromkeys(packet_ids + selected_ids))
+        verification_packet["selected_evidence"] = list(evidence_packet.get("selected_evidence", []) or [])
+        verification_packet["critical_unknowns"] = list(
+            evidence_packet.get("critical_unknowns", packet.get("critical_unknowns", [])) or []
+        )
+        verification_packet["partial_route_corroboration"] = packet.get("partial_route_corroboration")
+        return verification_packet
+
     def _to_block(
         self,
         block_spec: Any,
@@ -874,7 +894,8 @@ class ExecDecisionEngine:
                 escalated=escalated,
             )
             allow_repair = _env_bool("DDKIT_EXEC_REPAIR_ENABLED", True)
-            block, verification = self.verifier.verify_and_repair(block, packet, block_spec, allow_repair=allow_repair)
+            verification_packet = self._build_verification_packet(packet, final_evidence_packet)
+            block, verification = self.verifier.verify_and_repair(block, verification_packet, block_spec, allow_repair=allow_repair)
             block.verification = verification
             if block.model_trace:
                 block.model_trace.verifier_verdict = verification.overall_status

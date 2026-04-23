@@ -356,6 +356,42 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.why_this_verdict[0].claim_type, "inference")
 
+    def test_verifier_attaches_matching_refs_before_downgrading(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="MEDIUM",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Partial",
+            full_answer="Partial",
+            why_this_verdict=[
+                ExecWhyClaim(
+                    claim="Phase 3 ARISTOTLE results are present in the packet",
+                    claim_type="hard_evidence_backed",
+                    evidence_refs=[],
+                )
+            ],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-clin-results"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-clin-results",
+                    "doc_kind": "ctgov_results",
+                    "snippet": "ARISTOTLE Phase 3 results met the primary endpoint.",
+                }
+            ],
+            "critical_unknowns": [],
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.why_this_verdict[0].claim_type, "hard_evidence_backed")
+        self.assertEqual(repaired.why_this_verdict[0].evidence_refs, ["ev-clin-results"])
+
 
 class ExecRetrievalEscalationTests(unittest.TestCase):
     def test_commercial_priority_prefers_source_native(self):
