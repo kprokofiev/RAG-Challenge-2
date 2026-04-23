@@ -163,7 +163,7 @@ def _has_explicit_negative_evidence(text: str) -> bool:
         r"\bnegative\b",
         r"\bnot approv\w*\b",
         r"\bnot registered\b",
-        r"(?<!non[-\s])(?<!not[-\s])expired\b",
+        r"(?<!non[-\s])(?<!not[-\s])(?<!un)expired\b",
     )
     return any(re.search(pattern, lowered) for pattern in patterns)
 
