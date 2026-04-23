@@ -7037,17 +7037,21 @@ class DossierReportGenerator:
         # Sprint 14 P0.4: build_product_contexts now returns (contexts, suppressed_weak_signals)
         product_contexts, suppressed_weak_signals = build_product_contexts(registrations, evidence_list)
         if len(product_contexts) > 1:
-            # Sprint 19: Check if all contexts converge to the same route.
-            # If so, it's not truly ambiguous — just multiple regional registrations
-            # of the same product form. Don't mark as ambiguous.
+            # Multiple regional registrations can converge by route/form while
+            # remaining distinct product identities by region, reg_no, and MAH.
             ctx_routes = {c.route for c in product_contexts if c.route}
             if len(ctx_routes) <= 1:
-                # All contexts share the same route (or have no route) → not ambiguous
-                passport.passport_scope = "single_context"
+                passport.passport_scope = "multi_regional_context"
                 if ctx_routes:
                     passport.passport_notice = (
-                        f"{len(product_contexts)} regional contexts detected, "
-                        f"all converging to route={next(iter(ctx_routes))}."
+                        f"{len(product_contexts)} regional product contexts detected. "
+                        f"They converge to route={next(iter(ctx_routes))}, but remain separate "
+                        "by jurisdiction, registration number, MAH, and/or product identifier."
+                    )
+                else:
+                    passport.passport_notice = (
+                        f"{len(product_contexts)} regional product contexts detected. "
+                        "They remain separate by jurisdiction, registration number, MAH, and/or product identifier."
                     )
             else:
                 passport.passport_scope = "multi_context_ambiguous"

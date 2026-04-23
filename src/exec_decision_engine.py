@@ -361,6 +361,18 @@ class ExecDecisionEngine:
                 "registrations": _sample_registrations(registrations),
                 "commercial_signals": _sample_commercial_signals(commercial),
                 "product_contexts": _sample_product_contexts(product_contexts),
+                "product_identity": {
+                    "passport_scope": _scalar_text(
+                        (dossier.get("passport") or {}).get("passport_scope"),
+                        limit=60,
+                    ),
+                    "passport_notice": _scalar_text(
+                        (dossier.get("passport") or {}).get("passport_notice"),
+                        limit=180,
+                    ),
+                    "context_count": len(dossier.get("product_contexts", []) or []),
+                    "packet_context_count": len(product_contexts),
+                },
                 "clinical_summary": {
                     "count": len(clinical),
                     "sample_titles": [

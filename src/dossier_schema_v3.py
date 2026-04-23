@@ -243,7 +243,11 @@ class DossierPassport(BaseModel):
     # Sprint 7.5: multi-context awareness
     passport_scope: Optional[str] = Field(
         None,
-        description="'single_context' or 'multi_context_ambiguous' — set when >1 product context detected"
+        description=(
+            "'single_context', 'multi_regional_context', or 'multi_context_ambiguous'. "
+            "Use multi_regional_context when several region-specific registrations converge by route/form "
+            "but remain distinct product identities by region, registration number, or MAH."
+        )
     )
     passport_notice: Optional[str] = Field(
         None,
@@ -1991,6 +1995,13 @@ def compute_dossier_quality_v2(
             context_integrity = "GREEN"
         else:
             context_integrity = "YELLOW"
+    elif passport_scope == "multi_regional_context":
+        if weak_signal_ctx == 0 and len(route_families) <= 1 and reg_confirmed_ctx >= max(ctx_count, 1):
+            context_integrity = "GREEN"
+        elif weak_signal_ctx == 0 and len(route_families) <= 1:
+            context_integrity = "YELLOW"
+        else:
+            context_integrity = "RED"
     elif ctx_count <= 1:
         context_integrity = "GREEN"
     elif ctx_count <= 3:
@@ -2226,6 +2237,10 @@ def compute_dossier_quality_v2(
         notes.append("commercial open-data support is absent from the current corpus.")
     if passport_scope == "single_context" and context_integrity == "GREEN" and ctx_count > 1:
         notes.append(f"{ctx_count} regional contexts converge to a single product-context route")
+    if passport_scope == "multi_regional_context" and context_integrity == "GREEN":
+        notes.append(
+            f"{ctx_count} regional product contexts are route/form-converged but kept separate by region/MAH/registration identity"
+        )
     if us_expiry_expected and not us_expiry_covered:
         notes.append("US patent expiry evidence is still missing; do not treat US/EU expiry as fully verified.")
     if total_families == 0:

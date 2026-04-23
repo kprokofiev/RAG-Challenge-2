@@ -49,7 +49,7 @@ def _route_families(contexts: List[Dict[str, Any]]) -> set[str]:
 def _is_converged_single_context(dossier: Dict[str, Any], contexts: List[Dict[str, Any]]) -> bool:
     passport = dossier.get("passport") or {}
     passport_scope = str(passport.get("passport_scope") or "").strip().lower()
-    if passport_scope != "single_context":
+    if passport_scope not in {"single_context", "multi_regional_context"}:
         return False
     if len(_route_families(contexts)) > 1:
         return False
