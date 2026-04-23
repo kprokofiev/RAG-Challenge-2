@@ -236,6 +236,31 @@ def _grounding_refs_for_claim(claim_text: str, packet: Dict[str, Any], limit: in
 
 
 class ExecVerifier:
+    def _relevant_critical_unknowns(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        unknowns = list(packet.get("critical_unknowns", []) or [])
+        if block.block_id == "rf_entry":
+            filtered: List[Dict[str, Any]] = []
+            for item in unknowns:
+                text = f"{item.get('reason_code', '')} {item.get('impact', '')}".lower()
+                if any(marker in text for marker in ("eaeu", "patent", "legal_status_not_available")):
+                    continue
+                if any(marker in text for marker in ("ru", "rf", "grls", "registration")):
+                    filtered.append(item)
+            return filtered
+        if block.block_id == "eaeu_entry":
+            return [
+                item for item in unknowns
+                if any(
+                    marker in f"{item.get('reason_code', '')} {item.get('impact', '')}".lower()
+                    for marker in ("eaeu", "registration")
+                )
+            ]
+        return unknowns
+
     def _asset_negative_missing_evidence_overreach(
         self,
         block: ExecDecisionBlock,
@@ -304,7 +329,7 @@ class ExecVerifier:
         block_spec: Any,
     ) -> ExecVerificationReport:
         evidence_ids = set(packet.get("evidence_ids", []))
-        critical_unknowns = packet.get("critical_unknowns", [])
+        critical_unknowns = self._relevant_critical_unknowns(block, packet)
         issues: List[ExecVerificationIssue] = []
 
         for claim in block.why_this_verdict:
@@ -466,7 +491,7 @@ class ExecVerifier:
         if any(issue.issue_type == "critical_unknown_ignored" for issue in verification.issues):
             repaired.sufficiency = "PARTIAL"
             if not repaired.decision_blockers:
-                critical_unknowns = packet.get("critical_unknowns", [])
+                critical_unknowns = self._relevant_critical_unknowns(repaired, packet)
                 for item in critical_unknowns[:2]:
                     repaired.decision_blockers.append(
                         ExecBlocker(
@@ -526,20 +551,8 @@ class ExecVerifier:
                 "The missing EAEU valid_to detail remains an adjacent EAEU issue, but it should not override a positive RF decision anchored to the RU registration context. "
                 "Because dossier context integrity is already green, the lack of an additional RU route/form field in the GRLS snippet should remain a caveat rather than a blocker."
             )
-            repaired.decision_blockers = [
-                blocker for blocker in repaired.decision_blockers
-                if not any(
-                    marker in f"{blocker.title} {blocker.rationale}".lower()
-                    for marker in ("eaeu", "route/form", "product-context alignment", "dosage/admin form")
-                )
-            ]
-            repaired.next_actions = [
-                action for action in repaired.next_actions
-                if not any(
-                    marker in f"{action.action} {action.rationale}".lower()
-                    for marker in ("eaeu", "route/form", "product-context alignment", "dosage/admin form")
-                )
-            ]
+            repaired.decision_blockers = []
+            repaired.next_actions = []
             repaired.why_this_verdict = [
                 claim for claim in repaired.why_this_verdict
                 if not any(
@@ -550,6 +563,9 @@ class ExecVerifier:
             caveat = "EAEU authorization validity remains unresolved for the EAEU block, but RF entry is anchored to the active RU GRLS registration."
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
+            ru_validity_caveat = "RU GRLS end-date/legal-status detail remains partially structured in the source snapshot, but explicit GRLS status=active is sufficient for the RF decision."
+            if ru_validity_caveat not in repaired.caveats:
+                repaired.caveats.append(ru_validity_caveat)
             applied_changes.append("removed_eaeu_overconstraint_from_rf_entry")
 
         if any(issue.issue_type == "eaeu_holdable_position" for issue in verification.issues) or self._eaeu_holdable_regulatory_position(repaired, packet):
