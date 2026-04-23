@@ -2104,14 +2104,28 @@ class DossierReportGenerator:
             key_docs = list(
                 {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
             )
+            key_doc_kinds = {
+                str(getattr(self._evidence_registry.get(e), "doc_kind", "") or "").strip().lower()
+                for e in ev_refs
+                if e in self._evidence_registry
+            }
             kind = classify_synthesis_kind(str(desc.value or ""))
             if kind != "api_synthesis":
                 non_api_detected = True
                 continue
+            if key_doc_kinds.intersection({"patent_pdf", "ru_patent_pdf", "patent", "ru_patent_fips"}):
+                evidence_grade = "verified_process_patent"
+            elif key_doc_kinds.intersection({"patent_family_summary", "patent_family", "ops", "drug_monograph"}):
+                evidence_grade = "route_mention"
+            elif key_doc_kinds.intersection({"manufacturer_profile", "supplier_catalog", "api_supplier"}):
+                evidence_grade = "supplier_or_manufacturer_signal"
+            else:
+                evidence_grade = "unsupported"
             steps.append(
                 DossierSynthesisStep(
                     step_number=step_llm.step_number or (len(steps) + 1),
                     kind=kind,
+                    evidence_grade=evidence_grade,
                     description=desc,
                     reagents=reagents,
                     intermediates=intermediates,
@@ -3250,6 +3264,153 @@ class DossierReportGenerator:
         self._evidence_registry[ev.evidence_id] = ev
         return EvidencedValue(value=value, confidence=confidence, evidence_refs=[ev.evidence_id])
 
+    @staticmethod
+    def _is_indefinite_validity_value(value: Any) -> bool:
+        text = str(value or "").strip().lower()
+        if not text:
+            return False
+        markers = (
+            "indefinite",
+            "indefinitely",
+            "без срока",
+            "бессрочно",
+            "бессрочный",
+            "бессрочная",
+            "бессрочные",
+        )
+        return any(marker in text for marker in markers)
+
+    def _extract_structured_registration_validity(
+        self,
+        record: Dict[str, Any],
+        *,
+        region_label: str,
+        doc_id: str,
+        doc_title: str,
+        source_url: str,
+        doc_kind: str,
+        content_hash: str,
+        locator_prefix: str,
+    ) -> Tuple[Optional[EvidencedValue], str, List[str]]:
+        value_keys = (
+            "valid_to",
+            "valid_until",
+            "validity_end",
+            "validity_end_date",
+            "expiry_date",
+            "expiration_date",
+            "registration_valid_to",
+            "end_date",
+        )
+        type_keys = (
+            "validity_type",
+            "validity",
+            "validity_status",
+            "validity_label",
+            "term_status",
+        )
+        bool_keys = ("is_indefinite", "indefinite", "unlimited")
+
+        for key in value_keys:
+            if key not in record:
+                continue
+            raw_value = record.get(key)
+            value_text = str(raw_value or "").strip()
+            field_name = f"{region_label} {key}"
+            if value_text:
+                ev_value = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                    content_hash=content_hash,
+                    locator=f"{locator_prefix}/{key}",
+                    field_name=field_name,
+                    value=value_text,
+                )
+                if self._is_indefinite_validity_value(value_text):
+                    return None, "indefinite", list(ev_value.evidence_refs)
+                return ev_value, "date_present", list(ev_value.evidence_refs)
+            ev = _build_evidence(
+                doc_id,
+                None,
+                f"{field_name}: <blank in source>",
+                doc_title,
+                source_url,
+                doc_kind=doc_kind,
+                content_hash=content_hash,
+                locator=f"{locator_prefix}/{key}",
+            )
+            self._evidence_registry[ev.evidence_id] = ev
+            return None, "missing_in_source", [ev.evidence_id]
+
+        for key in type_keys:
+            if key not in record:
+                continue
+            raw_value = record.get(key)
+            value_text = str(raw_value or "").strip()
+            field_name = f"{region_label} {key}"
+            if value_text:
+                ev_value = self._build_structured_json_value(
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                    content_hash=content_hash,
+                    locator=f"{locator_prefix}/{key}",
+                    field_name=field_name,
+                    value=value_text,
+                )
+                if self._is_indefinite_validity_value(value_text):
+                    return None, "indefinite", list(ev_value.evidence_refs)
+                date_match = re.search(r"\d{4}-\d{2}-\d{2}", value_text)
+                if date_match:
+                    valid_to = self._build_structured_json_value(
+                        doc_id=doc_id,
+                        doc_title=doc_title,
+                        source_url=source_url,
+                        doc_kind=doc_kind,
+                        content_hash=content_hash,
+                        locator=f"{locator_prefix}/{key}",
+                        field_name=f"{region_label} valid_to",
+                        value=date_match.group(0),
+                    )
+                    return valid_to, "date_present", list(dict.fromkeys(ev_value.evidence_refs + valid_to.evidence_refs))
+                return None, "not_applicable", list(ev_value.evidence_refs)
+            ev = _build_evidence(
+                doc_id,
+                None,
+                f"{field_name}: <blank in source>",
+                doc_title,
+                source_url,
+                doc_kind=doc_kind,
+                content_hash=content_hash,
+                locator=f"{locator_prefix}/{key}",
+            )
+            self._evidence_registry[ev.evidence_id] = ev
+            return None, "missing_in_source", [ev.evidence_id]
+
+        for key in bool_keys:
+            if key not in record:
+                continue
+            raw_value = record.get(key)
+            truthy = raw_value is True or str(raw_value).strip().lower() in {"true", "1", "yes"}
+            if not truthy:
+                continue
+            ev_value = self._build_structured_json_value(
+                doc_id=doc_id,
+                doc_title=doc_title,
+                source_url=source_url,
+                doc_kind=doc_kind,
+                content_hash=content_hash,
+                locator=f"{locator_prefix}/{key}",
+                field_name=f"{region_label} {key}",
+                value=str(raw_value),
+            )
+            return None, "indefinite", list(ev_value.evidence_refs)
+
+        return None, "missing_in_source", []
+
     def _extract_pubchem_chemistry_from_original_json(self) -> Dict[str, EvidencedValue]:
         for item in self._iter_original_json_docs({"pubchem"}) or []:
             data = item["data"] or {}
@@ -3515,11 +3676,25 @@ class DossierReportGenerator:
                         )
                     )
 
+                valid_to, validity_type, validity_refs = self._extract_structured_registration_validity(
+                    reg,
+                    region_label="RU",
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind="grls",
+                    content_hash=content_hash,
+                    locator_prefix=f"/regulatory/registrations/{idx}",
+                )
+
                 evidence_refs: List[str] = []
                 if status:
                     evidence_refs.extend(status.evidence_refs)
                 if mah:
                     evidence_refs.extend(mah.evidence_refs)
+                if valid_to:
+                    evidence_refs.extend(valid_to.evidence_refs)
+                evidence_refs.extend(validity_refs)
                 for ev in identifiers + forms_strengths:
                     evidence_refs.extend(ev.evidence_refs)
 
@@ -3533,6 +3708,9 @@ class DossierReportGenerator:
                         forms_strengths=forms_strengths,
                         mah=mah,
                         identifiers=identifiers,
+                        valid_to=valid_to,
+                        validity_type=validity_type,
+                        validity_evidence_refs=list(dict.fromkeys(validity_refs)),
                         evidence_refs=list(dict.fromkeys(evidence_refs)),
                     )
                 )
@@ -3636,11 +3814,25 @@ class DossierReportGenerator:
                         )
                     )
 
+                valid_to, validity_type, validity_refs = self._extract_structured_registration_validity(
+                    reg,
+                    region_label="EAEU",
+                    doc_id=doc_id,
+                    doc_title=doc_title,
+                    source_url=source_url,
+                    doc_kind=doc_kind,
+                    content_hash=content_hash,
+                    locator_prefix=f"/items/{idx}",
+                )
+
                 evidence_refs: List[str] = []
                 if status:
                     evidence_refs.extend(status.evidence_refs)
                 if mah:
                     evidence_refs.extend(mah.evidence_refs)
+                if valid_to:
+                    evidence_refs.extend(valid_to.evidence_refs)
+                evidence_refs.extend(validity_refs)
                 for ev in identifiers + forms_strengths:
                     evidence_refs.extend(ev.evidence_refs)
 
@@ -3654,6 +3846,9 @@ class DossierReportGenerator:
                         forms_strengths=forms_strengths,
                         mah=mah,
                         identifiers=identifiers,
+                        valid_to=valid_to,
+                        validity_type=validity_type,
+                        validity_evidence_refs=list(dict.fromkeys(validity_refs)),
                         evidence_refs=list(dict.fromkeys(evidence_refs)),
                     )
                 )
@@ -6488,12 +6683,14 @@ class DossierReportGenerator:
         if det_expiry and families:
             patched_count = 0
             for fam in families:
-                if fam.expiry_by_country:
-                    continue  # LLM already provided expiry — skip
-
                 # Try to match representative_pub against expiry map
                 rep_val = fam.representative_pub.value if fam.representative_pub else None
                 matched_entries: List[tuple] = []  # (country, expiry, evidence)
+                existing_countries = {
+                    str(ev.value).split(":", 1)[0].strip().upper()
+                    for ev in (fam.expiry_by_country or [])
+                    if getattr(ev, "value", None)
+                }
 
                 if rep_val and isinstance(rep_val, str):
                     norm_rep = self._normalise_patent_number(rep_val)
@@ -6510,7 +6707,7 @@ class DossierReportGenerator:
                                 matched_entries.append((info["country"], info["expiry"], info["evidence"]))
 
                 # Also: if country_coverage lists countries that appear in expiry_map
-                if not matched_entries and fam.country_coverage:
+                if not matched_entries and not existing_countries and fam.country_coverage:
                     coverage_countries = set()
                     for cv in fam.country_coverage:
                         if cv.value and isinstance(cv.value, str):
@@ -6521,7 +6718,8 @@ class DossierReportGenerator:
 
                 if matched_entries:
                     # Deduplicate by country
-                    seen_countries: set = set()
+                    seen_countries: set = set(existing_countries)
+                    added_any = False
                     for country, expiry_date, ev in matched_entries:
                         if country in seen_countries:
                             continue
@@ -6533,6 +6731,9 @@ class DossierReportGenerator:
                             )
                         )
                         fam.evidence_refs.append(ev.evidence_id)
+                        added_any = True
+                    if not added_any:
+                        continue
                     patched_count += 1
 
                     # Remove the LEGAL_STATUS_NOT_AVAILABLE unknown we added earlier

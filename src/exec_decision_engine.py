@@ -98,6 +98,16 @@ def _normalize_region(value: Any) -> str:
     text = str(value or "").strip().upper()
     if text in {"RUSSIA", "RU"}:
         return "RU"
+    if text in {"EAEU", "EA", "EURASIAN ECONOMIC UNION"}:
+        return "EAEU"
+    if text in {"BELARUS", "BY"}:
+        return "BY"
+    if text in {"ARMENIA", "AM"}:
+        return "AM"
+    if text in {"KAZAKHSTAN", "KZ"}:
+        return "KZ"
+    if text in {"KYRGYZSTAN", "KG"}:
+        return "KG"
     if text in {"UNITED STATES", "USA", "US"}:
         return "US"
     if text in {"EMA", "EU"}:
@@ -280,6 +290,8 @@ class ExecDecisionEngine:
             return [item for item in data if _normalize_region(item.get("region")) in allowed]
         if section == "commercial_signals" and isinstance(data, list) and block_spec.regions:
             allowed = {_normalize_region(region) for region in block_spec.regions}
+            if "EAEU" in allowed:
+                allowed.update({"RU", "BY", "AM", "KZ", "KG"})
             filtered = []
             for item in data:
                 region = _normalize_region(item.get("region") or item.get("jurisdiction"))

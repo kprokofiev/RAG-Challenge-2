@@ -43,10 +43,15 @@ blocks:
       - patent_family_summary
       - patent_legal_events
       - patent_expiry_us
+      - ru_patent_fips
       - ru_registration_export
       - ru_esklp_snapshot
       - ru_procurement_snapshot
       - ru_official_act
+      - ru_commercial_summary
+      - ru_formulary_summary
+      - ru_procurement_summary
+      - ru_policy_act
     escalation_classes:
       - registrations_authority
       - clinical_maturity
@@ -114,9 +119,19 @@ blocks:
     allowed_doc_kinds:
       - eaeu_document
       - eaeu_registration
+      - grls
+      - grls_card
       - ru_registration_export
+      - ru_esklp_snapshot
+      - ru_procurement_snapshot
       - ru_official_act
       - ru_commercial_summary
+      - ru_formulary_summary
+      - ru_procurement_summary
+      - ru_policy_act
+      - formulary
+      - pricing
+      - payer_policy
     escalation_classes:
       - eaeu_registration_confirmation
       - eaeu_market_signal
@@ -320,6 +335,7 @@ blocks:
       - smpc
       - ctgov
       - patent_family_summary
+      - ru_patent_fips
       - ru_registration_export
       - ru_official_act
     escalation_classes:
@@ -350,6 +366,7 @@ blocks:
       - synthesis_steps
     allowed_doc_kinds:
       - patent_legal_events
+      - ru_patent_fips
       - ru_registration_export
       - ru_official_act
       - ctgov
@@ -381,6 +398,7 @@ blocks:
       - synthesis_steps
     allowed_doc_kinds:
       - patent_legal_events
+      - ru_patent_fips
       - ru_registration_export
       - ru_official_act
       - ctgov

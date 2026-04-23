@@ -172,6 +172,40 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertEqual([item["region"] for item in packet["registrations"]], ["RU"])
         self.assertTrue(packet["critical_unknowns"])
 
+    def test_eaeu_packet_includes_member_state_commercial_signals(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["eaeu_entry"]
+        dossier = _sample_dossier()
+        dossier["commercial_signals"].append(
+            {
+                "signal_id": "sig-2",
+                "region": "KZ",
+                "category": "pricing",
+                "verdict": "partial",
+                "summary": {"value": "Kazakhstan market signal", "evidence_refs": ["ev-com-2"]},
+                "source_name": "pricing",
+                "source_tier": "secondary",
+                "source_priority": 20,
+                "evidence_refs": ["ev-com-2"],
+            }
+        )
+        dossier["evidence_registry"].append(
+            {
+                "evidence_id": "ev-com-2",
+                "doc_id": "doc-com-2",
+                "page": 7,
+                "snippet": "Kazakhstan market signal",
+                "doc_kind": "pricing",
+            }
+        )
+
+        packet = engine._build_packet(dossier, "case-1", block_spec)
+
+        self.assertEqual(
+            {item["region"] for item in packet["commercial_signals"]},
+            {"RU", "KZ"},
+        )
+
     def test_packet_builder_preserves_section_linked_evidence_before_truncation(self):
         engine = ExecDecisionEngine()
         block_spec = engine.block_specs["asset_attractiveness"]
@@ -448,7 +482,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
     def test_evidence_assembler_emits_contract_linkage(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {
-            "allowed_doc_kinds": ["ctgov_results", "patent_expiry_us", "eaeu_document"],
+            "allowed_doc_kinds": ["ctgov_results", "patent_expiry_us", "eaeu_document", "ru_patent_fips"],
             "required_sections": ["clinical_studies", "patent_families", "registrations"],
             "clinical_studies": [
                 {
@@ -477,6 +511,8 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
                     "mah": {"value": "MAH Ltd", "evidence_refs": ["ev-eaeu"]},
                     "identifiers": [{"value": "LP-001", "evidence_refs": ["ev-eaeu"]}],
                     "forms_strengths": [{"value": "tablet | 5 mg", "evidence_refs": ["ev-eaeu"]}],
+                    "validity_type": "missing_in_source",
+                    "validity_evidence_refs": ["ev-eaeu"],
                     "evidence_refs": ["ev-eaeu"],
                 }
             ],
@@ -485,6 +521,12 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
                 {"evidence_id": "ev-pat-us", "doc_id": "doc-pat-us", "doc_kind": "patent_expiry_us", "snippet": "US: 2046-02-12"},
                 {"evidence_id": "ev-pat-eu", "doc_id": "doc-pat-eu", "doc_kind": "patent_expiry_us", "snippet": "EP: 2046-03-04"},
                 {"evidence_id": "ev-eaeu", "doc_id": "doc-eaeu", "doc_kind": "eaeu_document", "snippet": "Status: Authorised\nValid To:\nMAH (Holder): MAH Ltd"},
+                {
+                    "evidence_id": "ev-pat-ru",
+                    "doc_id": "doc-pat-ru",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": '{"doc_id":"RU2642983C2_20180129","jurisdiction":"RU","expiry_date":"2039-10-25"}',
+                },
             ],
         }
         plan = ExecQuestionPlan(
@@ -492,7 +534,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             answer_type="go_no_go",
             needed_dossier_sections=["clinical_studies", "patent_families", "registrations"],
             retrieval_plan=ExecRetrievalPlan(
-                doc_kinds=["ctgov_results", "patent_expiry_us", "eaeu_document"],
+                doc_kinds=["ctgov_results", "patent_expiry_us", "eaeu_document", "ru_patent_fips"],
                 queries=["apixaban evidence"],
             ),
         )
@@ -503,8 +545,14 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(linkage["phase3_results"]["phase3_with_ctgov_results_evidence"], 1)
         self.assertIn("US", linkage["ip_window"]["expiry_by_region"])
         self.assertIn("EU", linkage["ip_window"]["expiry_by_region"])
-        self.assertIn("RU", linkage["ip_window"]["missing_required_regions"])
+        self.assertIn("RU", linkage["patent_legal_status_snapshot"]["resolved_regions"])
+        self.assertEqual(
+            linkage["patent_legal_status_snapshot"]["regions"]["RU"]["window_status"],
+            "potentially_blocked",
+        )
         self.assertFalse(linkage["eaeu_registration"]["has_valid_to"])
+        self.assertFalse(linkage["eaeu_registration"]["has_validity_state"])
+        self.assertEqual(linkage["eaeu_registration"]["validity_types"], ["missing_in_source"])
         self.assertTrue(linkage["eaeu_registration"]["has_identifier_mah_linkage"])
 
     def test_retrieval_assembler_expands_queries_but_keeps_canonical_filter(self):

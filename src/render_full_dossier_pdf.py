@@ -492,6 +492,8 @@ def _format_reg_line(reg: Dict[str, Any]) -> str:
     verdict = _registration_verdict_label(_registration_verdict(reg))
     status = _ev_val(reg.get("status"))
     mah = _ev_val(reg.get("mah"))
+    valid_to = _ev_val(reg.get("valid_to"))
+    validity_type = str(reg.get("validity_type") or "").strip().lower()
     identifiers = ", ".join(_ev_list(reg.get("identifiers"))[:3])
     forms = ", ".join(_ev_list(reg.get("forms_strengths"))[:3])
     parts.append(f"verdict: {verdict}")
@@ -503,6 +505,14 @@ def _format_reg_line(reg: Dict[str, Any]) -> str:
         parts.append(f"ID: {identifiers}")
     if forms:
         parts.append(f"формы: {forms}")
+    if valid_to != "—":
+        parts.append(f"действует до: {valid_to}")
+    elif validity_type == "indefinite":
+        parts.append("срок: бессрочно")
+    elif validity_type == "missing_in_source":
+        parts.append("срок: в источнике не указан")
+    elif validity_type == "not_applicable":
+        parts.append("срок: не применимо / не нормализован")
     if not parts:
         parts.append("структурированные детали не выделены")
     return f"[{region}] " + "; ".join(parts)
@@ -642,9 +652,16 @@ def _synthesis_summary_lines(steps: List[Dict[str, Any]]) -> List[str]:
     if not steps:
         return ["Синтез-путь в структурированном досье не выделен."]
     kind_counter = Counter()
+    grade_counter = Counter()
+    source_docs = set()
     for step in steps:
         kind = str(step.get("kind") or "unknown").strip()
         kind_counter[kind] += 1
+        grade = str(step.get("evidence_grade") or "unsupported").strip()
+        grade_counter[grade] += 1
+        for doc_id in step.get("source_patent_refs", []) or []:
+            if str(doc_id).strip():
+                source_docs.add(str(doc_id).strip())
     lines = [f"В досье выделено {len(steps)} шагов синтеза / производственного процесса."]
     if kind_counter:
         lines.append(
@@ -652,16 +669,31 @@ def _synthesis_summary_lines(steps: List[Dict[str, Any]]) -> List[str]:
                 f"{name}: {count}" for name, count in kind_counter.most_common(5)
             ) + "."
         )
+    if grade_counter:
+        lines.append(
+            "По силе подтверждения: " + ", ".join(
+                f"{name}: {count}" for name, count in grade_counter.most_common(4)
+            ) + "."
+        )
+    if len(source_docs) <= 1 or grade_counter.get("verified_process_patent", 0) < len(steps):
+        lines.append(
+            "Текущий блок следует читать как manufacturing route screening, а не как full synthesis decision."
+        )
+    if len(source_docs) <= 1:
+        lines.append("API-route пока опирается только на один источник процесса / патентный документ.")
     return lines
 
 
 def _format_step_line(step: Dict[str, Any]) -> str:
     step_number = step.get("step_number", "?")
     kind = str(step.get("kind") or "unknown").strip()
+    evidence_grade = str(step.get("evidence_grade") or "unsupported").strip()
     description = _ev_val(step.get("description"))
     reagents = ", ".join(_ev_list(step.get("reagents"))[:4])
     intermediates = ", ".join(_ev_list(step.get("intermediates"))[:4])
     parts = [description[:220] if description != "—" else "описание не выделено"]
+    if evidence_grade:
+        parts.append(f"уровень доказательств: {evidence_grade}")
     if reagents:
         parts.append(f"реагенты: {reagents}")
     if intermediates:

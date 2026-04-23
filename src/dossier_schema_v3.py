@@ -277,6 +277,21 @@ class DossierRegistration(BaseModel):
         default_factory=list,
         description="Registration numbers (GRLS reg#, NDA#, EMA/H/C/#, etc.)"
     )
+    valid_to: Optional[EvidencedValue] = Field(
+        None,
+        description="Explicit registration validity end date when source-native evidence exposes it"
+    )
+    validity_type: str = Field(
+        "missing_in_source",
+        description=(
+            "Typed validity state for the registration term: "
+            "date_present | indefinite | missing_in_source | not_applicable"
+        ),
+    )
+    validity_evidence_refs: List[str] = Field(
+        default_factory=list,
+        description="evidence_ids backing validity_type / valid_to when source-native validity evidence exists"
+    )
     primary_docs: List[PrimaryDoc] = Field(
         default_factory=list,
         description="Sprint 7.5: enriched Tier-1 doc references for this registration"
@@ -482,6 +497,13 @@ class DossierSynthesisStep(BaseModel):
             "Sprint 7.5: step type classification. One of: "
             "api_synthesis | formulation_process | manufacturing_process | unknown"
         )
+    )
+    evidence_grade: str = Field(
+        "unsupported",
+        description=(
+            "Evidence grade for customer-facing route language. One of: "
+            "verified_process_patent | route_mention | supplier_or_manufacturer_signal | unsupported"
+        ),
     )
     description: EvidencedValue = Field(description="Description of the step with evidence")
     reagents: List[EvidencedValue] = Field(
