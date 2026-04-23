@@ -2,7 +2,7 @@
 Dossier Report Schema v3.0 (Sprint 7.5 additions)
 ===================================================
 Sprint 4 — structured dossier: passport + registrations + clinical_studies +
-patent_families + synthesis_steps + unknowns + evidence_registry.
+patent_families + synthesis_steps + commercial_signals + unknowns + evidence_registry.
 
 Sprint 7.5 additions:
   - product_contexts[] — multi-product context separation
@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import time
 from typing import Any, Dict, List, Literal, Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, validator
 
 from src.registration_truth import (
     VERDICT_CONFIRMED,
@@ -283,6 +283,62 @@ class DossierRegistration(BaseModel):
     )
 
 
+# ── Commercial signals ───────────────────────────────────────────────────────
+
+class DossierCommercialMetric(BaseModel):
+    """Named metric used by a commercial signal."""
+    name: str = Field(description="Machine-readable metric name")
+    value: EvidencedValue = Field(description="Evidence-backed metric value")
+
+
+class DossierCommercialSignal(BaseModel):
+    """
+    Structured commercial / access signal derived from open-data, official acts,
+    or normalized support summaries.
+    """
+    signal_id: str = Field(description="Deterministic signal identifier")
+    region: str = Field(description="Region code, e.g. RU, EAEU, EU, US, GLOBAL")
+    category: str = Field(
+        description=(
+            "Commercial category, e.g. formulary_presence | coverage_access | "
+            "procurement | outlook"
+        )
+    )
+    verdict: str = Field(
+        "unknown",
+        description="Normalized commercial verdict: confirmed | partial | unknown"
+    )
+    summary: EvidencedValue = Field(description="Human-readable commercial summary with evidence")
+    metrics: List[DossierCommercialMetric] = Field(
+        default_factory=list,
+        description="Named supporting metrics extracted from commercial support docs"
+    )
+    source_name: Optional[str] = Field(
+        None,
+        description="Highest-priority source label backing this commercial signal"
+    )
+    source_tier: Optional[str] = Field(
+        None,
+        description="Source tier for this signal: primary | support_summary | secondary | discovery_only"
+    )
+    source_priority: Optional[int] = Field(
+        None,
+        description="Relative source priority used when multiple sources support the same signal"
+    )
+    dataset_date: Optional[str] = Field(
+        None,
+        description="Dataset snapshot date associated with the signal, when available"
+    )
+    retrieved_at: Optional[str] = Field(
+        None,
+        description="Timestamp when the supporting commercial source was generated or retrieved"
+    )
+    evidence_refs: List[str] = Field(
+        default_factory=list,
+        description="All evidence_ids backing this commercial signal"
+    )
+
+
 # ── Clinical Study Card ───────────────────────────────────────────────────────
 
 class DossierClinicalStudy(BaseModel):
@@ -471,6 +527,7 @@ class DossierReport(BaseModel):
     clinical_studies: List[DossierClinicalStudy] = Field(default_factory=list)
     patent_families: List[DossierPatentFamily] = Field(default_factory=list)
     synthesis_steps: List[DossierSynthesisStep] = Field(default_factory=list)
+    commercial_signals: List[DossierCommercialSignal] = Field(default_factory=list)
 
     # Evidence & gaps
     unknowns: List[DossierUnknown] = Field(
@@ -523,6 +580,194 @@ class DossierReport(BaseModel):
     class Config:
         # Allows extra fields from legacy reports — forward-compat
         extra = "allow"
+
+
+# ── Exec Decision Engine v1 ───────────────────────────────────────────────────
+
+ExecClaimType = Literal["hard_evidence_backed", "inference", "tentative"]
+ExecConfidenceEnum = Literal["HIGH", "MEDIUM", "LOW"]
+ExecSufficiencyEnum = Literal["SUFFICIENT", "PARTIAL", "INSUFFICIENT"]
+ExecBlockerSeverity = Literal["NON_BLOCKING", "IMPORTANT", "DECISION_BLOCKING", "MUST_VERIFY_NOW"]
+ExecThinkingMode = Literal["off", "low", "medium", "high", "xhigh"]
+
+
+class ExecWhyClaim(BaseModel):
+    """Evidence-grounded reason behind a decision verdict."""
+    claim: str
+    claim_type: ExecClaimType = Field(
+        "inference",
+        description="Whether the statement is a hard evidence-backed fact, inference, or tentative note",
+    )
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecContradiction(BaseModel):
+    """Named contradiction or unresolved tension affecting a decision block."""
+    summary: str
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecBlocker(BaseModel):
+    """Decision blocker with explicit severity and evidence linkage."""
+    blocker_id: str = Field(default="", description="Deterministic blocker ID if available")
+    title: str = Field(description="Short blocker label")
+    severity: ExecBlockerSeverity = Field("IMPORTANT")
+    rationale: Optional[str] = Field(None, description="Why this blocker matters for the verdict")
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecNextAction(BaseModel):
+    """Recommended action flowing from blockers or missing evidence."""
+    action_id: str = Field(default="", description="Deterministic action ID if available")
+    action: str = Field(description="Action phrased for an operator or decision-maker")
+    priority: str = Field("NEXT", description="Priority bucket, e.g. NOW / NEXT / LATER")
+    rationale: Optional[str] = Field(None)
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ModelBudgetTrace(BaseModel):
+    """Trace emitted by the exec-aware router for one model call."""
+    model_config = ConfigDict(protected_namespaces=())
+    budget_date_utc: Optional[str] = None
+    budget_snapshot_before: Dict[str, Any] = Field(default_factory=dict)
+    reservation_estimate: Dict[str, Any] = Field(default_factory=dict)
+    model_requested: Optional[str] = None
+    model_selected: Optional[str] = None
+    fallback_reason: Optional[str] = None
+    thinking_mode_requested: Optional[str] = None
+    reasoning_effort_actual: Optional[str] = None
+    usage_actual: Dict[str, Any] = Field(default_factory=dict)
+    budget_snapshot_after: Dict[str, Any] = Field(default_factory=dict)
+    reset_at_utc: Optional[str] = None
+
+
+class ExecModelStageTrace(BaseModel):
+    """Trace for one LLM stage inside the exec pipeline."""
+    model_config = ConfigDict(protected_namespaces=())
+    model_selected: Optional[str] = None
+    thinking_mode: Optional[str] = None
+    reasoning_summary: Optional[str] = None
+    budget_trace: Optional[ModelBudgetTrace] = None
+
+
+class ExecBlockTrace(BaseModel):
+    """Internal per-block trace; safe for internal artifacts only."""
+    model_config = ConfigDict(protected_namespaces=())
+    stage: Optional[str] = None
+    input_packet_hash: Optional[str] = None
+    selected_evidence_ids: List[str] = Field(default_factory=list)
+    missing_evidence_classes: List[str] = Field(default_factory=list)
+    escalation_performed: bool = False
+    model_selected: Optional[str] = None
+    thinking_mode: Optional[str] = None
+    reasoning_summary: Optional[str] = None
+    budget_trace: Optional[ModelBudgetTrace] = None
+    planner_trace: Optional[ExecModelStageTrace] = None
+    answer_trace: Optional[ExecModelStageTrace] = None
+    contract_summary: Dict[str, Any] = Field(default_factory=dict)
+    evidence_packet_summary: Dict[str, Any] = Field(default_factory=dict)
+    verifier_verdict: Optional[str] = None
+
+
+class ExecVerificationIssue(BaseModel):
+    """Single verifier or reviewer finding."""
+    issue_type: str
+    severity: str
+    message: str
+    evidence_refs: List[str] = Field(default_factory=list)
+
+
+class ExecVerificationReport(BaseModel):
+    """Combined factual + decision + reviewer verification result."""
+    block_id: Optional[str] = None
+    overall_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    factual_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    decision_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    reviewer_status: str = Field("PASS", description="PASS | WARN | FAIL")
+    issues: List[ExecVerificationIssue] = Field(default_factory=list)
+    repair_applied: bool = False
+    repair_reason: Optional[str] = None
+    notes: List[str] = Field(default_factory=list)
+
+
+class ExecEvidenceSufficiency(BaseModel):
+    """Aggregated evidence sufficiency across the memo."""
+    overall_verdict: str = Field("PARTIAL", description="SUFFICIENT | PARTIAL | INSUFFICIENT")
+    topline_confidence: ExecConfidenceEnum = Field("LOW")
+    notes: List[str] = Field(default_factory=list)
+    by_block: Dict[str, str] = Field(default_factory=dict)
+
+
+class ExecDecisionBlock(BaseModel):
+    """Decision-grade block replacing old fixed-question answers."""
+    model_config = ConfigDict(protected_namespaces=())
+    block_id: str
+    title: str
+    verdict: str
+    confidence: ExecConfidenceEnum = Field("LOW")
+    sufficiency: ExecSufficiencyEnum = Field("INSUFFICIENT")
+    short_answer: str = Field(default="")
+    full_answer: str = Field(default="")
+    why_this_verdict: List[ExecWhyClaim] = Field(default_factory=list)
+    contradictions: List[ExecContradiction] = Field(default_factory=list)
+    unknowns: List[str] = Field(default_factory=list)
+    decision_blockers: List[ExecBlocker] = Field(default_factory=list)
+    next_actions: List[ExecNextAction] = Field(default_factory=list)
+    caveats: List[str] = Field(default_factory=list)
+    top_evidence_refs: List[str] = Field(default_factory=list)
+    missing_evidence_classes: List[str] = Field(default_factory=list)
+    model_trace: Optional[ExecBlockTrace] = None
+    verification: Optional[ExecVerificationReport] = None
+
+
+class ExecToplineSummary(BaseModel):
+    """Compact top-line summary for a major memo decision."""
+    verdict: str
+    confidence: ExecConfidenceEnum = Field("LOW")
+    sufficiency: ExecSufficiencyEnum = Field("INSUFFICIENT")
+    short_answer: str = Field(default="")
+
+
+class ExecRunManifest(BaseModel):
+    """Audit-grade execution manifest for one exec engine run."""
+    model_config = ConfigDict(protected_namespaces=())
+    run_id: str
+    case_id: Optional[str] = None
+    dossier_hash: str
+    exec_config: Dict[str, Any] = Field(default_factory=dict)
+    model_profile: Dict[str, Any] = Field(default_factory=dict)
+    budget_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    decision_blocks: List[str] = Field(default_factory=list)
+    escalation_triggers: List[Dict[str, Any]] = Field(default_factory=list)
+    retrieved_extra_doc_ids: List[str] = Field(default_factory=list)
+    verifier_results: List[Dict[str, Any]] = Field(default_factory=list)
+    repair_pass_results: List[Dict[str, Any]] = Field(default_factory=list)
+    final_verdict_summary: Dict[str, Any] = Field(default_factory=dict)
+    block_traces: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ExecAppendix(BaseModel):
+    """Appendix/debug bundle for internal audit and reruns."""
+    source_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    budget_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    question_traces: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ExecDecisionReportV1(BaseModel):
+    """Top-level decision memo contract for the new exec engine."""
+    report_version: str = Field("v1")
+    case_id: Optional[str] = None
+    inn: Optional[str] = None
+    generated_at: str
+    engine_manifest: ExecRunManifest
+    topline: Dict[str, ExecToplineSummary] = Field(default_factory=dict)
+    decision_blocks: List[ExecDecisionBlock] = Field(default_factory=list)
+    key_risks: List[str] = Field(default_factory=list)
+    decision_blockers: List[ExecBlocker] = Field(default_factory=list)
+    recommended_next_actions: List[ExecNextAction] = Field(default_factory=list)
+    evidence_sufficiency: ExecEvidenceSufficiency = Field(default_factory=ExecEvidenceSufficiency)
+    verification: ExecVerificationReport = Field(default_factory=ExecVerificationReport)
+    appendix: ExecAppendix = Field(default_factory=ExecAppendix)
 
 
 # ── Quality scorer ────────────────────────────────────────────────────────────
@@ -689,15 +934,40 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
     else:
         patent_pct = 0.0
 
-    # Synthesis coverage
-    synth_pct = round(
-        sum(
-            1
-            for ss in report.synthesis_steps
-            if ss.evidence_refs and (getattr(ss, "kind", "") or "").strip().lower() == "api_synthesis"
-        ) / max(len(report.synthesis_steps), 1) * 100,
-        1
-    ) if report.synthesis_steps else 0.0
+    # Synthesis coverage: one isolated API-route step should not score as "fully closed".
+    api_synth_steps = [
+        ss for ss in report.synthesis_steps
+        if ss.evidence_refs and (getattr(ss, "kind", "") or "").strip().lower() == "api_synthesis"
+    ]
+    api_synth_sources = {
+        str(doc_id).strip()
+        for ss in api_synth_steps
+        for doc_id in (getattr(ss, "source_patent_refs", None) or [])
+        if str(doc_id).strip()
+    }
+    if not api_synth_steps:
+        synth_pct = 0.0
+    elif len(api_synth_steps) >= 2 and len(api_synth_sources) >= 2:
+        synth_pct = 100.0
+    elif len(api_synth_steps) >= 2 or len(api_synth_sources) >= 2:
+        synth_pct = 75.0
+    else:
+        synth_pct = 50.0
+
+    # Commercial coverage: count signals with evidence-backed summaries and at
+    # least one supporting metric as stronger completion than a bare placeholder.
+    if report.commercial_signals:
+        signal_scores = []
+        for signal in report.commercial_signals:
+            filled = 0
+            if signal.summary and signal.summary.value and signal.summary.evidence_refs:
+                filled += 1
+            if signal.metrics and any(metric.value and metric.value.value for metric in signal.metrics):
+                filled += 1
+            signal_scores.append(filled / 2)
+        commercial_pct = round(sum(signal_scores) / len(signal_scores) * 100, 1)
+    else:
+        commercial_pct = 0.0
 
     # ── Chemistry block (S6-T4) ───────────────────────────────────────────────
     chemistry_filled = any([
@@ -803,6 +1073,8 @@ def compute_dossier_quality(report: DossierReport) -> Dict[str, Any]:
         "patents_pct": patent_pct,
         "patent_families_total": len(report.patent_families),
         "synthesis_pct": synth_pct,
+        "commercial_pct": commercial_pct,
+        "commercial_signals_total": len(report.commercial_signals),
         "chemistry_filled": chemistry_filled,
         "evidence_coverage_pct": evidence_coverage_pct,
         "evidence_completeness_pct": evidence_completeness_pct,
@@ -1655,6 +1927,7 @@ def compute_dossier_quality_v2(
         "clinical": round(q.get("clinical_pct", 0) / 100, 2),
         "patents": round(q.get("patents_pct", 0) / 100, 2),
         "synthesis": round(q.get("synthesis_pct", 0) / 100, 2),
+        "commercial": round(q.get("commercial_pct", 0) / 100, 2),
     }
 
     # Decision readiness gates
@@ -1708,8 +1981,16 @@ def compute_dossier_quality_v2(
         if getattr(c, "context_strength", None) == "weak_signal"
     )
     passport_scope = str(getattr(getattr(report, "passport", None), "passport_scope", "") or "").strip().lower()
+    route_families = {
+        str(getattr(c, "route", "") or "").strip().lower()
+        for c in report.product_contexts
+        if str(getattr(c, "route", "") or "").strip()
+    }
     if passport_scope == "single_context":
-        context_integrity = "GREEN" if ctx_count <= 2 else "YELLOW"
+        if weak_signal_ctx == 0 and len(route_families) <= 1 and reg_confirmed_ctx >= max(ctx_count, 1):
+            context_integrity = "GREEN"
+        else:
+            context_integrity = "YELLOW"
     elif ctx_count <= 1:
         context_integrity = "GREEN"
     elif ctx_count <= 3:
@@ -1827,10 +2108,33 @@ def compute_dossier_quality_v2(
     )
 
     synthesis_gate = "RED"
-    if synthesis_api_steps > 0:
+    synthesis_cov = coverage.get("synthesis", 0)
+    synthesis_api_sources = {
+        str(doc_id).strip()
+        for step in report.synthesis_steps
+        if (getattr(step, "kind", "") or "").strip().lower() == "api_synthesis"
+        for doc_id in (getattr(step, "source_patent_refs", None) or [])
+        if str(doc_id).strip()
+    }
+    if synthesis_api_steps >= 2 and (len(synthesis_api_sources) >= 2 or synthesis_cov >= 0.75):
         synthesis_gate = "GREEN"
-    elif synthesis_non_api_steps > 0:
+    elif synthesis_api_steps > 0 or synthesis_non_api_steps > 0:
         synthesis_gate = "YELLOW"
+
+    commercial_confirmed = sum(
+        1 for signal in report.commercial_signals
+        if (getattr(signal, "verdict", "") or "").strip().lower() == "confirmed"
+    )
+    commercial_partial = sum(
+        1 for signal in report.commercial_signals
+        if (getattr(signal, "verdict", "") or "").strip().lower() == "partial"
+    )
+    if commercial_confirmed >= 2:
+        commercial_gate = "GREEN"
+    elif commercial_confirmed > 0 or commercial_partial > 0:
+        commercial_gate = "YELLOW"
+    else:
+        commercial_gate = "RED"
 
     decision_readiness = {
         "registrations": registrations_gate,
@@ -1838,6 +2142,7 @@ def compute_dossier_quality_v2(
         "patents_discovery": patents_discovery_gate,
         "patents_legal": patents_legal,
         "synthesis": synthesis_gate,
+        "commercial": commercial_gate,
         "context_integrity": context_integrity,
     }
 
@@ -1911,6 +2216,16 @@ def compute_dossier_quality_v2(
             notes.append(f"Multiple product contexts detected: {ctx_count}")
     if patents_legal_pct < 1.0 and total_families > 0:
         notes.append(f"patents_legal_pct={round(patents_legal_pct*100,1)}% ({families_with_expiry}/{total_families} families with expiry)")
+    if synthesis_api_steps == 1 and synthesis_gate != "RED":
+        notes.append("single verified API synthesis step only; route corroboration remains limited")
+    if report.commercial_signals and commercial_gate != "GREEN":
+        notes.append(
+            f"commercial signals present but still partial: confirmed={commercial_confirmed}, partial={commercial_partial}"
+        )
+    if not report.commercial_signals:
+        notes.append("commercial open-data support is absent from the current corpus.")
+    if passport_scope == "single_context" and context_integrity == "GREEN" and ctx_count > 1:
+        notes.append(f"{ctx_count} regional contexts converge to a single product-context route")
     if us_expiry_expected and not us_expiry_covered:
         notes.append("US patent expiry evidence is still missing; do not treat US/EU expiry as fully verified.")
     if total_families == 0:
@@ -1962,3 +2277,8 @@ def compute_dossier_quality_v2(
 def get_json_schema() -> Dict[str, Any]:
     """Return the JSON Schema for DossierReport v3.0 (for validation tooling)."""
     return DossierReport.model_json_schema()
+
+
+def get_exec_json_schema() -> Dict[str, Any]:
+    """Return the JSON Schema for the exec decision memo contract."""
+    return ExecDecisionReportV1.model_json_schema()

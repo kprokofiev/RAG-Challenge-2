@@ -1,0 +1,300 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "documents": [
+    {
+      "doc_id": "86c178a8-94a8-4523-803d-eef0dfda7854",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4684818A1: IMPLANTIERBARE VORRICHTUNG MIT MOTORANTRIEB UND OSMOTISCHEM MOTORANTRIEB",
+      "source_url": "https://patents.google.com/patent/EP4684818A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/86c178a8-94a8-4523-803d-eef0dfda7854/rendered/document.pdf"
+    },
+    {
+      "doc_id": "45b29727-c1d5-4c2a-8a66-3e4c5c2fafdb",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4702985A1: ZUSAMMENSETZUNGEN ZUR BEHANDLUNG VON HERZ-KREISLAUF-ERKRANKUNGEN",
+      "source_url": "https://patents.google.com/patent/EP4702985A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/45b29727-c1d5-4c2a-8a66-3e4c5c2fafdb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "7d4d98b0-ef3c-4cb7-bd22-5985ce3c66b9",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260060974A1: THERAPEUTIC TYROSINE KINASE INHIBITORS FOR MULTIPLE SCLEROSIS",
+      "source_url": "https://patents.google.com/patent/US20260060974A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/7d4d98b0-ef3c-4cb7-bd22-5985ce3c66b9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "eda091ff-560e-400e-ba21-e349033067a5",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260042777A1: PIPERIDYLUREA COMPOUNDS AND METHODS OF USE THEREOF",
+      "source_url": "https://patents.google.com/patent/US20260042777A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/eda091ff-560e-400e-ba21-e349033067a5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "39a43078-a17b-4781-9b22-5726410687f3",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260034110A1: LUMACAFTOR FOR TREATING THROMBOSIS AND FOR RESTORING THE AUTOINHIBITORY FUNCTION OF VON WILLEBRAND FACTOR UNDER PRO-THROMBOTIC INFLAMMATORY CONDITIONS WHILE MAINTAINING HEMOSTASIS",
+      "source_url": "https://patents.google.com/patent/US20260034110A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/39a43078-a17b-4781-9b22-5726410687f3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "276e4a5d-4dae-4d90-8c90-53cd5ae03f13",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260069710A1: LIPOSOMAL NANOCARRIER DELIVERY SYSTEM FOR TARGETING ACTIVE CD44 MOLECULE, PREPARATION METHOD THEREFOR, AND USES THEREOF",
+      "source_url": "https://patents.google.com/patent/US20260069710A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/276e4a5d-4dae-4d90-8c90-53cd5ae03f13/rendered/document.pdf"
+    },
+    {
+      "doc_id": "fee2a9d6-99a5-4c47-92c5-ceb6e2029953",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026019771A1: ZALUNFIBAN DESTINÉ À ÊTRE UTILISÉ DANS LE TRAITEMENT D'UN TROUBLE THROMBOTIQUE CHEZ DES PATIENTS ATTEINTS D'UNE DÉFICIENCE RÉNALE",
+      "source_url": "https://patents.google.com/patent/WO2026019771A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/fee2a9d6-99a5-4c47-92c5-ceb6e2029953/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9d3c2f7a-52ec-4196-9335-c2afa8f88766",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026050896A1: PRÉPARATION ET UTILISATION DE KIT NANO CIBLÉ",
+      "source_url": "https://patents.google.com/patent/WO2026050896A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9d3c2f7a-52ec-4196-9335-c2afa8f88766/rendered/document.pdf"
+    },
+    {
+      "doc_id": "afc3430c-9741-40c3-9d77-4653fcdd983b",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026063944A1: OBICETRAPIB POUR LE TRAITEMENT DE DÉMENCES",
+      "source_url": "https://patents.google.com/patent/WO2026063944A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/afc3430c-9741-40c3-9d77-4653fcdd983b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "68ded4f8-4e45-4fc9-aaee-c8dab4fdb5a1",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026017079A1: ANTICORPS ANTI-FXI ET SON UTILISATION",
+      "source_url": "https://patents.google.com/patent/WO2026017079A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/68ded4f8-4e45-4fc9-aaee-c8dab4fdb5a1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8c1535ac-f402-42fc-a357-08c8fdba2dea",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026015297A1: FORMULATIONS BIPHASIQUES INJECTABLES",
+      "source_url": "https://patents.google.com/patent/WO2026015297A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8c1535ac-f402-42fc-a357-08c8fdba2dea/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a511fd31-1bdd-4ae9-999e-15c78f597955",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026039798A1: CONDENSAT BIOMOLÉCULAIRE SYNTHÉTIQUE POUR UN TRAITEMENT ANTICOAGULANT À LA DEMANDE",
+      "source_url": "https://patents.google.com/patent/WO2026039798A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a511fd31-1bdd-4ae9-999e-15c78f597955/rendered/document.pdf"
+    },
+    {
+      "doc_id": "278d1e8a-8be1-4814-9f17-d1816de17010",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026051998A1: COMPOSÉS, COMPOSITIONS ET PROCÉDÉS",
+      "source_url": "https://patents.google.com/patent/WO2026051998A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/278d1e8a-8be1-4814-9f17-d1816de17010/rendered/document.pdf"
+    },
+    {
+      "doc_id": "92328bc6-ce88-4720-b3a2-1d2eff2a2c5c",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026057848A2: DOSAGE IMMUNOLOGIQUE POUR DÉTECTER UN FRAGMENT DE COLLAGÈNE I",
+      "source_url": "https://patents.google.com/patent/WO2026057848A2",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/92328bc6-ce88-4720-b3a2-1d2eff2a2c5c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "773b1cf3-f6fd-419e-a771-08d99c430391",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026034953A1: COMPOSITION COMPRENANT UN EXTRAIT COMPLEXE DE COPTIS JAPONICA, PHELLODENDRON CHINENSIS, SCUTELLARIA BAICALENSIS, GARDENIA JASMINOIDES ET RHEUM PALMATUM",
+      "source_url": "https://patents.google.com/patent/WO2026034953A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/773b1cf3-f6fd-419e-a771-08d99c430391/rendered/document.pdf"
+    },
+    {
+      "doc_id": "86900d35-20ed-413e-84b2-72206c86703c",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF JP2026057205A: アピキサバンを含有する口腔内崩壊錠",
+      "source_url": "https://patents.google.com/patent/JP2026057205A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/86900d35-20ed-413e-84b2-72206c86703c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "82ab680c-1249-4645-ba67-3af3e44d1b06",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121426708A: Biological thiol activated hemoglobin probe as well as preparation method and application thereof",
+      "source_url": "https://patents.google.com/patent/CN121426708A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/82ab680c-1249-4645-ba67-3af3e44d1b06/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c2d59eee-7ad6-432e-82ff-9866e7f28d16",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121466095A: 左西孟旦在制备治疗永久性脑梗死药物中的应用",
+      "source_url": "https://patents.google.com/patent/CN121466095A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c2d59eee-7ad6-432e-82ff-9866e7f28d16/rendered/document.pdf"
+    },
+    {
+      "doc_id": "61dc0b5c-7028-4254-8860-55d5518d098b",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121538316A: PEAR1的SNP标志物在预测抗血栓药物治疗血栓的疗效中的应用",
+      "source_url": "https://patents.google.com/patent/CN121538316A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/61dc0b5c-7028-4254-8860-55d5518d098b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a991c980-03a7-40c2-ace8-0d893fd9b319",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121673287A: 一种嘧啶并环衍生物及其制备方法和应用",
+      "source_url": "https://patents.google.com/patent/CN121673287A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a991c980-03a7-40c2-ace8-0d893fd9b319/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f8c0f278-f514-4a5c-ab72-b60e54ab1c5e",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121622688A: 一种用于治疗抗磷脂综合征的组合物",
+      "source_url": "https://patents.google.com/patent/CN121622688A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f8c0f278-f514-4a5c-ab72-b60e54ab1c5e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "32b21ccc-eea2-41af-8b95-758a86d541e7",
+      "doc_kind": "ctis",
+      "title": "EU clinical trials summary: apixaban",
+      "source_url": "http://api-gateway:8080/v1/aggregate/clinical?facet=false&include=eu&inn=apixaban&limit=5000",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/32b21ccc-eea2-41af-8b95-758a86d541e7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "45756b48-496b-4c8d-a71e-71ee9a28ba53",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF EP4685162A1: MENSCHLICHER ANTI-FV-ANTIKÖRPER, THERAPEUTISCHE UND DIAGNOSTISCHE ANWENDUNGEN DAVON",
+      "source_url": "https://patents.google.com/patent/EP4685162A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/45756b48-496b-4c8d-a71e-71ee9a28ba53/rendered/document.pdf"
+    },
+    {
+      "doc_id": "17dca2ec-a0dd-448d-8973-d47d7545c9ed",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260022197A1: METHODS OF REVERSING TICAGRELOR ACTIVITY",
+      "source_url": "https://patents.google.com/patent/US20260022197A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/17dca2ec-a0dd-448d-8973-d47d7545c9ed/rendered/document.pdf"
+    },
+    {
+      "doc_id": "78871d77-b45d-46a8-9416-3426254447cd",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260027215A1: COMPOSITIONS FOR TRANSPORT OF THERAPEUTIC CARGOS USING BINDERS TARGETING CA-IV",
+      "source_url": "https://patents.google.com/patent/US20260027215A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/78871d77-b45d-46a8-9416-3426254447cd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "73550bcd-0d2e-40c0-994f-a8e79f8d0718",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260041778A1: SHEAR RESPONSIVE APTAMER-BASED CONJUGATE FOR TARGETED DRUG DELIVERY",
+      "source_url": "https://patents.google.com/patent/US20260041778A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/73550bcd-0d2e-40c0-994f-a8e79f8d0718/rendered/document.pdf"
+    },
+    {
+      "doc_id": "92907b99-3d1a-48b2-a8c3-d593cbe94072",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260069602A1: COMPOUNDS, COMPOSITIONS, AND METHODS",
+      "source_url": "https://patents.google.com/patent/US20260069602A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/92907b99-3d1a-48b2-a8c3-d593cbe94072/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a7bc317c-bb48-4f74-876e-b52e376a03e8",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF US20260060821A1: DRUG ELUTING COVERED STENT",
+      "source_url": "https://patents.google.com/patent/US20260060821A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a7bc317c-bb48-4f74-876e-b52e376a03e8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "71f106d9-9892-4b0c-8ca9-a1f14cb8bca8",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026064514A1: COMPOSITIONS D'ARNI DE PLASMINOGÈNE (PLG) ET LEURS PROCÉDÉS D'UTILISATION",
+      "source_url": "https://patents.google.com/patent/WO2026064514A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/71f106d9-9892-4b0c-8ca9-a1f14cb8bca8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f7f4521d-320d-4563-bad9-1d72099b0ff5",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026062560A1: MÉTHODES ET COMPOSÉS HAUTEMENT PERMÉABLES ET BIODISPONIBLES POUR LE TRAITEMENT DE MALADIES",
+      "source_url": "https://patents.google.com/patent/WO2026062560A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f7f4521d-320d-4563-bad9-1d72099b0ff5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2cd1eac9-5cee-4dd7-b53e-cf6d8284abcd",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026013578A1: COMBINAISONS COMPRENANT DES AGENTS DE DÉGRADATION CIBLANT VAV1",
+      "source_url": "https://patents.google.com/patent/WO2026013578A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2cd1eac9-5cee-4dd7-b53e-cf6d8284abcd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b222685a-8f7d-4130-a9db-0f84ab4f293f",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026050513A1: TOLÉBRUTINIB CONTRE LA SCLÉROSE EN PLAQUES",
+      "source_url": "https://patents.google.com/patent/WO2026050513A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b222685a-8f7d-4130-a9db-0f84ab4f293f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "51644ea8-6f95-49b2-b07b-138b1f553542",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026052765A1: PROCÉDÉ UTILISANT DES NIVEAUX DE NUCLÉOSOMES",
+      "source_url": "https://patents.google.com/patent/WO2026052765A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/51644ea8-6f95-49b2-b07b-138b1f553542/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d565edb3-62a8-4abf-bdc6-bf3da0a026c9",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026041075A1: AGONISTES DE GPL-1",
+      "source_url": "https://patents.google.com/patent/WO2026041075A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d565edb3-62a8-4abf-bdc6-bf3da0a026c9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1538e305-e748-49af-b7cf-88ca3b663fde",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026046996A1: COMPOSITION ANTIMICROBIENNE DE HAUTE EFFICACITÉ",
+      "source_url": "https://patents.google.com/patent/WO2026046996A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1538e305-e748-49af-b7cf-88ca3b663fde/rendered/document.pdf"
+    },
+    {
+      "doc_id": "176ca015-5f11-4adf-9b24-5d53ee3feea1",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF WO2026046334A1: PROCÉDÉ D'UTILISATION D'UN AGENT D'INVERSION DES ANTICOAGULANTS POUR TRAITER UN SAIGNEMENT PROVOQUÉ PAR LES ANTICOAGULANTS",
+      "source_url": "https://patents.google.com/patent/WO2026046334A1",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/176ca015-5f11-4adf-9b24-5d53ee3feea1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e0734b0d-7d5d-47f9-8fac-054c50af78d7",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121460134A: 基于智能决策支持技术的血栓高风险人群管理方法及系统",
+      "source_url": "https://patents.google.com/patent/CN121460134A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e0734b0d-7d5d-47f9-8fac-054c50af78d7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cc8be8bc-3aeb-4d67-a356-ab0e606cdf73",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121545763A: 一种基于人工智能的真实世界医疗数据系统",
+      "source_url": "https://patents.google.com/patent/CN121545763A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cc8be8bc-3aeb-4d67-a356-ab0e606cdf73/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e454966e-d866-439c-9c11-c1b9a3943b49",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121360123A: Application of phenyl pyrimidone compound",
+      "source_url": "https://patents.google.com/patent/CN121360123A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e454966e-d866-439c-9c11-c1b9a3943b49/rendered/document.pdf"
+    },
+    {
+      "doc_id": "158833af-e2f8-4f29-98ad-677996ba9900",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121629039A: MIA2的SNP标志物在预测抗血栓药物治疗血栓的疗效中的应用",
+      "source_url": "https://patents.google.com/patent/CN121629039A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/158833af-e2f8-4f29-98ad-677996ba9900/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d5cc935f-ca2e-4889-b9d3-aac4a40589c4",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN121613119A: 一种抗Xa因子检测试剂盒",
+      "source_url": "https://patents.google.com/patent/CN121613119A",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d5cc935f-ca2e-4889-b9d3-aac4a40589c4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "36321216-57bb-4fb0-901b-aec209accda2",
+      "doc_kind": "patent_pdf",
+      "title": "Patent PDF CN224026003U: 一种阿哌沙班中间体高精度新型纯化装置",
+      "source_url": "https://patents.google.com/patent/CN224026003U",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/36321216-57bb-4fb0-901b-aec209accda2/rendered/document.pdf"
+    }
+  ]
+}

@@ -28,12 +28,15 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field
 
 from src.api_requests import APIProcessor
+from src.clinical_status import normalize_clinical_status
 from src.dossier_schema_v3 import (
     DossierEvidence,
     DossierUnknown,
     EvidencedValue,
     DossierPassport,
     DossierRegistration,
+    DossierCommercialMetric,
+    DossierCommercialSignal,
     DossierClinicalStudy,
     DossierPatentFamily,
     DossierSynthesisStep,
@@ -66,6 +69,18 @@ class RateLimitExhausted(Exception):
 
 
 _CHECKPOINT_UNSET = object()
+
+
+def _normalize_clinical_status_ev(ev: Optional[EvidencedValue]) -> Optional[EvidencedValue]:
+    if ev is None or ev.value in (None, ""):
+        return ev
+    normalized = normalize_clinical_status(str(ev.value))
+    if not normalized or normalized == ev.value:
+        return ev
+    return EvidencedValue(
+        value=normalized,
+        evidence_refs=list(dict.fromkeys(ev.evidence_refs or [])),
+    )
 
 
 # ── Authority-tiering policy (S6-T2) ───────────────��─────────────────────────
@@ -510,6 +525,29 @@ _JSON_DOC_KINDS = {
     "pubchem", "chembl", "label", "us_fda", "ctgov", "ctgov_results", "ctgov_protocol",
     "patent_family_summary", "patent_legal_events", "patent_expiry_us", "patent_discovery_us",
     "ru_patent_fips", "grls", "eaeu_document", "eaeu_registration", "ru_clinical_permission",
+    "ru_registration_export", "ru_esklp_snapshot", "ru_procurement_snapshot", "ru_official_act",
+}
+
+_COMMERCIAL_SIGNAL_PREFIX = "COMMERCIAL_SIGNAL"
+_COMMERCIAL_METRIC_PREFIX = "COMMERCIAL_METRIC"
+_COMMERCIAL_PRIMARY_DOC_KINDS = {
+    "ru_registration_export",
+    "ru_esklp_snapshot",
+    "ru_procurement_snapshot",
+    "ru_official_act",
+}
+_COMMERCIAL_SOURCE_PRIORITY = {
+    "ru_registration_export": 100,
+    "ru_esklp_snapshot": 95,
+    "ru_official_act": 90,
+    "ru_procurement_snapshot": 85,
+    "ru_commercial_summary": 55,
+    "ru_formulary_summary": 52,
+    "ru_policy_act": 50,
+    "ru_procurement_summary": 48,
+    "formulary": 40,
+    "pricing": 40,
+    "payer_policy": 38,
 }
 
 
@@ -1043,8 +1081,8 @@ class DossierReportGenerator:
             return
         for doc_path in self.documents_dir.glob("*.json"):
             try:
-                with open(doc_path, "r", encoding="utf-8") as f:
-                    doc = json.load(f)
+                raw_bytes = doc_path.read_bytes()
+                doc = json.loads(raw_bytes.decode("utf-8"))
             except Exception:
                 continue
 
@@ -1064,7 +1102,9 @@ class DossierReportGenerator:
 
             content = doc.get("content", {}) or {}
             raw_items = content.get("chunks") or content.get("pages") or []
-            for chunk in raw_items:
+            container_key = "chunks" if content.get("chunks") else "pages"
+            content_hash = hashlib.sha256(raw_bytes).hexdigest()
+            for idx, chunk in enumerate(raw_items):
                 text = str(chunk.get("text", "") or "").strip()
                 if not text:
                     continue
@@ -1076,7 +1116,587 @@ class DossierReportGenerator:
                     "page": chunk.get("page", chunk.get("page_from", 0)),
                     "text": text,
                     "type": chunk.get("type", "content"),
+                    "content_hash": content_hash,
+                    "locator": f"$.content.{container_key}[{idx}]",
                 }
+
+    @staticmethod
+    def _parse_pipe_kv_record(line: str, expected_prefix: str) -> Dict[str, str]:
+        parts = [part.strip() for part in line.split("|")]
+        if not parts:
+            return {}
+        prefix = parts[0].strip().upper()
+        if prefix != expected_prefix:
+            return {}
+        record: Dict[str, str] = {}
+        for part in parts[1:]:
+            key, sep, value = part.partition("=")
+            if not sep:
+                continue
+            key = key.strip().lower()
+            value = value.strip()
+            if key:
+                record[key] = value
+        return record
+
+    def _commercial_doc_kinds(self) -> set[str]:
+        raw = settings.ddkit_commercial_signal_doc_kinds or ""
+        return {
+            item.strip().lower()
+            for item in raw.split(",")
+            if item.strip()
+        }
+
+    @staticmethod
+    def _commercial_verdict_rank(verdict: str) -> int:
+        normalized = str(verdict or "").strip().lower()
+        return {"confirmed": 3, "partial": 2, "unknown": 1}.get(normalized, 0)
+
+    def _commercial_source_priority(self, doc_kind: str, explicit_priority: Any = None) -> int:
+        if explicit_priority not in (None, ""):
+            try:
+                return int(explicit_priority)
+            except Exception:
+                pass
+        return _COMMERCIAL_SOURCE_PRIORITY.get(str(doc_kind or "").strip().lower(), 30)
+
+    def _commercial_source_tier(self, doc_kind: str, explicit_tier: Optional[str] = None) -> str:
+        normalized_tier = str(explicit_tier or "").strip().lower()
+        if normalized_tier:
+            return normalized_tier
+        normalized_kind = str(doc_kind or "").strip().lower()
+        if normalized_kind in _COMMERCIAL_PRIMARY_DOC_KINDS:
+            return "primary"
+        if normalized_kind in {"formulary", "pricing", "payer_policy"}:
+            return "secondary"
+        return "support_summary"
+
+    def _merge_commercial_signal_metadata(
+        self,
+        signal: DossierCommercialSignal,
+        *,
+        source_name: Optional[str],
+        source_tier: Optional[str],
+        source_priority: int,
+        dataset_date: Optional[str],
+        retrieved_at: Optional[str],
+    ) -> None:
+        current_priority = signal.source_priority if signal.source_priority is not None else -1
+        should_replace = source_priority >= current_priority
+        if source_name and (should_replace or not signal.source_name):
+            signal.source_name = source_name
+        if source_tier and (should_replace or not signal.source_tier):
+            signal.source_tier = source_tier
+        if source_priority and (should_replace or signal.source_priority is None):
+            signal.source_priority = source_priority
+        if dataset_date and (should_replace or not signal.dataset_date):
+            signal.dataset_date = dataset_date
+        if retrieved_at and (should_replace or not signal.retrieved_at):
+            signal.retrieved_at = retrieved_at
+
+    def _upsert_commercial_signal(
+        self,
+        signals: Dict[Tuple[str, str], DossierCommercialSignal],
+        signal_order: List[Tuple[str, str]],
+        *,
+        region: str,
+        category: str,
+        verdict: str,
+        summary: str,
+        evidence_id: str,
+        source_name: Optional[str],
+        source_tier: Optional[str],
+        source_priority: int,
+        dataset_date: Optional[str] = None,
+        retrieved_at: Optional[str] = None,
+    ) -> DossierCommercialSignal:
+        key = (region, category)
+        signal = signals.get(key)
+        if signal is None:
+            signal = DossierCommercialSignal(
+                signal_id=f"commercial_{region.lower()}_{category}",
+                region=region,
+                category=category,
+                verdict=verdict or "unknown",
+                summary=EvidencedValue(
+                    value=summary,
+                    evidence_refs=[evidence_id],
+                ),
+                metrics=[],
+                source_name=source_name,
+                source_tier=source_tier,
+                source_priority=source_priority,
+                dataset_date=dataset_date or None,
+                retrieved_at=retrieved_at or None,
+                evidence_refs=[evidence_id],
+            )
+            signals[key] = signal
+            signal_order.append(key)
+            return signal
+
+        if self._commercial_verdict_rank(verdict) > self._commercial_verdict_rank(signal.verdict):
+            signal.verdict = verdict or signal.verdict
+        signal.evidence_refs = list(dict.fromkeys(signal.evidence_refs + [evidence_id]))
+        if summary:
+            current_priority = signal.source_priority if signal.source_priority is not None else -1
+            if not signal.summary.value or source_priority >= current_priority:
+                signal.summary = EvidencedValue(
+                    value=summary,
+                    evidence_refs=[evidence_id],
+                )
+        self._merge_commercial_signal_metadata(
+            signal,
+            source_name=source_name,
+            source_tier=source_tier,
+            source_priority=source_priority,
+            dataset_date=dataset_date,
+            retrieved_at=retrieved_at,
+        )
+        return signal
+
+    def _generate_commercial_signals(
+        self,
+        unknowns: List[DossierUnknown],
+    ) -> List[DossierCommercialSignal]:
+        allowed_doc_kinds = self._commercial_doc_kinds()
+        if not allowed_doc_kinds:
+            return []
+
+        signals: Dict[Tuple[str, str], DossierCommercialSignal] = {}
+        signal_order: List[Tuple[str, str]] = []
+        structured_doc_kinds = allowed_doc_kinds.intersection(_COMMERCIAL_PRIMARY_DOC_KINDS)
+
+        for doc in self._iter_original_json_docs(allowed_doc_kinds=structured_doc_kinds):
+            payload = doc.get("data") or {}
+            if not isinstance(payload, dict):
+                continue
+            meta = doc.get("meta", {}) or {}
+            doc_kind = str(doc.get("doc_kind") or "").strip().lower()
+            region = str(payload.get("region") or meta.get("region") or "RU").strip().upper()
+            source_name = str(payload.get("source_name") or meta.get("title") or doc_kind).strip() or doc_kind
+            source_tier = self._commercial_source_tier(doc_kind, payload.get("source_tier"))
+            source_priority = self._commercial_source_priority(doc_kind, payload.get("source_priority"))
+            dataset_date = str(payload.get("dataset_date") or "").strip() or None
+            retrieved_at = str(payload.get("retrieved_at") or meta.get("retrieved_at") or "").strip() or None
+            source_url = str(payload.get("source_url") or meta.get("source_url") or "").strip()
+            metrics = payload.get("metrics", {}) or {}
+            entities = payload.get("entities", {}) or {}
+            summary_text = str(payload.get("summary") or "").strip()
+
+            def _metric_value(name: str, default: Any = 0) -> Any:
+                value = metrics.get(name)
+                if value in (None, ""):
+                    return default
+                return value
+
+            def _entity_count(name: str) -> int:
+                value = entities.get(name)
+                if isinstance(value, list):
+                    return len(value)
+                if isinstance(value, dict):
+                    return 1 if value else 0
+                return 0
+
+            evidence_snippet = summary_text or json.dumps(
+                {
+                    "summary": payload.get("summary"),
+                    "metrics": metrics,
+                    "doc_kind": doc_kind,
+                },
+                ensure_ascii=False,
+            )
+            evidence = _build_evidence(
+                str(doc.get("doc_id") or ""),
+                None,
+                evidence_snippet,
+                meta.get("title") or source_name,
+                source_url,
+                doc_kind=doc_kind,
+                content_hash=doc.get("content_hash"),
+                locator="$",
+            )
+            self._evidence_registry[evidence.evidence_id] = evidence
+
+            if doc_kind == "ru_registration_export":
+                matching_rows = int(_metric_value("matching_rows", _entity_count("ru_reg_certificate")))
+                active_regs = int(_metric_value("active_registration_count", 0))
+                trade_count = int(_metric_value("trade_name_count", _entity_count("ru_trade_name")))
+                mah_count = int(_metric_value("mah_count", _entity_count("ru_mah")))
+                jnvlp_yes_rows = int(_metric_value("jnvlp_yes_rows", 0))
+                verdict = "confirmed" if active_regs else ("partial" if matching_rows else "unknown")
+                signal = self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region=region,
+                    category="registration_footprint",
+                    verdict=verdict,
+                    summary=summary_text or (
+                        f"{region} registration export contains {matching_rows} matching rows and {active_regs} active registrations."
+                    ),
+                    evidence_id=evidence.evidence_id,
+                    source_name=source_name,
+                    source_tier=source_tier,
+                    source_priority=source_priority,
+                    dataset_date=dataset_date,
+                    retrieved_at=retrieved_at,
+                )
+                signal.metrics.extend([
+                    DossierCommercialMetric(
+                        name="matching_rows",
+                        value=EvidencedValue(value=str(matching_rows), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="active_registration_count",
+                        value=EvidencedValue(value=str(active_regs), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="trade_name_count",
+                        value=EvidencedValue(value=str(trade_count), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="mah_count",
+                        value=EvidencedValue(value=str(mah_count), evidence_refs=[evidence.evidence_id]),
+                    ),
+                ])
+                if mah_count:
+                    self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category="mah_landscape",
+                        verdict="confirmed" if active_regs else "partial",
+                        summary=(
+                            f"{region} registration export contains {mah_count} MAH holder(s) for {self.inn}."
+                        ),
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                        dataset_date=dataset_date,
+                        retrieved_at=retrieved_at,
+                    )
+                if jnvlp_yes_rows:
+                    jnvlp_signal = self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category="jnvlp_status",
+                        verdict="confirmed",
+                        summary=(
+                            f"{region} registration export flags {jnvlp_yes_rows} row(s) as JNVLP-positive for {self.inn}."
+                        ),
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                        dataset_date=dataset_date,
+                        retrieved_at=retrieved_at,
+                    )
+                    jnvlp_signal.metrics.append(
+                        DossierCommercialMetric(
+                            name="jnvlp_yes_rows",
+                            value=EvidencedValue(value=str(jnvlp_yes_rows), evidence_refs=[evidence.evidence_id]),
+                        )
+                    )
+                continue
+
+            if doc_kind == "ru_esklp_snapshot":
+                esklp_hits = int(_metric_value("esklp_hit_count", _entity_count("ru_smnn_node")))
+                strength_count = int(_metric_value("strength_count", 0))
+                group_count = int(_metric_value("group_hit_count", _entity_count("ru_interchangeability_group")))
+                klp_pack_count = int(_metric_value("klp_pack_count", _entity_count("ru_klp_pack")))
+                signal = self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region=region,
+                    category="formulary_presence",
+                    verdict="confirmed" if esklp_hits else "unknown",
+                    summary=summary_text or (
+                        f"{region} ESKLP snapshot contains {esklp_hits} matching formulary row(s) for {self.inn}."
+                    ),
+                    evidence_id=evidence.evidence_id,
+                    source_name=source_name,
+                    source_tier=source_tier,
+                    source_priority=source_priority,
+                    dataset_date=dataset_date,
+                    retrieved_at=retrieved_at,
+                )
+                signal.metrics.extend([
+                    DossierCommercialMetric(
+                        name="esklp_hit_count",
+                        value=EvidencedValue(value=str(esklp_hits), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="klp_pack_count",
+                        value=EvidencedValue(value=str(klp_pack_count), evidence_refs=[evidence.evidence_id]),
+                    ),
+                ])
+                if strength_count:
+                    strength_signal = self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category="strength_coverage",
+                        verdict="confirmed",
+                        summary=(
+                            f"{region} ESKLP snapshot contains {strength_count} strength/form entries for {self.inn}."
+                        ),
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                        dataset_date=dataset_date,
+                        retrieved_at=retrieved_at,
+                    )
+                    strength_signal.metrics.append(
+                        DossierCommercialMetric(
+                            name="strength_count",
+                            value=EvidencedValue(value=str(strength_count), evidence_refs=[evidence.evidence_id]),
+                        )
+                    )
+                if group_count:
+                    group_signal = self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category="interchangeability",
+                        verdict="confirmed",
+                        summary=(
+                            f"{region} ESKLP snapshot contains {group_count} interchangeability/group hit(s) for {self.inn}."
+                        ),
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                        dataset_date=dataset_date,
+                        retrieved_at=retrieved_at,
+                    )
+                    group_signal.metrics.append(
+                        DossierCommercialMetric(
+                            name="group_hit_count",
+                            value=EvidencedValue(value=str(group_count), evidence_refs=[evidence.evidence_id]),
+                        )
+                    )
+                continue
+
+            if doc_kind == "ru_procurement_snapshot":
+                matching_rows = int(_metric_value("matching_rows", _entity_count("ru_procurement_notice")))
+                buyer_count = int(_metric_value("buyer_count", _entity_count("ru_buyer")))
+                supplier_count = int(_metric_value("supplier_count", _entity_count("ru_supplier")))
+                contract_line_count = int(_metric_value("contract_line_count", _entity_count("ru_contract_line")))
+                workbook_usable = str(_metric_value("workbook_usable", "false")).strip().lower()
+                verdict = "confirmed" if matching_rows else ("partial" if workbook_usable == "true" else "unknown")
+                signal = self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region=region,
+                    category="procurement",
+                    verdict=verdict,
+                    summary=summary_text or (
+                        f"{region} procurement snapshot contains {matching_rows} matching notice row(s) for {self.inn}."
+                    ),
+                    evidence_id=evidence.evidence_id,
+                    source_name=source_name,
+                    source_tier=source_tier,
+                    source_priority=source_priority,
+                    dataset_date=dataset_date,
+                    retrieved_at=retrieved_at,
+                )
+                signal.metrics.extend([
+                    DossierCommercialMetric(
+                        name="matching_rows",
+                        value=EvidencedValue(value=str(matching_rows), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="buyer_count",
+                        value=EvidencedValue(value=str(buyer_count), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="supplier_count",
+                        value=EvidencedValue(value=str(supplier_count), evidence_refs=[evidence.evidence_id]),
+                    ),
+                    DossierCommercialMetric(
+                        name="contract_line_count",
+                        value=EvidencedValue(value=str(contract_line_count), evidence_refs=[evidence.evidence_id]),
+                    ),
+                ])
+                continue
+
+            if doc_kind == "ru_official_act":
+                page_hits = int(_metric_value("page_hits", 0))
+                signal = self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region=region,
+                    category="policy_presence",
+                    verdict="confirmed" if page_hits else "partial",
+                    summary=summary_text or (
+                        f"{region} official act references {self.inn} on {page_hits} page(s)."
+                    ),
+                    evidence_id=evidence.evidence_id,
+                    source_name=source_name,
+                    source_tier=source_tier,
+                    source_priority=source_priority,
+                    dataset_date=dataset_date,
+                    retrieved_at=retrieved_at,
+                )
+                signal.metrics.append(
+                    DossierCommercialMetric(
+                        name="page_hits",
+                        value=EvidencedValue(value=str(page_hits), evidence_refs=[evidence.evidence_id]),
+                    )
+                )
+                continue
+
+        for chunk in self._iter_parsed_doc_chunks(set(), allowed_doc_kinds=allowed_doc_kinds):
+            text = str(chunk.get("text") or "")
+            if not text:
+                continue
+            doc_kind = str(chunk.get("doc_kind") or "").strip().lower()
+            source_name = str(chunk.get("doc_title") or doc_kind).strip() or doc_kind
+            source_tier = self._commercial_source_tier(doc_kind)
+            source_priority = self._commercial_source_priority(doc_kind)
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                signal_record = self._parse_pipe_kv_record(line, _COMMERCIAL_SIGNAL_PREFIX)
+                if signal_record:
+                    region = str(signal_record.get("region") or "GLOBAL").strip().upper()
+                    category = str(signal_record.get("category") or "other").strip().lower()
+                    summary = str(signal_record.get("summary") or "").strip()
+                    if not summary:
+                        continue
+                    verdict = str(signal_record.get("verdict") or "unknown").strip().lower()
+                    evidence = _build_evidence(
+                        str(chunk.get("doc_id") or ""),
+                        chunk.get("page"),
+                        line,
+                        chunk.get("doc_title"),
+                        chunk.get("source_url"),
+                        doc_kind=chunk.get("doc_kind"),
+                        content_hash=chunk.get("content_hash"),
+                        locator=chunk.get("locator"),
+                    )
+                    self._evidence_registry[evidence.evidence_id] = evidence
+                    self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category=category,
+                        verdict=verdict,
+                        summary=summary,
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                    )
+
+                metric_record = self._parse_pipe_kv_record(line, _COMMERCIAL_METRIC_PREFIX)
+                if metric_record:
+                    region = str(metric_record.get("region") or "GLOBAL").strip().upper()
+                    category = str(metric_record.get("category") or "other").strip().lower()
+                    metric_name = str(metric_record.get("name") or "").strip().lower()
+                    metric_value = str(metric_record.get("value") or "").strip()
+                    if not metric_name or not metric_value:
+                        continue
+                    evidence = _build_evidence(
+                        str(chunk.get("doc_id") or ""),
+                        chunk.get("page"),
+                        line,
+                        chunk.get("doc_title"),
+                        chunk.get("source_url"),
+                        doc_kind=chunk.get("doc_kind"),
+                        content_hash=chunk.get("content_hash"),
+                        locator=chunk.get("locator"),
+                    )
+                    self._evidence_registry[evidence.evidence_id] = evidence
+                    signal = self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category=category,
+                        verdict="partial",
+                        summary=f"{region} {category.replace('_', ' ')} signal is present in commercial support docs.",
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                    )
+                    signal.metrics.append(
+                        DossierCommercialMetric(
+                            name=metric_name,
+                            value=EvidencedValue(
+                                value=metric_value,
+                                evidence_refs=[evidence.evidence_id],
+                            ),
+                        )
+                    )
+                    signal.evidence_refs = list(
+                        dict.fromkeys(signal.evidence_refs + [evidence.evidence_id])
+                    )
+
+        ordered_signals = [signals[key] for key in signal_order][: settings.ddkit_commercial_signal_max]
+        if ordered_signals:
+            logger.info(
+                "commercial_signals_extracted inn=%s count=%d doc_kinds=%s",
+                self.inn,
+                len(ordered_signals),
+                sorted(allowed_doc_kinds),
+            )
+        return ordered_signals
+
+    @staticmethod
+    def _is_process_relevant_patent_family(fam: DossierPatentFamily) -> bool:
+        tech_focus = str(getattr(getattr(fam, "technical_focus", None), "value", "") or "").strip().lower()
+        process_rel = str(getattr(getattr(fam, "process_relevance", None), "value", "") or "").strip().lower()
+        what_blocks = str(getattr(getattr(fam, "what_blocks", None), "value", "") or "").strip().lower()
+        if tech_focus in {"process_manufacturing", "intermediate_synthesis"}:
+            return True
+        if what_blocks == "synthesis":
+            return True
+        if process_rel != "strong":
+            return False
+        if tech_focus in {"formulation", "dosage_form_delivery", "composition", "combination"}:
+            return False
+        if what_blocks in {"formulation", "method_of_use"}:
+            return False
+        return True
+
+    def _summarize_synthesis_route_support(
+        self,
+        steps: List[DossierSynthesisStep],
+    ) -> Dict[str, Any]:
+        meta_index = self._doc_metainfo_index()
+        api_steps = [step for step in steps if str(getattr(step, "kind", "") or "") == "api_synthesis"]
+        doc_ids: List[str] = []
+        doc_titles: List[str] = []
+        seen_doc_ids: Set[str] = set()
+        for step in api_steps:
+            for doc_id in getattr(step, "source_patent_refs", None) or []:
+                normalized = str(doc_id or "").strip()
+                if not normalized or normalized in seen_doc_ids:
+                    continue
+                seen_doc_ids.add(normalized)
+                doc_ids.append(normalized)
+                meta = meta_index.get(normalized, {}) or {}
+                title = str(meta.get("title") or normalized).strip()
+                if title:
+                    doc_titles.append(title)
+        corroborated = len(api_steps) >= 2 and len(doc_ids) >= 2
+        reasons: List[str] = []
+        if len(api_steps) < 2:
+            reasons.append(f"api_steps={len(api_steps)}")
+        if len(doc_ids) < 2:
+            reasons.append(f"source_docs={len(doc_ids)}")
+        return {
+            "api_steps": len(api_steps),
+            "doc_ids": doc_ids,
+            "doc_titles": doc_titles,
+            "corroborated": corroborated,
+            "reason": ", ".join(reasons) if reasons else "corroborated",
+        }
 
     def _synthesis_chunk_score(self, item: Dict[str, Any]) -> int:
         title_lower = str(item.get("doc_title") or "").lower()
@@ -1206,11 +1826,11 @@ class DossierReportGenerator:
             1,
             min(
                 len(candidates),
-                int(os.getenv("DDKIT_SYNTHESIS_RERANK_BATCH_SIZE", "8") or 8),
+                settings.ddkit_synthesis_rerank_batch_size,
             ),
         )
         llm_weight = float(os.getenv("DDKIT_SYNTHESIS_RERANK_WEIGHT", "0.85") or 0.85)
-        keep_top_k = max(1, int(os.getenv("DDKIT_SYNTHESIS_RERANK_TOP_K", "12") or 12))
+        keep_top_k = max(1, settings.ddkit_synthesis_rerank_top_k)
         rerank_query = (
             f"Verified API synthesis route for {self.inn}: reaction sequence, intermediates, reagents, yields, examples. "
             "Strongly prefer process patents and intermediate-preparation steps. "
@@ -1376,8 +1996,16 @@ class DossierReportGenerator:
             lines.append(line)
         return alias_map, "\n".join(lines)
 
-    def _call_llm(self, instruction: str, context: str, question: str,
-                   candidates_str: str, schema_class) -> Optional[Any]:
+    def _call_llm_with_model(
+        self,
+        instruction: str,
+        context: str,
+        question: str,
+        candidates_str: str,
+        schema_class,
+        *,
+        model_override: Optional[str] = None,
+    ) -> Optional[Any]:
         """Call LLM with structured output schema; returns parsed Pydantic object or None.
 
         Retries up to 3 times with exponential backoff on rate-limit (429) errors.
@@ -1399,7 +2027,7 @@ class DossierReportGenerator:
         for attempt in range(max_retries + 1):
             try:
                 result_dict = self.api.send_message(
-                    model=self.answering_model,
+                    model=model_override or self.answering_model,
                     system_content=system_prompt,
                     human_content=user_prompt,
                     is_structured=True,
@@ -1430,6 +2058,149 @@ class DossierReportGenerator:
                     ) from exc
                 logger.warning("LLM call failed for question=%r: %s", question[:60], exc)
                 return None
+
+    def _call_llm(self, instruction: str, context: str, question: str,
+                   candidates_str: str, schema_class) -> Optional[Any]:
+        return self._call_llm_with_model(
+            instruction,
+            context,
+            question,
+            candidates_str,
+            schema_class,
+        )
+
+    def _materialize_synthesis_steps(
+        self,
+        raw_steps: List[_SynthesisStepLLM],
+        alias_map: Dict[str, Dict[str, Any]],
+        unknowns: List[DossierUnknown],
+        *,
+        add_missing_alias_unknowns: bool = True,
+    ) -> Tuple[List[DossierSynthesisStep], bool]:
+        steps: List[DossierSynthesisStep] = []
+        non_api_detected = False
+        am = alias_map
+        for step_llm in raw_steps or []:
+            if step_llm.description is None:
+                continue
+            desc = _ev_to_evidenced_value(step_llm.description, am)
+            if desc is None or not desc.evidence_refs:
+                if add_missing_alias_unknowns:
+                    self._add_unknown(
+                        unknowns,
+                        f"synthesis_steps[{step_llm.step_number}].description",
+                        "NO_EVIDENCE_IN_CORPUS",
+                        "Synthesis step description lacked linked evidence_id.",
+                    )
+                continue
+
+            reagents = _ev_list(step_llm.reagents, am)
+            intermediates = _ev_list(step_llm.intermediates, am)
+            ev_refs = list(desc.evidence_refs)
+            for ev in reagents + intermediates:
+                ev_refs.extend(ev.evidence_refs)
+
+            key_docs = list(
+                {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
+            )
+            kind = classify_synthesis_kind(str(desc.value or ""))
+            if kind != "api_synthesis":
+                non_api_detected = True
+                continue
+            steps.append(
+                DossierSynthesisStep(
+                    step_number=step_llm.step_number or (len(steps) + 1),
+                    kind=kind,
+                    description=desc,
+                    reagents=reagents,
+                    intermediates=intermediates,
+                    source_patent_refs=key_docs,
+                    evidence_refs=list(set(ev_refs)),
+                )
+            )
+        return steps, non_api_detected
+
+    def _extract_synthesis_steps_chunkwise(
+        self,
+        question: str,
+        retrieved: List[Dict[str, Any]],
+        unknowns: List[DossierUnknown],
+        *,
+        source_label: str,
+    ) -> List[DossierSynthesisStep]:
+        if not retrieved:
+            return []
+
+        model_name = os.getenv("DDKIT_SYNTHESIS_EXTRACT_MODEL", "gpt-5.4-mini")
+        max_chunks = max(1, settings.ddkit_synthesis_chunkwise_max)
+        max_steps = max(1, settings.ddkit_synthesis_chunkwise_steps)
+        instruction = (
+            f"{_SYNTHESIS_INSTRUCTION}\n\n"
+            "You will receive ONE patent chunk at a time.\n"
+            "- Extract AT MOST ONE concrete API-route or apixaban-intermediate step from that chunk.\n"
+            "- Prefer example/procedure paragraphs with explicit operations, reagents, and yields.\n"
+            "- Return empty steps if the chunk is only title, legal metadata, background, or formulation/manufacturing text.\n"
+            "- Translate Chinese faithfully into concise English."
+        )
+
+        collected: List[DossierSynthesisStep] = []
+        seen_keys: set[str] = set()
+        for item in retrieved[:max_chunks]:
+            candidates_map = self._candidates_map([item])
+            context = self._context_str([item])
+            alias_map, candidates_str = self._build_alias_map(candidates_map)
+            result = self._call_llm_with_model(
+                instruction,
+                context,
+                f"{question} Use only this single chunk and return at most one explicit step if present.",
+                candidates_str,
+                _SynthesisExtractLLM,
+                model_override=model_name,
+            )
+            if result is None or not result.steps:
+                continue
+
+            steps, _ = self._materialize_synthesis_steps(
+                result.steps[:1],
+                alias_map,
+                unknowns,
+                add_missing_alias_unknowns=False,
+            )
+            for step in steps:
+                desc_key = re.sub(r"\s+", " ", str(getattr(step.description, "value", "") or "").strip().lower())
+                doc_key = "|".join(sorted(str(doc_id) for doc_id in (step.source_patent_refs or [])))
+                dedupe_key = f"{doc_key}|{desc_key}"
+                if not desc_key or dedupe_key in seen_keys:
+                    continue
+                seen_keys.add(dedupe_key)
+                collected.append(step)
+                if len(collected) >= max_steps:
+                    break
+            if len(collected) >= max_steps:
+                break
+
+        for idx, step in enumerate(collected, 1):
+            step.step_number = idx
+
+        if collected:
+            logger.info(
+                "synthesis_chunkwise_fallback_success inn=%s source=%s model=%s chunks=%d steps=%d",
+                self.inn,
+                source_label,
+                model_name,
+                min(len(retrieved), max_chunks),
+                len(collected),
+            )
+        else:
+            logger.info(
+                "synthesis_chunkwise_fallback_empty inn=%s source=%s model=%s chunks=%d",
+                self.inn,
+                source_label,
+                model_name,
+                min(len(retrieved), max_chunks),
+            )
+
+        return collected
 
     def _context_str(self, retrieved: List[Dict[str, Any]]) -> str:
         parts = []
@@ -4534,8 +5305,19 @@ class DossierReportGenerator:
         if not combined:
             return None
 
-        candidates_map = self._candidates_map(combined[:40])
-        context = self._context_str(combined[:24])
+        candidate_cap = max(
+            24,
+            int(getattr(settings, "ddkit_clinical_study_candidate_k", 60) or 60),
+        )
+        context_cap = max(
+            18,
+            min(
+                candidate_cap,
+                int(getattr(settings, "ddkit_clinical_study_context_k", 36) or 36),
+            ),
+        )
+        candidates_map = self._candidates_map(combined[:candidate_cap])
+        context = self._context_str(combined[:context_cap])
         alias_map, candidates_str = self._build_alias_map(candidates_map)
 
         # Single-study extraction prompt
@@ -4597,7 +5379,7 @@ class DossierReportGenerator:
         comparator = _collect(_ev_to_evidenced_value(study_llm.comparator, am))
         regimen = _collect(_ev_to_evidenced_value(study_llm.regimen_dosing, am))
         conclusion = _collect(_ev_to_evidenced_value(study_llm.conclusion, am))
-        status = _collect(_ev_to_evidenced_value(study_llm.status, am))
+        status = _normalize_clinical_status_ev(_collect(_ev_to_evidenced_value(study_llm.status, am)))
         countries = _ev_list(study_llm.countries, am)
         efficacy = _ev_list(study_llm.efficacy_keypoints, am)
         for ev in countries + efficacy:
@@ -4876,7 +5658,7 @@ class DossierReportGenerator:
             if alloc and alloc not in ("NA", "N_A"):
                 study_type_value = f"{study_type_value} ({alloc.replace('_', ' ').title()})"
 
-        status_value = status_mod.get("overallStatus") or None
+        status_value = normalize_clinical_status(status_mod.get("overallStatus") or None)
         enrolled_value = None
         enroll_info = design.get("enrollmentInfo", {})
         if enroll_info.get("count") is not None:
@@ -4970,7 +5752,7 @@ class DossierReportGenerator:
                     study.phase = EvidencedValue(value=phase_str, evidence_refs=refs)
 
             if needs_status:
-                overall_status = status_mod.get("overallStatus", "")
+                overall_status = normalize_clinical_status(status_mod.get("overallStatus", "") or "")
                 if overall_status:
                     study.status = EvidencedValue(value=overall_status, evidence_refs=refs)
 
@@ -5010,7 +5792,7 @@ class DossierReportGenerator:
 
             # WS3.7: Deterministic screening signal flags from CTGov API
             # is_ongoing: actively recruiting or not yet completed
-            overall_status = status_mod.get("overallStatus", "")
+            overall_status = normalize_clinical_status(status_mod.get("overallStatus", "") or "")
             _ongoing_statuses = {"RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATION",
                                   "NOT_YET_RECRUITING", "AVAILABLE"}
             if overall_status:
@@ -5195,7 +5977,11 @@ class DossierReportGenerator:
         structured_ru_studies = self._extract_ru_clinical_studies_from_original_json()
         case_id = self.case_id or ""
         base_unknowns = list(unknowns)
-        study_top_k = max(18, settings.ddkit_final_candidates_k * 2)
+        study_top_k = max(
+            24,
+            int(getattr(settings, "ddkit_clinical_study_top_k", 32) or 32),
+            settings.ddkit_final_candidates_k * 2,
+        )
 
         clinical_unknowns: List[DossierUnknown] = []
         studies: List[DossierClinicalStudy] = []
@@ -5373,6 +6159,7 @@ class DossierReportGenerator:
         # Step 4: CTGov API enrichment — fill null phase/status/enrollment/countries
         if studies:
             self._enrich_clinical_from_ctgov_api(studies)
+            self._normalize_clinical_statuses(studies)
             self._backfill_clinical_flags_from_local_fields(studies)
             clinical_flag_specs = {
                 "is_ongoing": "overall CTGov status metadata",
@@ -5775,11 +6562,40 @@ class DossierReportGenerator:
         patent_corpus_present = self._has_patent_corpus()
         preferred_doc_ids: Set[str] = set()
         for fam in getattr(self, "_latest_patent_families", []) or []:
-            tech_focus = str(getattr(getattr(fam, "technical_focus", None), "value", "") or "").strip().lower()
-            process_rel = str(getattr(getattr(fam, "process_relevance", None), "value", "") or "").strip().lower()
-            what_blocks = str(getattr(getattr(fam, "what_blocks", None), "value", "") or "").strip().lower()
-            if tech_focus in {"process_manufacturing", "intermediate_synthesis"} or process_rel in {"moderate", "strong"} or what_blocks == "synthesis":
+            if self._is_process_relevant_patent_family(fam):
                 preferred_doc_ids.update(getattr(fam, "key_docs", []) or [])
+
+        def _finalize_steps(
+            source_label: str,
+            steps: List[DossierSynthesisStep],
+        ) -> List[DossierSynthesisStep]:
+            route_support = self._summarize_synthesis_route_support(steps)
+            if route_support["api_steps"]:
+                logger.info(
+                    "synthesis_route_trace inn=%s source=%s api_steps=%d corroborated=%s doc_ids=%s doc_titles=%s reason=%s",
+                    self.inn,
+                    source_label,
+                    route_support["api_steps"],
+                    route_support["corroborated"],
+                    route_support["doc_ids"],
+                    route_support["doc_titles"][:6],
+                    route_support["reason"],
+                )
+                if not route_support["corroborated"]:
+                    doc_labels = route_support["doc_titles"][:4] or route_support["doc_ids"][:4]
+                    doc_hint = ", ".join(doc_labels) if doc_labels else "current process corpus"
+                    self._add_unknown(
+                        unknowns,
+                        "synthesis_steps.api_route",
+                        "PARTIAL_ROUTE_CORROBORATION",
+                        (
+                            f"API route for {self.inn} is only partially corroborated: "
+                            f"{route_support['api_steps']} API step(s) currently trace back to {len(route_support['doc_ids'])} "
+                            f"process document(s) ({doc_hint}); route remains partial because {route_support['reason']}."
+                        ),
+                        "Attach at least one more independent process-chemistry/API source with explicit intermediates or reaction sequence before treating synthesis as closed.",
+                    )
+            return steps
 
         def _extract_from_doc_kinds(
             doc_kinds: List[str],
@@ -5804,13 +6620,33 @@ class DossierReportGenerator:
             supplemental = self._retrieve(
                 question,
                 doc_kinds,
-                top_k=36 if preferred_doc_ids and source_label == "patent_corpus" else 24,
+                top_k=(
+                    settings.ddkit_synthesis_patent_corpus_top_k
+                    if preferred_doc_ids and source_label == "patent_corpus"
+                    else 32
+                ),
             )
             if preferred_doc_ids and source_label == "patent_corpus" and supplemental:
                 preferred = [item for item in supplemental if str(item.get("doc_id") or "") in preferred_doc_ids]
                 if preferred:
-                    supplemental = preferred
-            retrieved = self._merge_candidate_lists(retrieved, supplemental, limit=24) if retrieved or supplemental else []
+                    non_preferred_cap = max(
+                        0,
+                        settings.ddkit_synthesis_non_preferred_max,
+                    )
+                    non_preferred = [
+                        item for item in supplemental if str(item.get("doc_id") or "") not in preferred_doc_ids
+                    ]
+                    supplemental = preferred + non_preferred[:non_preferred_cap]
+            merge_limit = (
+                settings.ddkit_synthesis_patent_corpus_merge_k
+                if preferred_doc_ids and source_label == "patent_corpus"
+                else 24
+            )
+            retrieved = self._merge_candidate_lists(
+                retrieved,
+                supplemental,
+                limit=merge_limit,
+            ) if retrieved or supplemental else []
             if not retrieved:
                 logger.info("synthesis_source_empty inn=%s source=%s", self.inn, source_label)
                 return "no_docs", []
@@ -5832,6 +6668,14 @@ class DossierReportGenerator:
                 _SYNTHESIS_INSTRUCTION, context, question, candidates_str, _SynthesisExtractLLM
             )
             if result is None or not result.steps:
+                chunkwise_steps = self._extract_synthesis_steps_chunkwise(
+                    question,
+                    retrieved,
+                    unknowns,
+                    source_label=source_label,
+                )
+                if chunkwise_steps:
+                    return "ok", _finalize_steps(source_label, chunkwise_steps)
                 logger.info(
                     "synthesis_source_no_steps inn=%s source=%s retrieved=%d",
                     self.inn,
@@ -5840,45 +6684,11 @@ class DossierReportGenerator:
                 )
                 return "no_steps", []
 
-            steps: List[DossierSynthesisStep] = []
-            non_api_detected = False
-            am = alias_map
-            for step_llm in result.steps:
-                if step_llm.description is None:
-                    continue
-                desc = _ev_to_evidenced_value(step_llm.description, am)
-                if desc is None or not desc.evidence_refs:
-                    self._add_unknown(
-                        unknowns, f"synthesis_steps[{step_llm.step_number}].description",
-                        "NO_EVIDENCE_IN_CORPUS",
-                        "Synthesis step description lacked linked evidence_id.",
-                    )
-                    continue
-
-                reagents = _ev_list(step_llm.reagents, am)
-                intermediates = _ev_list(step_llm.intermediates, am)
-                ev_refs = list(desc.evidence_refs)
-                for ev in reagents + intermediates:
-                    ev_refs.extend(ev.evidence_refs)
-
-                key_docs = list(
-                    {self._evidence_registry[e].doc_id for e in ev_refs if e in self._evidence_registry}
-                )
-                kind = classify_synthesis_kind(str(desc.value or ""))
-                if kind != "api_synthesis":
-                    non_api_detected = True
-                    continue
-                steps.append(
-                    DossierSynthesisStep(
-                        step_number=step_llm.step_number or (len(steps) + 1),
-                        kind=kind,
-                        description=desc,
-                        reagents=reagents,
-                        intermediates=intermediates,
-                        source_patent_refs=key_docs,
-                        evidence_refs=list(set(ev_refs)),
-                    )
-                )
+            steps, non_api_detected = self._materialize_synthesis_steps(
+                result.steps,
+                alias_map,
+                unknowns,
+            )
 
             if steps:
                 logger.info(
@@ -5887,8 +6697,16 @@ class DossierReportGenerator:
                     source_label,
                     len(steps),
                 )
-                return "ok", steps
+                return "ok", _finalize_steps(source_label, steps)
             if non_api_detected:
+                chunkwise_steps = self._extract_synthesis_steps_chunkwise(
+                    question,
+                    retrieved,
+                    unknowns,
+                    source_label=f"{source_label}_after_non_api",
+                )
+                if chunkwise_steps:
+                    return "ok", _finalize_steps(f"{source_label}_after_non_api", chunkwise_steps)
                 logger.info(
                     "synthesis_source_non_api_only inn=%s source=%s retrieved=%d",
                     self.inn,
@@ -5966,6 +6784,14 @@ class DossierReportGenerator:
         )
         return []
 
+    def _normalize_clinical_statuses(
+        self,
+        studies: List[DossierClinicalStudy],
+    ) -> None:
+        """Canonicalize stored study statuses before summaries/exec generation."""
+        for study in studies:
+            study.status = _normalize_clinical_status_ev(study.status)
+
     def _build_fallback_sections_manifest(self, report: DossierReport) -> List[Dict[str, Any]]:
         """Honest non-null fallback when legacy DD sections[] payload is unavailable."""
         section_specs = [
@@ -5974,6 +6800,7 @@ class DossierReportGenerator:
             ("clinical_studies", "Clinical Studies", len(report.clinical_studies)),
             ("patent_families", "Patent Families", len(report.patent_families)),
             ("synthesis_steps", "Synthesis Steps", len(report.synthesis_steps)),
+            ("commercial_signals", "Commercial Signals", len(report.commercial_signals)),
         ]
         manifest: List[Dict[str, Any]] = []
         for section_id, title, item_count in section_specs:
@@ -6010,6 +6837,7 @@ class DossierReportGenerator:
             "clinical_studies": 1 if report.clinical_studies else 0,
             "patent_families": 1 if report.patent_families else 0,
             "synthesis_steps": 1 if report.synthesis_steps else 0,
+            "commercial_signals": 1 if report.commercial_signals else 0,
         }
         expected_by_kind = {key: 1 for key in section_counts}
         included_total = sum(section_counts.values())
@@ -6174,7 +7002,27 @@ class DossierReportGenerator:
             )
         logger.info("synthesis_steps done (%.1fs)", time.time() - start_ts)
 
-        # ── F: Assemble report ────────────────────────────────────────────────
+        # ── F: Commercial signals ───────────────────────────────────────────
+        _check_deadline("commercial_signals")
+        commercial_signals = []
+        if completed_stages.get("commercial_signals"):
+            commercial_signals = self._restore_model_list(
+                checkpoint.get("commercial_signals"),
+                DossierCommercialSignal,
+            )
+            if commercial_signals:
+                logger.info("commercial_signals resumed from checkpoint count=%d", len(commercial_signals))
+        if not commercial_signals and not completed_stages.get("commercial_signals"):
+            commercial_signals = self._generate_commercial_signals(unknowns)
+            self._save_checkpoint(
+                case_id,
+                unknowns,
+                stage_name="commercial_signals",
+                stage_payload=[item.model_dump() for item in commercial_signals],
+            )
+        logger.info("commercial_signals done (%.1fs)", time.time() - start_ts)
+
+        # ── G: Assemble report ────────────────────────────────────────────────
         import uuid as _uuid
 
         report_id = f"dossier_{case_id}_{int(time.time())}"
@@ -6224,6 +7072,7 @@ class DossierReportGenerator:
             clinical_studies=clinical_studies,
             patent_families=patent_families,
             synthesis_steps=synthesis_steps,
+            commercial_signals=commercial_signals,
             unknowns=unknowns,
             evidence_registry=evidence_list,
             sections=legacy_sections,
@@ -6306,6 +7155,7 @@ class DossierReportGenerator:
                 {"name": "clinical_studies", "status": _stage_status(len(clinical_studies)), "count": len(clinical_studies)},
                 {"name": "patent_families", "status": _stage_status(len(patent_families)), "count": len(patent_families)},
                 {"name": "synthesis_steps", "status": _stage_status(len(synthesis_steps)), "count": len(synthesis_steps)},
+                {"name": "commercial_signals", "status": _stage_status(len(commercial_signals)), "count": len(commercial_signals)},
                 {"name": "total", "elapsed_s": round(elapsed, 1), "run_verdict": _run_verdict},
             ],
             docs_attached=0,
@@ -6318,11 +7168,11 @@ class DossierReportGenerator:
 
         logger.info(
             "DossierReport v3.0 assembled: contexts=%d registrations=%d "
-            "clinical=%d patents=%d synthesis=%d unknowns=%d evidence=%d elapsed=%.1fs "
+            "clinical=%d patents=%d synthesis=%d commercial=%d unknowns=%d evidence=%d elapsed=%.1fs "
             "run_id=%s quality_v2_gates=%s",
             len(product_contexts),
             len(registrations), len(clinical_studies), len(patent_families),
-            len(synthesis_steps), len(unknowns), len(evidence_list), elapsed,
+            len(synthesis_steps), len(commercial_signals), len(unknowns), len(evidence_list), elapsed,
             run_id,
             report.dossier_quality_v2.decision_readiness if report.dossier_quality_v2 else "N/A",
         )
@@ -6337,19 +7187,21 @@ class DossierReportGenerator:
                     "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "completed_stages": {
                         "passport": True,
-                        "registrations": True,
-                        "clinical_studies": True,
-                        "patent_families": True,
-                        "synthesis_steps": True,
-                    },
-                    "passport": passport.model_dump(),
-                    "registrations": [item.model_dump() for item in registrations],
-                    "clinical_studies": [item.model_dump() for item in clinical_studies],
-                    "patent_families": [item.model_dump() for item in patent_families],
-                    "synthesis_steps": [item.model_dump() for item in synthesis_steps],
-                    "unknowns": [item.model_dump() for item in unknowns],
-                    "evidence_registry": [
-                        item.model_dump() for item in self._evidence_registry.values()
+                    "registrations": True,
+                    "clinical_studies": True,
+                    "patent_families": True,
+                    "synthesis_steps": True,
+                    "commercial_signals": True,
+                },
+                "passport": passport.model_dump(),
+                "registrations": [item.model_dump() for item in registrations],
+                "clinical_studies": [item.model_dump() for item in clinical_studies],
+                "patent_families": [item.model_dump() for item in patent_families],
+                "synthesis_steps": [item.model_dump() for item in synthesis_steps],
+                "commercial_signals": [item.model_dump() for item in commercial_signals],
+                "unknowns": [item.model_dump() for item in unknowns],
+                "evidence_registry": [
+                    item.model_dump() for item in self._evidence_registry.values()
                     ],
                     "report_id": report_id,
                     "run_id": run_id,

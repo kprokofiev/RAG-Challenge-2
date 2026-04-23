@@ -504,9 +504,39 @@ class DocParseIndexProcessor:
                     if k.strip()
                 }
                 _dk = (doc_kind or "").lower()
+                text_layer_chars = int(text_layer.get("text_chars") or 0)
 
                 force_docling_ocr = _dk in _ocr_doc_kinds
                 force_tables = _dk in _tables_doc_kinds
+                # Sprint 22 finalization: a number of regulatory / chemistry /
+                # legal / process PDFs are text-native and do not benefit from
+                # Docling layout extraction. Keeping them on the fast-text path
+                # materially reduces single-worker backlog during full dossier E2E.
+                if text_layer.get("has_text_layer") and text_layer_chars >= 1000 and _dk in {
+                    "assessment_report",
+                    "approval_letter",
+                    "chembl",
+                    "ctgov_documents",
+                    "ctgov_protocol",
+                    "ctgov_results",
+                    "ctis",
+                    "eaeu_document",
+                    "eu_regulatory_summary",
+                    "grls",
+                    "label",
+                    "patent_discovery_us",
+                    "patent_expiry_us",
+                    "patent_family_summary",
+                    "patent_legal_events",
+                    "patent_pdf",
+                    "pubchem",
+                    "ru_instruction",
+                    "ru_patent_pdf",
+                    "scientific_pmc",
+                    "us_fda",
+                }:
+                    force_docling_ocr = False
+                    force_tables = False
 
                 smpc_fast_text = _dk == "smpc" and text_layer.get("has_text_layer")
 

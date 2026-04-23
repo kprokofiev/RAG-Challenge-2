@@ -34,6 +34,11 @@ except ImportError:
 
 from pdf_fonts import register_cyrillic_fonts
 
+try:
+    from src.render_exec_decision_report import render_exec_decision_report
+except ImportError:  # pragma: no cover
+    from render_exec_decision_report import render_exec_decision_report
+
 
 def _get_styles():
     font = register_cyrillic_fonts()
@@ -94,6 +99,10 @@ def render_exec_questions_report(
     Returns:
         Path to generated PDF.
     """
+    if isinstance(exec_results, dict) and exec_results.get("decision_blocks"):
+        return render_exec_decision_report(exec_results, output_path, mode="customer")
+    if exec_results and isinstance(exec_results, list) and exec_results[0].get("decision_blocks"):
+        return render_exec_decision_report(exec_results[0], output_path, mode="customer")
     if not HAS_REPORTLAB:
         raise ImportError("reportlab is required for PDF rendering")
 

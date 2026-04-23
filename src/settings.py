@@ -108,15 +108,64 @@ class WorkerSettings(BaseSettings):
     ddkit_sections_plan_version: str = Field("unknown", env="DDKIT_SECTIONS_PLAN_VERSION")
 
     # Sprint-3: evidence K parameters (per-section adaptive defaults can be overridden globally)
-    ddkit_dense_k: int = Field(24, env="DDKIT_DENSE_K")
-    ddkit_sparse_k: int = Field(24, env="DDKIT_SPARSE_K")
-    ddkit_rerank_sample_k: int = Field(24, env="DDKIT_RERANK_SAMPLE_K")
-    ddkit_final_candidates_k: int = Field(10, env="DDKIT_FINAL_CANDIDATES_K")
+    ddkit_dense_k: int = Field(40, env="DDKIT_DENSE_K")
+    ddkit_sparse_k: int = Field(40, env="DDKIT_SPARSE_K")
+    ddkit_rerank_sample_k: int = Field(60, env="DDKIT_RERANK_SAMPLE_K")
+    ddkit_final_candidates_k: int = Field(16, env="DDKIT_FINAL_CANDIDATES_K")
     # Hard guardrail: once the dossier crosses this number of non-cached retrieve calls,
     # downstream stages should prefer honest unknowns over unbounded token spend.
     ddkit_max_retrieve_calls_per_dossier: int = Field(
-        180,
+        320,
         env="DDKIT_MAX_RETRIEVE_CALLS_PER_DOSSIER",
+    )
+    ddkit_clinical_study_top_k: int = Field(32, env="DDKIT_CLINICAL_STUDY_TOP_K")
+    ddkit_clinical_study_candidate_k: int = Field(
+        60,
+        env="DDKIT_CLINICAL_STUDY_CANDIDATE_K",
+    )
+    ddkit_clinical_study_context_k: int = Field(
+        36,
+        env="DDKIT_CLINICAL_STUDY_CONTEXT_K",
+    )
+    ddkit_synthesis_rerank_batch_size: int = Field(
+        12,
+        env="DDKIT_SYNTHESIS_RERANK_BATCH_SIZE",
+    )
+    ddkit_synthesis_rerank_top_k: int = Field(
+        20,
+        env="DDKIT_SYNTHESIS_RERANK_TOP_K",
+    )
+    ddkit_synthesis_chunkwise_max: int = Field(
+        16,
+        env="DDKIT_SYNTHESIS_CHUNKWISE_MAX",
+    )
+    ddkit_synthesis_chunkwise_steps: int = Field(
+        6,
+        env="DDKIT_SYNTHESIS_CHUNKWISE_STEPS",
+    )
+    ddkit_synthesis_non_preferred_max: int = Field(
+        16,
+        env="DDKIT_SYNTHESIS_NON_PREFERRED_MAX",
+    )
+    ddkit_synthesis_patent_corpus_top_k: int = Field(
+        48,
+        env="DDKIT_SYNTHESIS_PATENT_CORPUS_TOP_K",
+    )
+    ddkit_synthesis_patent_corpus_merge_k: int = Field(
+        36,
+        env="DDKIT_SYNTHESIS_PATENT_CORPUS_MERGE_K",
+    )
+    ddkit_commercial_signal_doc_kinds: str = Field(
+        (
+            "ru_registration_export,ru_esklp_snapshot,ru_procurement_snapshot,ru_official_act,"
+            "ru_commercial_summary,ru_formulary_summary,ru_procurement_summary,ru_policy_act,"
+            "formulary,pricing,payer_policy"
+        ),
+        env="DDKIT_COMMERCIAL_SIGNAL_DOC_KINDS",
+    )
+    ddkit_commercial_signal_max: int = Field(
+        16,
+        env="DDKIT_COMMERCIAL_SIGNAL_MAX",
     )
 
     # Sprint-8: per-stage timeout budgets (seconds).

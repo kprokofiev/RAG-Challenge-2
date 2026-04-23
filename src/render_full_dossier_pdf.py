@@ -38,6 +38,7 @@ except ImportError:
     logger.warning("reportlab not installed — PDF rendering disabled")
 
 from pdf_fonts import FONT_BOLD, FONT_NORMAL, register_cyrillic_fonts
+from src.clinical_status import format_clinical_status, normalize_clinical_status
 from src.registration_truth import VERDICT_CONFIRMED, VERDICT_PARTIAL, infer_registration_verdict
 
 
@@ -58,9 +59,14 @@ _REGION_DOC_KINDS = {
     "pil": "EU",
     "assessment_report": "EU",
     "eu_regulatory_summary": "EU",
+    "registry_report": "EU",
     "epi": "EU",
     "eaeu_document": "EAEU",
     "eaeu_registration": "EAEU",
+    "ru_commercial_summary": "RU",
+    "ru_formulary_summary": "RU",
+    "ru_procurement_summary": "RU",
+    "ru_policy_act": "RU",
     "label": "US",
     "approval_letter": "US",
     "us_fda": "US",
@@ -184,6 +190,20 @@ def _ev_list(items: Any) -> List[str]:
         if value != "—":
             values.append(value)
     return values
+
+
+def _ev_refs(ev: Any) -> List[str]:
+    if isinstance(ev, dict):
+        refs = ev.get("evidence_refs")
+        if isinstance(refs, list):
+            return [str(ref) for ref in refs if str(ref or "").strip()]
+        return []
+    if isinstance(ev, list):
+        refs: List[str] = []
+        for item in ev:
+            refs.extend(_ev_refs(item))
+        return refs
+    return []
 
 
 def _unique(items: List[str]) -> List[str]:
@@ -399,6 +419,19 @@ def _collect_synthesis_sources(
     return titles
 
 
+def _collect_commercial_sources(
+    dossier: Dict[str, Any],
+    evidence_by_id: Dict[str, Dict[str, Any]],
+) -> List[str]:
+    titles: List[str] = []
+    for signal in dossier.get("commercial_signals", []) or []:
+        if not isinstance(signal, dict):
+            continue
+        _extend_unique(titles, _titles_from_evidence_refs(evidence_by_id, signal.get("evidence_refs")))
+        _extend_unique(titles, _titles_from_evidence_refs(evidence_by_id, _ev_refs(signal.get("summary"))))
+    return titles
+
+
 def _append_bullets(story: List[Any], lines: List[str], styles, style_name: str = "DossierBullet", max_items: Optional[int] = None):
     subset = lines[:max_items] if max_items else lines
     for line in subset:
@@ -489,8 +522,8 @@ def _clinical_summary_lines(studies: List[Dict[str, Any]]) -> List[str]:
     ru_presence = 0
     conclusions = 0
     for study in studies:
-        status = _ev_val(study.get("status"))
-        if status != "—":
+        status = normalize_clinical_status(_ev_val(study.get("status")))
+        if status:
             status_counter[status] += 1
         phase = _ev_val(study.get("phase"))
         if phase != "—":
@@ -502,7 +535,10 @@ def _clinical_summary_lines(studies: List[Dict[str, Any]]) -> List[str]:
 
     lines = [f"В досье собрано {len(studies)} клинических карточек."]
     if status_counter:
-        top_statuses = ", ".join(f"{status}: {count}" for status, count in status_counter.most_common(4))
+        top_statuses = ", ".join(
+            f"{format_clinical_status(status) or status}: {count}"
+            for status, count in status_counter.most_common(4)
+        )
         lines.append(f"По статусам: {top_statuses}.")
     phases = _unique(phase_values)
     if phases:
@@ -517,7 +553,7 @@ def _clinical_summary_lines(studies: List[Dict[str, Any]]) -> List[str]:
 def _format_study_line(study: Dict[str, Any]) -> str:
     study_id = _ev_val(study.get("study_id"))
     title = _ev_val(study.get("title"))
-    status = _ev_val(study.get("status"))
+    status = format_clinical_status(_ev_val(study.get("status"))) or _ev_val(study.get("status"))
     phase = _ev_val(study.get("phase"))
     countries = ", ".join(_ev_list(study.get("countries"))[:4])
     conclusion = _ev_val(study.get("conclusion"))
@@ -633,6 +669,59 @@ def _format_step_line(step: Dict[str, Any]) -> str:
     return f"Шаг {step_number} ({kind}): " + "; ".join(parts)
 
 
+def _commercial_summary_lines(signals: List[Dict[str, Any]]) -> List[str]:
+    if not signals:
+        return ["Коммерческие open-data / policy сигналы в структурированном досье не выделены."]
+    by_region = Counter()
+    by_category = Counter()
+    confirmed = 0
+    partial = 0
+    for signal in signals:
+        region = _normalize_region(signal.get("region")) or "GLOBAL"
+        category = str(signal.get("category") or "other").strip().lower()
+        verdict = str(signal.get("verdict") or "unknown").strip().lower()
+        by_region[region] += 1
+        by_category[category] += 1
+        if verdict == "confirmed":
+            confirmed += 1
+        elif verdict == "partial":
+            partial += 1
+    lines = [f"В досье выделено {len(signals)} коммерческих сигналов."]
+    if confirmed or partial:
+        bits = []
+        if confirmed:
+            bits.append(f"confirmed: {confirmed}")
+        if partial:
+            bits.append(f"partial: {partial}")
+        lines.append("По статусу сигналов: " + ", ".join(bits) + ".")
+    if by_region:
+        lines.append("По географиям: " + ", ".join(f"{_region_label(region)}: {count}" for region, count in by_region.most_common(5)) + ".")
+    if by_category:
+        lines.append("По категориям: " + ", ".join(f"{name}: {count}" for name, count in by_category.most_common(5)) + ".")
+    return lines
+
+
+def _format_commercial_signal_line(signal: Dict[str, Any]) -> str:
+    region = _region_label(_normalize_region(signal.get("region")) or "GLOBAL")
+    category = str(signal.get("category") or "other").strip().lower().replace("_", " ")
+    verdict = str(signal.get("verdict") or "unknown").strip().lower()
+    summary = _ev_val(signal.get("summary"))
+    metrics = []
+    for metric in signal.get("metrics", []) or []:
+        if not isinstance(metric, dict):
+            continue
+        name = str(metric.get("name") or "").strip()
+        value = _ev_val(metric.get("value"))
+        if name and value != "—":
+            metrics.append(f"{name}={value}")
+    parts = [f"{region} / {category} / {verdict}"]
+    if summary != "—":
+        parts.append(summary[:220])
+    if metrics:
+        parts.append("метрики: " + ", ".join(metrics[:6]))
+    return "; ".join(parts)
+
+
 def _render_cover_page(story: List[Any], styles, dossier: Dict[str, Any], source_buckets: Dict[str, List[str]]):
     passport = dossier.get("passport", {}) or {}
     inn = passport.get("inn", "Unknown INN")
@@ -672,7 +761,6 @@ def _render_registrations_page(story: List[Any], styles, dossier: Dict[str, Any]
         regions = _unique(
             [_region_label(_normalize_region(reg.get("region"))) for reg in registrations if reg.get("region")]
         )
-        regions = []
         if regions:
             story.append(Paragraph(f"Подтвержденные регионы: {', '.join(regions)}.", styles["Body"]))
         _append_bullets(
@@ -698,6 +786,20 @@ def _render_clinical_page(story: List[Any], styles, dossier: Dict[str, Any], sou
         _append_bullets(story, [_format_study_line(study) for study in studies], styles, max_items=10)
     else:
         story.append(Paragraph("Структурированных study cards в корпусе нет.", styles["Body"]))
+    _append_sources(story, styles, source_titles)
+
+
+def _render_commercial_page(story: List[Any], styles, dossier: Dict[str, Any], source_titles: List[str]):
+    signals = [item for item in (dossier.get("commercial_signals", []) or []) if isinstance(item, dict)]
+    story.append(PageBreak())
+    story.append(Paragraph("Коммерческий слой", styles["QuestionHead"]))
+    story.append(Paragraph("Сводка", styles["SectionHead"]))
+    _append_bullets(story, _commercial_summary_lines(signals), styles, max_items=6)
+    story.append(Paragraph("Сигналы", styles["SectionHead"]))
+    if signals:
+        _append_bullets(story, [_format_commercial_signal_line(signal) for signal in signals], styles, max_items=12)
+    else:
+        story.append(Paragraph("Коммерческие сигналы в structured dossier отсутствуют.", styles["Body"]))
     _append_sources(story, styles, source_titles)
 
 
@@ -776,12 +878,14 @@ def render_full_dossier_pdf(dossier: Dict[str, Any], output_path: str) -> str:
     evidence_by_id, evidence_by_doc_id = _make_evidence_maps(dossier)
     source_buckets = _collect_front_page_sources(dossier, evidence_by_id)
     registration_sources = _collect_registration_sources(dossier, evidence_by_id)
+    commercial_sources = _collect_commercial_sources(dossier, evidence_by_id)
     clinical_sources = _collect_clinical_sources(dossier, evidence_by_id)
     patent_sources = _collect_patent_sources(dossier, evidence_by_id, evidence_by_doc_id)
     synthesis_sources = _collect_synthesis_sources(dossier, evidence_by_id, evidence_by_doc_id)
 
     _render_cover_page(story, styles, dossier, source_buckets)
     _render_registrations_page(story, styles, dossier, registration_sources)
+    _render_commercial_page(story, styles, dossier, commercial_sources)
     _render_clinical_page(story, styles, dossier, clinical_sources)
     _render_patents_page(story, styles, dossier, patent_sources)
     _render_synthesis_page(story, styles, dossier, synthesis_sources)

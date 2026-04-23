@@ -1,0 +1,888 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "documents": [
+    {
+      "doc_id": "8b48a9f3-58ad-490c-9be1-8e959ba99f46",
+      "doc_kind": "smpc",
+      "title": "EU SmPC (CAP): apixaban",
+      "source_url": "https://www.ema.europa.eu/en/documents/product-information/apixaban-accord-epar-product-information_en.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8b48a9f3-58ad-490c-9be1-8e959ba99f46/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0d078113-7983-46e5-8a19-60be514bc2cd",
+      "doc_kind": "assessment_report",
+      "title": "EU EPAR Assessment Report: apixaban",
+      "source_url": "https://www.ema.europa.eu/en/documents/assessment-report/apixaban-accord-epar-public-assessment-report_en.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0d078113-7983-46e5-8a19-60be514bc2cd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "49938cfa-d452-4fed-849f-e47b57611d8d",
+      "doc_kind": "label",
+      "title": "FDA label (openFDA, ANDA210180): apixaban",
+      "source_url": "https://api.fda.gov/drug/label.json?limit=1&search=openfda.application_number%3A%22ANDA210180%22%2BAND%2Bopenfda.generic_name%3A%22apixaban%22",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/49938cfa-d452-4fed-849f-e47b57611d8d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8883ed76-7ca8-470d-8904-b214a16cad06",
+      "doc_kind": "approval_letter",
+      "title": "FDA Approval Letter (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000Approv.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8883ed76-7ca8-470d-8904-b214a16cad06/rendered/document.pdf"
+    },
+    {
+      "doc_id": "3553df88-7ad4-4b00-a304-69b60d6b572f",
+      "doc_kind": "us_fda",
+      "title": "FDA Integrated Review (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000IntegratedR.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/3553df88-7ad4-4b00-a304-69b60d6b572f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9102adfc-ca50-4eb6-855b-36fd620631f0",
+      "doc_kind": "us_fda",
+      "title": "FDA Product Quality Review (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000ChemR.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9102adfc-ca50-4eb6-855b-36fd620631f0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "55063d34-a4f7-4c80-b38d-d6e34a21f6a4",
+      "doc_kind": "us_fda",
+      "title": "FDA Proprietary Name Review (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000NameR.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/55063d34-a4f7-4c80-b38d-d6e34a21f6a4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6de9dee1-e77d-4ab8-83ed-a7cdf67185a4",
+      "doc_kind": "us_fda",
+      "title": "FDA Other Review (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/220073Orig1s000OtherR.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6de9dee1-e77d-4ab8-83ed-a7cdf67185a4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "050d2746-7b8e-4370-8b41-fc90fedd890a",
+      "doc_kind": "us_fda",
+      "title": "FDA Current Official Label (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/220073s000lbl.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/050d2746-7b8e-4370-8b41-fc90fedd890a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1bceb29c-7490-43c1-a7ba-d133a52f4084",
+      "doc_kind": "approval_letter",
+      "title": "FDA Approval Letter (NDA220073 / ELIQUIS)",
+      "source_url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2025/220073Orig1s000ltr.pdf",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1bceb29c-7490-43c1-a7ba-d133a52f4084/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f0ab7b3a-fe71-4494-bc49-c26aca3570c3",
+      "doc_kind": "patent_family_summary",
+      "title": "EPO OPS patent families: apixaban",
+      "source_url": "http://api-gateway:8080/api/v1/patents/eu/summary?inn=apixaban&size=25&with_legal=true",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f0ab7b3a-fe71-4494-bc49-c26aca3570c3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a86e080a-a06d-40d8-9524-1cf59885903c",
+      "doc_kind": "grls",
+      "title": "RU regulatory registration summary: apixaban",
+      "source_url": "http://api-gateway:8080/v1/ru/drugs/apixaban/regulatory",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a86e080a-a06d-40d8-9524-1cf59885903c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4ed78b53-6efa-4bdf-a89d-4dc92956b5ea",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT00371683?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4ed78b53-6efa-4bdf-a89d-4dc92956b5ea/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6d6db243-7137-4562-a525-f18daef1770b",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT00371683?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6d6db243-7137-4562-a525-f18daef1770b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0508d1dd-ad1d-46db-8c79-9aed3b3b9dfb",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT00371683?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0508d1dd-ad1d-46db-8c79-9aed3b3b9dfb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "15fa947c-3abb-4df0-8ea1-2b4ed6026115",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT00371683: Study of Apixaban for the Prevention of Thrombosis-related Events Following Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT00371683?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/15fa947c-3abb-4df0-8ea1-2b4ed6026115/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0576456b-656e-4ae9-bea3-2703f01c745b",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT00633893?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0576456b-656e-4ae9-bea3-2703f01c745b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1f04fb12-1b24-443c-bb91-cd9b1a1f8b3f",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT00633893?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1f04fb12-1b24-443c-bb91-cd9b1a1f8b3f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0c38f295-01f3-46b6-8c36-a0d96de76ba2",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT00633893?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0c38f295-01f3-46b6-8c36-a0d96de76ba2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2c7a1b9f-6f1b-47a9-844a-1b3f1a2386f8",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT00633893: Efficacy and Safety Study of Apixaban for Extended Treatment of Deep Vein Thrombosis or Pulmonary Embolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT00633893?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2c7a1b9f-6f1b-47a9-844a-1b3f1a2386f8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "72245ec5-23c6-4120-9816-ba0ca5662698",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00320255: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advanced (Metastatic) Cancer",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT00320255?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/72245ec5-23c6-4120-9816-ba0ca5662698/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a5515ce3-1a65-446e-afe8-cd19fd23b754",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT00320255: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advanced (Metastatic) Cancer",
+      "source_url": "https://clinicaltrials.gov/study/NCT00320255?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a5515ce3-1a65-446e-afe8-cd19fd23b754/rendered/document.pdf"
+    },
+    {
+      "doc_id": "738abb5f-41a3-44e7-9729-d7496cb6a1cd",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00320255: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advanced (Metastatic) Cancer",
+      "source_url": "https://clinicaltrials.gov/study/NCT00320255?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/738abb5f-41a3-44e7-9729-d7496cb6a1cd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "23d45040-255c-433a-b60f-a8d02f5fa8b1",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT00320255: A Phase 2 Pilot Study of Apixaban for the Prevention of Thromboembolic Events in Patients With Advanced (Metastatic) Cancer",
+      "source_url": "https://clinicaltrials.gov/study/NCT00320255?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/23d45040-255c-433a-b60f-a8d02f5fa8b1/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f2d67e00-d2a5-4059-bdc4-db70b04beed5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04952792: Study of Apixaban in Patients Receiving Hemodiafiltration",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04952792?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f2d67e00-d2a5-4059-bdc4-db70b04beed5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "db985cc9-e37e-45a0-a6c9-28dd2902e518",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04952792: Study of Apixaban in Patients Receiving Hemodiafiltration",
+      "source_url": "https://clinicaltrials.gov/study/NCT04952792?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/db985cc9-e37e-45a0-a6c9-28dd2902e518/rendered/document.pdf"
+    },
+    {
+      "doc_id": "da5f1868-bed1-46fc-a3ea-cab3b74dce70",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04952792: Study of Apixaban in Patients Receiving Hemodiafiltration",
+      "source_url": "https://clinicaltrials.gov/study/NCT04952792?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/da5f1868-bed1-46fc-a3ea-cab3b74dce70/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5debd064-3ff9-4129-b81a-b082e8b3694c",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04952792: Study of Apixaban in Patients Receiving Hemodiafiltration",
+      "source_url": "https://clinicaltrials.gov/study/NCT04952792?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5debd064-3ff9-4129-b81a-b082e8b3694c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1579ceb1-e523-438b-8181-d97a9b0986cd",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT00412984?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1579ceb1-e523-438b-8181-d97a9b0986cd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a6cd72ee-4897-48c0-86bc-5665f0ba35cd",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT00412984?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a6cd72ee-4897-48c0-86bc-5665f0ba35cd/rendered/document.pdf"
+    },
+    {
+      "doc_id": "58c6bf80-f37f-4312-98b9-13e1a2137851",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT00412984?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/58c6bf80-f37f-4312-98b9-13e1a2137851/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e9ea3fe5-2681-4c64-969e-941e5c5e0c2b",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT00412984: Apixaban for the Prevention of Stroke in Subjects With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT00412984?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e9ea3fe5-2681-4c64-969e-941e5c5e0c2b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "566b56af-92f5-476c-986f-3a23c8d1e992",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02066454: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma Trated With iMiDs",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02066454?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/566b56af-92f5-476c-986f-3a23c8d1e992/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ece2d07b-46b5-4a9b-976c-14dc87260e0c",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02066454: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma Trated With iMiDs",
+      "source_url": "https://clinicaltrials.gov/study/NCT02066454?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ece2d07b-46b5-4a9b-976c-14dc87260e0c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "16c09093-a439-4c58-8993-ab301e34dd42",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02066454: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma Trated With iMiDs",
+      "source_url": "https://clinicaltrials.gov/study/NCT02066454?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/16c09093-a439-4c58-8993-ab301e34dd42/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f1ba9250-b7be-4030-aaee-8d7fe3b218f3",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02066454: Evaluation of the Use of Apixaban in Prevnetion of Thromboembolic Disease in Patients With Myeloma Trated With iMiDs",
+      "source_url": "https://clinicaltrials.gov/study/NCT02066454?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f1ba9250-b7be-4030-aaee-8d7fe3b218f3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "67ed7f11-f084-4191-b06c-7ddadf14146a",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02829957: RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02829957?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/67ed7f11-f084-4191-b06c-7ddadf14146a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e2f8ac04-75f0-41b8-bff7-1bbfc4f05cf5",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02829957: RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding",
+      "source_url": "https://clinicaltrials.gov/study/NCT02829957?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e2f8ac04-75f0-41b8-bff7-1bbfc4f05cf5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f7508c3d-f941-41cc-bd3d-6252e2804e10",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02829957: RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding",
+      "source_url": "https://clinicaltrials.gov/study/NCT02829957?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f7508c3d-f941-41cc-bd3d-6252e2804e10/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6a4be6ee-d5c0-455d-a1e6-73c787e5ed37",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02829957: RAMBLE - Rivaroxaban vs. Apixaban for Heavy Menstrual Bleeding",
+      "source_url": "https://clinicaltrials.gov/study/NCT02829957?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6a4be6ee-d5c0-455d-a1e6-73c787e5ed37/rendered/document.pdf"
+    },
+    {
+      "doc_id": "92cfe4d6-6615-47dc-b987-6626689102b4",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02889562?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/92cfe4d6-6615-47dc-b987-6626689102b4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4b845039-670c-4679-86e6-dfa83a58566c",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02889562?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4b845039-670c-4679-86e6-dfa83a58566c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "720c5c34-b6c6-4ffa-b5df-63bd75036e0e",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02889562?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/720c5c34-b6c6-4ffa-b5df-63bd75036e0e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "48e65ca5-f097-4f13-be1f-228ee80d580b",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02889562: Apixaban Versus Warfarin for the Management of Post-operative Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02889562?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/48e65ca5-f097-4f13-be1f-228ee80d580b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "eb58ce69-0b45-4662-bd73-a180c1af4de9",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02933697: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage Kidney Disease (ESKD)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02933697?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/eb58ce69-0b45-4662-bd73-a180c1af4de9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "feee93b7-28de-4bd4-8b11-a7473417e1a9",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02933697: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage Kidney Disease (ESKD)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02933697?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/feee93b7-28de-4bd4-8b11-a7473417e1a9/rendered/document.pdf"
+    },
+    {
+      "doc_id": "514fc293-916c-450c-9b43-8c56d05f688a",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02933697: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage Kidney Disease (ESKD)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02933697?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/514fc293-916c-450c-9b43-8c56d05f688a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9516a6ed-464c-4ebe-953b-4a2863f5dd0a",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02933697: Compare Apixaban and Vitamin-K Antagonists in Patients With Atrial Fibrillation (AF) and End-Stage Kidney Disease (ESKD)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02933697?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9516a6ed-464c-4ebe-953b-4a2863f5dd0a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8aefcc39-d5df-45f7-a6e6-b3b40cdcd765",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03080883: Apixaban in Preventing Secondary Cancer Related Venous Thrombosis in Cancer Patients Who Have Completed Anticoagulation Therapy",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03080883?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8aefcc39-d5df-45f7-a6e6-b3b40cdcd765/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5dc59332-4db1-4408-abe2-cba49b097bf4",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03080883: Apixaban in Preventing Secondary Cancer Related Venous Thrombosis in Cancer Patients Who Have Completed Anticoagulation Therapy",
+      "source_url": "https://clinicaltrials.gov/study/NCT03080883?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5dc59332-4db1-4408-abe2-cba49b097bf4/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cf086c3f-6175-4f7f-854d-3253d34e64c3",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03080883: Apixaban in Preventing Secondary Cancer Related Venous Thrombosis in Cancer Patients Who Have Completed Anticoagulation Therapy",
+      "source_url": "https://clinicaltrials.gov/study/NCT03080883?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cf086c3f-6175-4f7f-854d-3253d34e64c3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8c1a954d-502f-4857-8c69-d3f22683edd6",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03080883: Apixaban in Preventing Secondary Cancer Related Venous Thrombosis in Cancer Patients Who Have Completed Anticoagulation Therapy",
+      "source_url": "https://clinicaltrials.gov/study/NCT03080883?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8c1a954d-502f-4857-8c69-d3f22683edd6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "726a6fd3-52ba-45ed-a491-f2059c2d38aa",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03232398: Apixaban Versus Warfarin in Patients With Left Ventricular (LV) Thrombus",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT03232398?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/726a6fd3-52ba-45ed-a491-f2059c2d38aa/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0e923337-1549-49c5-a4d9-073ea54158ac",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT03232398: Apixaban Versus Warfarin in Patients With Left Ventricular (LV) Thrombus",
+      "source_url": "https://clinicaltrials.gov/study/NCT03232398?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0e923337-1549-49c5-a4d9-073ea54158ac/rendered/document.pdf"
+    },
+    {
+      "doc_id": "07f0fe04-f0c9-42f7-b462-7f69758121ff",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT03232398: Apixaban Versus Warfarin in Patients With Left Ventricular (LV) Thrombus",
+      "source_url": "https://clinicaltrials.gov/study/NCT03232398?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/07f0fe04-f0c9-42f7-b462-7f69758121ff/rendered/document.pdf"
+    },
+    {
+      "doc_id": "29be8195-5b1c-4a9e-94da-37f580d42233",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT03232398: Apixaban Versus Warfarin in Patients With Left Ventricular (LV) Thrombus",
+      "source_url": "https://clinicaltrials.gov/study/NCT03232398?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/29be8195-5b1c-4a9e-94da-37f580d42233/rendered/document.pdf"
+    },
+    {
+      "doc_id": "3ecb5941-7ed5-4306-8322-ab5c233ca8c8",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05757869: A Study of Milvexian Versus Apixaban in Participants With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT05757869?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/3ecb5941-7ed5-4306-8322-ab5c233ca8c8/rendered/document.pdf"
+    },
+    {
+      "doc_id": "451fb97f-f620-4b0b-9789-718f87738312",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT05757869: A Study of Milvexian Versus Apixaban in Participants With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT05757869?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/451fb97f-f620-4b0b-9789-718f87738312/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1a6846a8-790f-4d92-806d-6ff5343e1de5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT05757869: A Study of Milvexian Versus Apixaban in Participants With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT05757869?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1a6846a8-790f-4d92-806d-6ff5343e1de5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6ab28edf-8e0d-46af-a9fa-5678b6c6bc37",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT05757869: A Study of Milvexian Versus Apixaban in Participants With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT05757869?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6ab28edf-8e0d-46af-a9fa-5678b6c6bc37/rendered/document.pdf"
+    },
+    {
+      "doc_id": "4db932b9-2a6d-4671-9f0d-4d09d65c642a",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06551415: Dabigatran Versus Apixaban in Cerebral Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT06551415?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/4db932b9-2a6d-4671-9f0d-4d09d65c642a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ac58a234-57a0-4d45-91d5-193e32310c28",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT06551415: Dabigatran Versus Apixaban in Cerebral Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT06551415?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ac58a234-57a0-4d45-91d5-193e32310c28/rendered/document.pdf"
+    },
+    {
+      "doc_id": "691b04f6-c007-4dd8-afc8-8571b6bc8435",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06551415: Dabigatran Versus Apixaban in Cerebral Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT06551415?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/691b04f6-c007-4dd8-afc8-8571b6bc8435/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cbe62843-5937-441f-a738-3f6a562a9d60",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT06551415: Dabigatran Versus Apixaban in Cerebral Venous Thrombosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT06551415?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cbe62843-5937-441f-a738-3f6a562a9d60/rendered/document.pdf"
+    },
+    {
+      "doc_id": "36c50361-857c-49a2-bf8e-bf122b90d481",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00787150: A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT00787150?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/36c50361-857c-49a2-bf8e-bf122b90d481/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ca8b2e56-58f9-4e9d-8264-7bfe4686aea3",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT00787150: A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT00787150?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ca8b2e56-58f9-4e9d-8264-7bfe4686aea3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a1951c15-5e2c-4172-9b9e-08a8298a78bb",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00787150: A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT00787150?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a1951c15-5e2c-4172-9b9e-08a8298a78bb/rendered/document.pdf"
+    },
+    {
+      "doc_id": "21a14ca5-9676-44a0-8473-68c6624bafcc",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT00787150: A Phase 2 Study To Evaluate The Safety Of Apixaban In Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT00787150?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/21a14ca5-9676-44a0-8473-68c6624bafcc/rendered/document.pdf"
+    },
+    {
+      "doc_id": "786c5deb-9d33-4127-9325-1bb65f2d7583",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02048865: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02048865?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/786c5deb-9d33-4127-9325-1bb65f2d7583/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f37c262b-a634-4153-a317-09b510121085",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02048865: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients",
+      "source_url": "https://clinicaltrials.gov/study/NCT02048865?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f37c262b-a634-4153-a317-09b510121085/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b91a5f60-0c1d-4d4c-8cd2-ef83ad23f9e6",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02048865: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients",
+      "source_url": "https://clinicaltrials.gov/study/NCT02048865?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b91a5f60-0c1d-4d4c-8cd2-ef83ad23f9e6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "dd7a0865-95f7-44c6-8348-069b8421f122",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02048865: Apixaban for the Prevention of Venous Thromboembolism in Cancer Patients",
+      "source_url": "https://clinicaltrials.gov/study/NCT02048865?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/dd7a0865-95f7-44c6-8348-069b8421f122/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a92f37fc-49ec-4b11-922d-8a09568315f6",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02565693: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02565693?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a92f37fc-49ec-4b11-922d-8a09568315f6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1c615de7-ed5f-4918-8096-6315afcdd199",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02565693: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02565693?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1c615de7-ed5f-4918-8096-6315afcdd199/rendered/document.pdf"
+    },
+    {
+      "doc_id": "77b67624-396c-44f5-b6c4-4dcbe3d14b0d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02565693: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02565693?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/77b67624-396c-44f5-b6c4-4dcbe3d14b0d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "3772e8ae-beea-4d1c-8473-606a71d06043",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02565693: Apixaban After Anticoagulation-associated Intracerebral Haemorrhage in Patients With Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02565693?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/3772e8ae-beea-4d1c-8473-606a71d06043/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5c101dd0-21c5-435a-84df-ac6f1b72076f",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04041843: Oral Anticoagulant Apixaban for Treatment of Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04041843?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5c101dd0-21c5-435a-84df-ac6f1b72076f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "78cf9efe-8e44-44a2-969f-81a762a138a2",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04041843: Oral Anticoagulant Apixaban for Treatment of Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT04041843?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/78cf9efe-8e44-44a2-969f-81a762a138a2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9c24b2f7-90cc-4ff7-b352-8680c042db72",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04041843: Oral Anticoagulant Apixaban for Treatment of Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT04041843?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9c24b2f7-90cc-4ff7-b352-8680c042db72/rendered/document.pdf"
+    },
+    {
+      "doc_id": "e3e4c7b8-93c9-4f4b-8e68-2759a6ce9bd7",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04041843: Oral Anticoagulant Apixaban for Treatment of Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT04041843?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/e3e4c7b8-93c9-4f4b-8e68-2759a6ce9bd7/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a48aba80-a643-4604-8cca-36946f350739",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04229264: Efficacy and Safety of Apixaban in Reducing Restenosis and Limb Loss in PAD Patients.",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04229264?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a48aba80-a643-4604-8cca-36946f350739/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6b82b54e-bf5c-4be5-9dd2-04ecc097e9bc",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04229264: Efficacy and Safety of Apixaban in Reducing Restenosis and Limb Loss in PAD Patients.",
+      "source_url": "https://clinicaltrials.gov/study/NCT04229264?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6b82b54e-bf5c-4be5-9dd2-04ecc097e9bc/rendered/document.pdf"
+    },
+    {
+      "doc_id": "074810b1-5153-4c2b-aa29-2b2a7e2a2410",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04229264: Efficacy and Safety of Apixaban in Reducing Restenosis and Limb Loss in PAD Patients.",
+      "source_url": "https://clinicaltrials.gov/study/NCT04229264?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/074810b1-5153-4c2b-aa29-2b2a7e2a2410/rendered/document.pdf"
+    },
+    {
+      "doc_id": "62cb0998-4abf-4d59-9f7c-c465d4e115d2",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04229264: Efficacy and Safety of Apixaban in Reducing Restenosis and Limb Loss in PAD Patients.",
+      "source_url": "https://clinicaltrials.gov/study/NCT04229264?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/62cb0998-4abf-4d59-9f7c-c465d4e115d2/rendered/document.pdf"
+    },
+    {
+      "doc_id": "ee22d60d-b75a-45ee-ac96-a7c4a50f409d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06817811: Bioequivalence Study of Apixaban 5 mg Film-Coated Tablet",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT06817811?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/ee22d60d-b75a-45ee-ac96-a7c4a50f409d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "b88c46f9-3757-4560-9485-ae68a15f7d8f",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT06817811: Bioequivalence Study of Apixaban 5 mg Film-Coated Tablet",
+      "source_url": "https://clinicaltrials.gov/study/NCT06817811?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/b88c46f9-3757-4560-9485-ae68a15f7d8f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1c04eaee-c487-4d6a-ab0b-505992695c16",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06817811: Bioequivalence Study of Apixaban 5 mg Film-Coated Tablet",
+      "source_url": "https://clinicaltrials.gov/study/NCT06817811?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1c04eaee-c487-4d6a-ab0b-505992695c16/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d260c05b-4aca-4e2f-82f3-5a464bc6c698",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT06817811: Bioequivalence Study of Apixaban 5 mg Film-Coated Tablet",
+      "source_url": "https://clinicaltrials.gov/study/NCT06817811?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d260c05b-4aca-4e2f-82f3-5a464bc6c698/rendered/document.pdf"
+    },
+    {
+      "doc_id": "f40aa4df-2715-425a-8684-3c9ba8e341d0",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02100228: Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrillation) And Expected To Have Treatment To Put Them Back Into A Normal Heart Rhythm (Cardioversion)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02100228?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/f40aa4df-2715-425a-8684-3c9ba8e341d0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0757c8f3-c3d2-4a8d-9368-4290a33dfe80",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02100228: Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrillation) And Expected To Have Treatment To Put Them Back Into A Normal Heart Rhythm (Cardioversion)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02100228?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0757c8f3-c3d2-4a8d-9368-4290a33dfe80/rendered/document.pdf"
+    },
+    {
+      "doc_id": "28e992f1-73f2-4dbc-8328-155bd5f0336c",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02100228: Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrillation) And Expected To Have Treatment To Put Them Back Into A Normal Heart Rhythm (Cardioversion)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02100228?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/28e992f1-73f2-4dbc-8328-155bd5f0336c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "29da46be-384f-4f17-8967-4ad42cf9469a",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02100228: Study Of The Blood Thinner, Apixaban, For Patients Who Have An Abnormal Heart Rhythm (Atrial Fibrillation) And Expected To Have Treatment To Put Them Back Into A Normal Heart Rhythm (Cardioversion)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02100228?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/29da46be-384f-4f17-8967-4ad42cf9469a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "62007fcc-3580-4988-b7f4-55391d516e71",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02406885?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/62007fcc-3580-4988-b7f4-55391d516e71/rendered/document.pdf"
+    },
+    {
+      "doc_id": "bd8a501d-7b42-499e-939e-4deb3d010b86",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02406885?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/bd8a501d-7b42-499e-939e-4deb3d010b86/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d43f8482-7387-4464-81df-3d4c99d7b011",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02406885?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d43f8482-7387-4464-81df-3d4c99d7b011/rendered/document.pdf"
+    },
+    {
+      "doc_id": "cc7e0d11-eaa5-4777-a1f9-c6cce69fb928",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02406885: Apixaban Pharmacokinetics in Bariatric Patients (APB)",
+      "source_url": "https://clinicaltrials.gov/study/NCT02406885?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/cc7e0d11-eaa5-4777-a1f9-c6cce69fb928/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c257aa5d-878f-4dfd-b60f-7a6a7b42c02d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02608099: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02608099?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c257aa5d-878f-4dfd-b60f-7a6a7b42c02d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0c1bbda7-989b-4e40-8532-52d3fcc38511",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02608099: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02608099?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0c1bbda7-989b-4e40-8532-52d3fcc38511/rendered/document.pdf"
+    },
+    {
+      "doc_id": "52200d64-7071-4bd0-af74-27222706b214",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02608099: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02608099?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/52200d64-7071-4bd0-af74-27222706b214/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0eeeb44c-e310-467a-82e1-7074bcc8c00c",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02608099: Apixaban Evaluation of Interrupted Or Uninterrupted Anticoagulation for Ablation of Atrial Fibrillation",
+      "source_url": "https://clinicaltrials.gov/study/NCT02608099?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0eeeb44c-e310-467a-82e1-7074bcc8c00c/rendered/document.pdf"
+    },
+    {
+      "doc_id": "70c18e7f-36b4-4890-8e5b-81b580c4e5ac",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02958969: Apixaban for Primary Prevention of Venous Thromboembolism in Patients With Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT02958969?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/70c18e7f-36b4-4890-8e5b-81b580c4e5ac/rendered/document.pdf"
+    },
+    {
+      "doc_id": "bf2fca3a-390d-479c-9491-8a8ff6be4872",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT02958969: Apixaban for Primary Prevention of Venous Thromboembolism in Patients With Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/study/NCT02958969?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/bf2fca3a-390d-479c-9491-8a8ff6be4872/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1285a7dd-f99e-49a0-8c70-4ca4af44ef4b",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT02958969: Apixaban for Primary Prevention of Venous Thromboembolism in Patients With Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/study/NCT02958969?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1285a7dd-f99e-49a0-8c70-4ca4af44ef4b/rendered/document.pdf"
+    },
+    {
+      "doc_id": "5e3ac05f-687f-44bc-914e-e5ab702e5e50",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT02958969: Apixaban for Primary Prevention of Venous Thromboembolism in Patients With Multiple Myeloma",
+      "source_url": "https://clinicaltrials.gov/study/NCT02958969?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/5e3ac05f-687f-44bc-914e-e5ab702e5e50/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a8d90642-9265-47b3-b82d-69e858d760ff",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04168203: Extended-Duration Low-Intensity Apixaban to Prevent Recurrence in High-Risk Patients With Provoked Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04168203?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a8d90642-9265-47b3-b82d-69e858d760ff/rendered/document.pdf"
+    },
+    {
+      "doc_id": "c450830f-b69e-4281-bec1-fe56883ffbd3",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04168203: Extended-Duration Low-Intensity Apixaban to Prevent Recurrence in High-Risk Patients With Provoked Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT04168203?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/c450830f-b69e-4281-bec1-fe56883ffbd3/rendered/document.pdf"
+    },
+    {
+      "doc_id": "2b8c9a35-df75-4066-a1b8-0f615c7ea7f0",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04168203: Extended-Duration Low-Intensity Apixaban to Prevent Recurrence in High-Risk Patients With Provoked Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT04168203?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/2b8c9a35-df75-4066-a1b8-0f615c7ea7f0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "8c009eee-7ffd-490a-bc16-051d43c84944",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04168203: Extended-Duration Low-Intensity Apixaban to Prevent Recurrence in High-Risk Patients With Provoked Venous Thromboembolism",
+      "source_url": "https://clinicaltrials.gov/study/NCT04168203?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/8c009eee-7ffd-490a-bc16-051d43c84944/rendered/document.pdf"
+    },
+    {
+      "doc_id": "470113b1-7ff9-4538-a76c-9be356f2ace5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04645550: Apixaban, Warfarin and Aspirin Prevents Portal Vein Thrombosis in Patients After Laparoscopic Splenectomy（ESAWAAPT）",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT04645550?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/470113b1-7ff9-4538-a76c-9be356f2ace5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "d67cb880-7de7-4980-974d-addc07aaaf52",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT04645550: Apixaban, Warfarin and Aspirin Prevents Portal Vein Thrombosis in Patients After Laparoscopic Splenectomy（ESAWAAPT）",
+      "source_url": "https://clinicaltrials.gov/study/NCT04645550?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/d67cb880-7de7-4980-974d-addc07aaaf52/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a4379202-ac39-4ef9-b028-854eb967ccf0",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT04645550: Apixaban, Warfarin and Aspirin Prevents Portal Vein Thrombosis in Patients After Laparoscopic Splenectomy（ESAWAAPT）",
+      "source_url": "https://clinicaltrials.gov/study/NCT04645550?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a4379202-ac39-4ef9-b028-854eb967ccf0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0ca7f61a-0acb-45b7-a2d2-aea1a55a2f4a",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT04645550: Apixaban, Warfarin and Aspirin Prevents Portal Vein Thrombosis in Patients After Laparoscopic Splenectomy（ESAWAAPT）",
+      "source_url": "https://clinicaltrials.gov/study/NCT04645550?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0ca7f61a-0acb-45b7-a2d2-aea1a55a2f4a/rendered/document.pdf"
+    },
+    {
+      "doc_id": "28a6df93-5357-4a35-965c-07b61295ff0f",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00097357: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT00097357?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/28a6df93-5357-4a35-965c-07b61295ff0f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "69b40355-6287-4b69-b933-6209400e9b2f",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT00097357: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT00097357?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/69b40355-6287-4b69-b933-6209400e9b2f/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a5c3f947-fdf5-4def-9a55-c7c20ed3243d",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT00097357: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT00097357?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a5c3f947-fdf5-4def-9a55-c7c20ed3243d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "353a169a-2cb5-4a3f-a1e2-77b4bd337bc6",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT00097357: BMS-562247 in Subjects Undergoing Elective Total Knee Replacement Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT00097357?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/353a169a-2cb5-4a3f-a1e2-77b4bd337bc6/rendered/document.pdf"
+    },
+    {
+      "doc_id": "238ac196-0780-4c7f-9ea8-99420e742706",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06953726: Comparing the Safety and Efficacy of Apixaban and Rivaroxaban",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT06953726?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/238ac196-0780-4c7f-9ea8-99420e742706/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9f8b9fd6-e6cb-4885-b5e0-41faf4a5475d",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT06953726: Comparing the Safety and Efficacy of Apixaban and Rivaroxaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT06953726?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9f8b9fd6-e6cb-4885-b5e0-41faf4a5475d/rendered/document.pdf"
+    },
+    {
+      "doc_id": "0eb482f8-9f97-412b-b770-17b051f6f045",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT06953726: Comparing the Safety and Efficacy of Apixaban and Rivaroxaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT06953726?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/0eb482f8-9f97-412b-b770-17b051f6f045/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1fa8f812-de36-4a60-9bef-bd5c16c09087",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT06953726: Comparing the Safety and Efficacy of Apixaban and Rivaroxaban",
+      "source_url": "https://clinicaltrials.gov/study/NCT06953726?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1fa8f812-de36-4a60-9bef-bd5c16c09087/rendered/document.pdf"
+    },
+    {
+      "doc_id": "9bc619fa-1060-4169-a7d1-4fd3b85aeab0",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07189897: Apixaban or Enoxaparin After Head and Neck Cancer Surgery",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT07189897?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/9bc619fa-1060-4169-a7d1-4fd3b85aeab0/rendered/document.pdf"
+    },
+    {
+      "doc_id": "a2428490-843e-4b15-90b4-c0ce9964a517",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT07189897: Apixaban or Enoxaparin After Head and Neck Cancer Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT07189897?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/a2428490-843e-4b15-90b4-c0ce9964a517/rendered/document.pdf"
+    },
+    {
+      "doc_id": "bc7d4704-bd6d-4eae-a2b2-cc7a1b93dda5",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07189897: Apixaban or Enoxaparin After Head and Neck Cancer Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT07189897?tab=protocol",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/bc7d4704-bd6d-4eae-a2b2-cc7a1b93dda5/rendered/document.pdf"
+    },
+    {
+      "doc_id": "6ccaf702-d016-4f56-83e8-b52d66bb7a3e",
+      "doc_kind": "ctgov_documents",
+      "title": "CTGov NCT07189897: Apixaban or Enoxaparin After Head and Neck Cancer Surgery",
+      "source_url": "https://clinicaltrials.gov/study/NCT07189897?tab=documents",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/6ccaf702-d016-4f56-83e8-b52d66bb7a3e/rendered/document.pdf"
+    },
+    {
+      "doc_id": "1c5718a4-92fd-442e-8126-efe921fed0ca",
+      "doc_kind": "ctgov_protocol",
+      "title": "CTGov NCT07237308: BEACON-AA: Apixaban With or Without Clopidogrel in Stroke Patients With Atrial Fibrillation and Cerebral Atherosclerosis",
+      "source_url": "https://clinicaltrials.gov/api/v2/studies/NCT07237308?format=json",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/1c5718a4-92fd-442e-8126-efe921fed0ca/rendered/document.pdf"
+    },
+    {
+      "doc_id": "52522432-c22e-4e13-ad6a-7df4508fa158",
+      "doc_kind": "ctgov_results",
+      "title": "CTGov NCT07237308: BEACON-AA: Apixaban With or Without Clopidogrel in Stroke Patients With Atrial Fibrillation and Cerebral Atherosclerosis",
+      "source_url": "https://clinicaltrials.gov/study/NCT07237308?tab=results",
+      "s3_rendered_pdf_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/documents/52522432-c22e-4e13-ad6a-7df4508fa158/rendered/document.pdf"
+    }
+  ]
+}

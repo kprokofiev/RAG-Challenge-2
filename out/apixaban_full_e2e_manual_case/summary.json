@@ -1,0 +1,17 @@
+{
+  "case_id": "edf721c6-ce6a-4778-8289-6d3f7774bea1",
+  "report_id": "46f3ecea-2368-47e9-a184-30d686f5e573",
+  "dossier_report_id": "4bc5bf27-9fba-4a3f-9d50-1a512df91052",
+  "registrations_count": 4,
+  "clinical_studies_count": 27,
+  "patent_families_count": 0,
+  "synthesis_steps_count": 0,
+  "unknowns_count": 7,
+  "evidence_registry_size": 192,
+  "manual_evidence_titles": [
+    "apixaban_eaeu_registrations_export_summary.txt",
+    "apixaban_esklp_summary_eaeu.txt"
+  ],
+  "full_pdf": "C:\\GItHub\\Vector_db\\RAG-Challenge-2\\out\\apixaban_full_e2e_manual_case\\full_dossier.pdf",
+  "exec_pdf": "C:\\GItHub\\Vector_db\\RAG-Challenge-2\\out\\apixaban_full_e2e_manual_case\\exec_questions_report.pdf"
+}

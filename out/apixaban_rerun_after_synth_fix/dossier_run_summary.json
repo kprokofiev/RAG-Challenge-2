@@ -1,0 +1,26 @@
+{
+  "tenant_id": "demo",
+  "case_id": "43a2ef71-a421-4099-99b2-abdae130b1ec",
+  "inn": "apixaban",
+  "run_id": "apixaban_rerun_after_synth_fix_1776026012",
+  "report_id": "apixaban_rerun_after_synth_fix_1776026012",
+  "elapsed_s": 309.4,
+  "dossier_key": "tenants/demo/cases/43a2ef71-a421-4099-99b2-abdae130b1ec/reports/apixaban_rerun_after_synth_fix_1776026012/dossier_v3.json",
+  "dossier_path": "/app/out/apixaban_rerun_after_synth_fix/dossier_v3.json",
+  "counts": {
+    "registrations": 4,
+    "clinical_studies": 61,
+    "patent_families": 16,
+    "synthesis_steps": 1,
+    "unknowns": 0,
+    "evidence_registry": 479
+  },
+  "decision_readiness": {
+    "registrations": "GREEN",
+    "clinical": "GREEN",
+    "patents_discovery": "GREEN",
+    "patents_legal": "GREEN",
+    "synthesis": "GREEN",
+    "context_integrity": "YELLOW"
+  }
+}
