@@ -63,7 +63,6 @@ _MISSING_EVIDENCE_MARKERS = {
 _NEGATIVE_EVIDENCE_MARKERS = {
     "closed",
     "denied",
-    "expired",
     "failed",
     "inactive",
     "invalid",
@@ -149,6 +148,28 @@ def _contains_marker(text: str, markers: set[str]) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def _has_explicit_negative_evidence(text: str) -> bool:
+    lowered = text.lower()
+    patterns = (
+        r"\bwithdrawn\b",
+        r"\brevoked\b",
+        r"\bterminated\b",
+        r"\bsuspended\b",
+        r"\brejected\b",
+        r"\brefused\b",
+        r"\binactive\b",
+        r"\bclosed\b",
+        r"\bfailed\b",
+        r"\bdenied\b",
+        r"\bnegative\b",
+        r"\binvalid\b",
+        r"\bnot approv\w*\b",
+        r"\bnot registered\b",
+        r"(?<!non[-\s])(?<!not[-\s])expired\b",
+    )
+    return any(re.search(pattern, lowered) for pattern in patterns)
+
+
 def _registration_status_text(item: Dict[str, Any]) -> str:
     return " ".join(
         part for part in (
@@ -222,7 +243,7 @@ class ExecVerifier:
         block: ExecDecisionBlock,
         packet: Dict[str, Any],
     ) -> bool:
-        if block.block_id != "asset_attractiveness" or block.verdict != "NO_GO":
+        if block.block_id != "asset_attractiveness" or block.verdict not in {"NO_GO", "INSUFFICIENT_EVIDENCE"}:
             return False
         if not _has_context_integrity_green(packet):
             return False
@@ -232,7 +253,7 @@ class ExecVerifier:
         ):
             return False
         text = _block_text(block)
-        return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _contains_marker(text, _NEGATIVE_EVIDENCE_MARKERS)
+        return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _has_explicit_negative_evidence(text)
 
     def _rf_scope_overconstraint(
         self,
@@ -246,7 +267,7 @@ class ExecVerifier:
         if _positive_commercial_signal_count(packet, "RU") <= 0:
             return False
         text = _block_text(block).lower()
-        return ("eaeu" in text or "valid_to" in text or "underlying authorization" in text) and not _contains_marker(text, _NEGATIVE_EVIDENCE_MARKERS)
+        return ("eaeu" in text or "valid_to" in text or "underlying authorization" in text) and not _has_explicit_negative_evidence(text)
 
     def _eaeu_holdable_regulatory_position(
         self,
@@ -258,7 +279,7 @@ class ExecVerifier:
         if not _has_positive_registration(packet, "EAEU"):
             return False
         text = _block_text(block)
-        return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _contains_marker(text, _NEGATIVE_EVIDENCE_MARKERS)
+        return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _has_explicit_negative_evidence(text)
 
     def _ground_or_downgrade_unreferenced_hard_claims(
         self,
@@ -482,7 +503,7 @@ class ExecVerifier:
                 )
             applied_changes.append("added_action_for_blocker")
 
-        if any(issue.issue_type == "negative_missing_evidence_overreach" for issue in verification.issues):
+        if any(issue.issue_type == "negative_missing_evidence_overreach" for issue in verification.issues) or self._asset_negative_missing_evidence_overreach(repaired, packet):
             repaired.verdict = "HOLD"
             repaired.sufficiency = "PARTIAL"
             repaired.confidence = "MEDIUM"
@@ -495,7 +516,7 @@ class ExecVerifier:
             )
             applied_changes.append("softened_missing_evidence_no_go_to_hold")
 
-        if any(issue.issue_type == "rf_scope_overconstraint" for issue in verification.issues):
+        if any(issue.issue_type == "rf_scope_overconstraint" for issue in verification.issues) or self._rf_scope_overconstraint(repaired, packet):
             repaired.verdict = "GO"
             repaired.sufficiency = "SUFFICIENT"
             repaired.confidence = "MEDIUM"
@@ -523,7 +544,7 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("removed_eaeu_overconstraint_from_rf_entry")
 
-        if any(issue.issue_type == "eaeu_holdable_position" for issue in verification.issues):
+        if any(issue.issue_type == "eaeu_holdable_position" for issue in verification.issues) or self._eaeu_holdable_regulatory_position(repaired, packet):
             repaired.verdict = "HOLD"
             repaired.sufficiency = "PARTIAL"
             repaired.confidence = "MEDIUM"
@@ -561,7 +582,14 @@ class ExecVerifier:
         has_reparable_warn = any(
             issue.issue_type in reparable_warns for issue in verification.issues
         )
-        if (verification.overall_status != "FAIL" and not has_reparable_warn) or not allow_repair:
+        needs_policy_repair = any(
+            (
+                self._asset_negative_missing_evidence_overreach(block, packet),
+                self._rf_scope_overconstraint(block, packet),
+                self._eaeu_holdable_regulatory_position(block, packet),
+            )
+        )
+        if (verification.overall_status != "FAIL" and not has_reparable_warn and not needs_policy_repair) or not allow_repair:
             return block, verification
         repaired_block, repaired_verification = self.repair_block(block, packet, verification)
         return repaired_block, repaired_verification
