@@ -5128,6 +5128,14 @@ class DossierReportGenerator:
     _RU_FIPS_JURISDICTION_RE = re.compile(
         r'"jurisdiction"\s*:\s*"([A-Z]{2})"',
     )
+    _RU_FIPS_OFFICIAL_NO_HIT_RE = re.compile(
+        r"Найдено:.*?патентов\s*-\s*<b>\s*0\s*</b>.*?Строка поиска:\s*</i></b>\s*([^<\n]+)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    _RU_FIPS_OFFICIAL_AS_OF_RE = re.compile(
+        r"по состоянию на\s*<b>\s*(\d{4}\.\d{2}\.\d{2})\s*</b>",
+        re.IGNORECASE,
+    )
 
     def _extract_patent_expiry_deterministic(self) -> Dict[str, Dict[str, str]]:
         """Scan patent_legal_events, patent_expiry_us, and ru_patent_fips chunks for expiry dates.
@@ -5200,6 +5208,33 @@ class DossierReportGenerator:
                     self._extract_ru_fips_expiry(
                         text, page, doc_id, doc_title, metainfo, expiry_map
                     )
+                    no_hit_match = self._RU_FIPS_OFFICIAL_NO_HIT_RE.search(text)
+                    if no_hit_match:
+                        search_term = re.sub(r"\s+", " ", no_hit_match.group(1) or "").strip(" .;:")
+                        as_of_match = self._RU_FIPS_OFFICIAL_AS_OF_RE.search(text)
+                        as_of_raw = as_of_match.group(1) if as_of_match else ""
+                        as_of_iso = (
+                            as_of_raw.replace(".", "-")
+                            if re.match(r"\d{4}\.\d{2}\.\d{2}$", as_of_raw)
+                            else ""
+                        )
+                        snippet = (
+                            "OFFICIAL_PATENT_REGISTER_NO_HIT | "
+                            "region=EAEU | "
+                            f"search_term={search_term or self.inn} | "
+                            "patents=0"
+                        )
+                        if as_of_iso:
+                            snippet += f" | as_of={as_of_iso}"
+                        ev = _build_evidence(
+                            doc_id,
+                            page,
+                            snippet,
+                            doc_title,
+                            metainfo.get("source_url"),
+                            doc_kind="ru_patent_fips",
+                        )
+                        self._evidence_registry[ev.evidence_id] = ev
 
         logger.info(
             "patent_expiry_deterministic inn=%s extracted=%d patents with expiry dates",

@@ -702,6 +702,40 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertTrue(any(item["doc_id"] == "doc-grls" for item in evidence_packet["selected_evidence"]))
         self.assertFalse(any(item["doc_id"] == "doc-approval" for item in evidence_packet["selected_evidence"]))
 
+    def test_contract_linkage_accepts_official_eapo_no_hit_for_eaeu(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "asset_attractiveness",
+            "allowed_doc_kinds": ["ru_patent_fips"],
+            "patent_families": [],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-eapo-nohit",
+                    "doc_id": "doc-eapo-nohit",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30",
+                }
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="asset_attractiveness",
+            answer_type="go_no_go",
+            needed_dossier_sections=["patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["ru_patent_fips"],
+                queries=["apixaban eaeu patent status"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        self.assertIn("EAEU", linkage["patent_legal_status_snapshot"]["resolved_regions"])
+        self.assertEqual(
+            linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["window_status"],
+            "open",
+        )
+
 
 class ExecLlmEnvTests(unittest.TestCase):
     def test_require_exec_openai_api_key_loads_explicit_env_file(self):

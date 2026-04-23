@@ -92,6 +92,10 @@ _RU_FIPS_EXPIRY_DATE_RE = re.compile(
 _RU_FIPS_JURISDICTION_RE = re.compile(
     r'"jurisdiction"\s*:\s*"([A-Z]{2})"',
 )
+_OFFICIAL_PATENT_REGISTER_NO_HIT_RE = re.compile(
+    r"OFFICIAL_PATENT_REGISTER_NO_HIT\s*\|\s*region=([A-Z]+)\s*\|\s*search_term=([^|]+)\|\s*patents=0(?:\s*\|\s*as_of=([\d-]+))?",
+    re.IGNORECASE,
+)
 
 
 def normalize_exec_doc_kind(value: Any) -> str:
@@ -304,6 +308,8 @@ def _infer_region_window_status(
 ) -> str:
     normalized = [status.strip().lower() for status in legal_statuses if str(status or "").strip()]
     for status in normalized:
+        if any(marker in status for marker in ("no_listed_pharma_patents", "no patents found", "no_listed_patents")):
+            return "open"
         if any(marker in status for marker in ("expired", "lapsed", "revoked", "withdrawn", "ceased")):
             return "open"
         if any(marker in status for marker in ("granted", "pending", "active", "in force")):
@@ -319,6 +325,22 @@ def _infer_region_window_status(
 def _extract_ru_fips_source_entries(snippet: str, evidence_ref: str) -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
     text = str(snippet or "")
+    official_no_hit = _OFFICIAL_PATENT_REGISTER_NO_HIT_RE.search(text)
+    if official_no_hit:
+        region_raw, search_term, as_of = official_no_hit.groups()
+        entries.append(
+            {
+                "region": _canonical_ip_region(region_raw or "EAEU"),
+                "representative_pub": "",
+                "expiry_date": "",
+                "remaining_time_months": None,
+                "legal_status": "no_listed_pharma_patents",
+                "search_term": str(search_term or "").strip(),
+                "status_date": str(as_of or "").strip(),
+                "evidence_refs": [evidence_ref],
+            }
+        )
+        return entries
     for match in _RU_FIPS_DOC_ID_RE.finditer(text):
         raw_pub = match.group(1).replace(" ", "")
         window = text[match.end():match.end() + 3000]
