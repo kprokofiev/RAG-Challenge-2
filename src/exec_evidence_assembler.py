@@ -5,6 +5,8 @@ Deterministic evidence packet assembly for question-first exec reasoning.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from datetime import date
+import re
 from typing import Any, Dict, Iterable, List, Optional
 
 try:
@@ -153,10 +155,15 @@ def _compact_value(value: Any) -> Any:
             "status",
             "summary",
             "title",
+            "study_id",
             "phase",
+            "conclusion",
+            "efficacy_keypoints",
+            "n_enrolled",
             "category",
             "mah",
             "identifiers",
+            "forms_strengths",
             "legal_status_snapshot",
             "expiry_by_country",
             "description",
@@ -165,6 +172,79 @@ def _compact_value(value: Any) -> Any:
             if key in value:
                 keep[key] = value[key]
         return keep or value
+    return value
+
+
+def _value_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        if "value" in value:
+            return _value_text(value.get("value"))
+        return " ".join(_value_text(item) for item in value.values())
+    if isinstance(value, list):
+        return "; ".join(_value_text(item) for item in value if _value_text(item))
+    return str(value).strip()
+
+
+def _compact_refs(value: Any, limit: int = 8) -> List[str]:
+    return list(dict.fromkeys(_iter_evidence_refs(value)))[:limit]
+
+
+def _is_phase3(value: Any) -> bool:
+    text = _value_text(value).lower().replace("_", " ")
+    return "phase 3" in text or "phase iii" in text
+
+
+def _has_negative_results_phrase(value: Any) -> bool:
+    text = _value_text(value).lower()
+    return any(
+        phrase in text
+        for phrase in (
+            "no results-based conclusion",
+            "no outcome results",
+            "does not provide outcome",
+            "not provide outcome",
+            "no numeric outcome",
+        )
+    )
+
+
+_EXPIRY_RE = re.compile(r"\b([A-Z]{2,5})\s*:\s*(\d{4}-\d{2}-\d{2})\b")
+_VALID_TO_RE = re.compile(
+    r"Valid\s*To\s*:\s*([^\n\r]+?)(?=\n\s*(?:MAH|Holder|Dosage|Manufacturing|Registration|$))",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _canonical_ip_region(raw_region: str) -> str:
+    region = str(raw_region or "").strip().upper()
+    if region in {"EP", "EU"}:
+        return "EU"
+    if region in {"RU", "EA", "EAEU"}:
+        return "EAEU" if region in {"EA", "EAEU"} else "RU"
+    return region
+
+
+def _remaining_months(expiry_date: str) -> Optional[int]:
+    try:
+        year, month, day = [int(part) for part in expiry_date.split("-")]
+        target = date(year, month, day)
+    except Exception:
+        return None
+    today = date.today()
+    return (target.year - today.year) * 12 + (target.month - today.month) - (1 if target.day < today.day else 0)
+
+
+def _extract_valid_to(snippet: str) -> Optional[str]:
+    match = _VALID_TO_RE.search(str(snippet or ""))
+    if not match:
+        return None
+    value = re.sub(r"\s+", " ", match.group(1)).strip(" :;-")
+    if not value or value.lower() in {"n/a", "na", "none", "null"}:
+        return None
+    if value.lower().startswith(("mah", "holder", "dosage", "manufacturing", "registration")):
+        return None
     return value
 
 
@@ -413,6 +493,127 @@ class ExecEvidenceAssembler:
                 missing.append(fact)
         return list(dict.fromkeys(missing))
 
+    def _build_contract_linkage(
+        self,
+        selected_sections: Dict[str, Any],
+        selected_evidence: List[Dict[str, Any]],
+        base_packet: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        evidence_by_ref: Dict[str, Dict[str, Any]] = {}
+        for item in list(selected_evidence) + list((base_packet or {}).get("evidence_registry", []) or []):
+            for ref_key in ("evidence_id", "doc_id"):
+                ref = str(item.get(ref_key) or "").strip()
+                if ref and ref not in evidence_by_ref:
+                    evidence_by_ref[ref] = item
+
+        def _doc_kind(ref: str) -> str:
+            return normalize_exec_doc_kind((evidence_by_ref.get(ref) or {}).get("doc_kind"))
+
+        clinical_linked: List[Dict[str, Any]] = []
+        phase3_with_results_refs = 0
+        for study in selected_sections.get("clinical_studies", []) or []:
+            if not isinstance(study, dict) or not _is_phase3(study.get("phase")):
+                continue
+            refs = _compact_refs(study)
+            result_refs = [
+                ref for ref in refs
+                if _doc_kind(ref) in {"ctgov_results", "ctgov_documents", "publication", "scientific_pmc", "scientific_pdf"}
+            ]
+            if result_refs:
+                phase3_with_results_refs += 1
+            conclusion_text = _value_text(study.get("conclusion"))
+            clinical_linked.append(
+                {
+                    "study_id": _value_text(study.get("study_id")),
+                    "phase": _value_text(study.get("phase")),
+                    "status": _value_text(study.get("status")),
+                    "has_ctgov_results_evidence": bool(result_refs),
+                    "has_result_conclusion": bool(conclusion_text) and not _has_negative_results_phrase(conclusion_text),
+                    "result_evidence_refs": result_refs[:5],
+                }
+            )
+
+        expiry_by_region: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for family in selected_sections.get("patent_families", []) or []:
+            if not isinstance(family, dict):
+                continue
+            family_id = family.get("family_id") or _value_text(family.get("representative_pub")) or "unknown"
+            for item in family.get("expiry_by_country", []) or []:
+                value = _value_text(item)
+                match = _EXPIRY_RE.search(value)
+                if not match:
+                    continue
+                raw_region, expiry_date = match.groups()
+                region = _canonical_ip_region(raw_region)
+                refs = _compact_refs(item) or _compact_refs(family)
+                expiry_by_region[region].append(
+                    {
+                        "family_id": family_id,
+                        "raw_region": raw_region,
+                        "expiry_date": expiry_date,
+                        "remaining_time_months": _remaining_months(expiry_date),
+                        "evidence_refs": refs[:5],
+                    }
+                )
+
+        eaeu_regs: List[Dict[str, Any]] = []
+        eaeu_evidence_snippets = [
+            item for item in selected_evidence
+            if normalize_exec_doc_kind(item.get("doc_kind")) == "eaeu_document"
+        ]
+        for reg in selected_sections.get("registrations", []) or []:
+            if not isinstance(reg, dict) or str(reg.get("region") or "").strip().upper() != "EAEU":
+                continue
+            refs = _compact_refs(reg)
+            snippets = [
+                str((evidence_by_ref.get(ref) or {}).get("snippet") or "")
+                for ref in refs
+            ]
+            snippets.extend(str(item.get("snippet") or "") for item in eaeu_evidence_snippets[:3])
+            valid_to_values = [value for value in (_extract_valid_to(snippet) for snippet in snippets) if value]
+            identifiers = [
+                _value_text(item)
+                for item in reg.get("identifiers", []) or []
+                if _value_text(item)
+            ]
+            forms_strengths = [
+                _value_text(item)
+                for item in reg.get("forms_strengths", []) or []
+                if _value_text(item)
+            ]
+            eaeu_regs.append(
+                {
+                    "status": _value_text(reg.get("status")),
+                    "mah": _value_text(reg.get("mah")),
+                    "identifiers": identifiers[:5],
+                    "forms_strengths": forms_strengths[:6],
+                    "valid_to": valid_to_values[0] if valid_to_values else None,
+                    "valid_to_status": "evidenced" if valid_to_values else "missing_in_source",
+                    "identifier_mah_linked": bool(identifiers and _value_text(reg.get("mah")) and refs),
+                    "strength_traceability": "registration_forms_strengths_present" if forms_strengths else "missing",
+                    "evidence_refs": refs[:8],
+                }
+            )
+
+        ip_regions_required = {"US", "EU", "RU", "EAEU"}
+        expiry_region_map = {region: items for region, items in sorted(expiry_by_region.items())}
+        return {
+            "phase3_results": {
+                "phase3_study_count": len(clinical_linked),
+                "phase3_with_ctgov_results_evidence": phase3_with_results_refs,
+                "studies": clinical_linked[:12],
+            },
+            "ip_window": {
+                "expiry_by_region": expiry_region_map,
+                "missing_required_regions": sorted(ip_regions_required - set(expiry_region_map)),
+            },
+            "eaeu_registration": {
+                "registrations": eaeu_regs[:6],
+                "has_identifier_mah_linkage": any(item["identifier_mah_linked"] for item in eaeu_regs),
+                "has_valid_to": any(item["valid_to"] for item in eaeu_regs),
+            },
+        }
+
     def assemble(
         self,
         base_packet: Dict[str, Any],
@@ -447,6 +648,7 @@ class ExecEvidenceAssembler:
         grouped = self._group_evidence(selected_sections, all_evidence, plan)
         contradictions = self._find_contradictions(selected_sections)
         missing = self._missing_evidence_classes(plan, grouped)
+        contract_linkage = self._build_contract_linkage(selected_sections, all_evidence, base_packet)
         return {
             "question_id": plan.question_id,
             "answer_type": plan.answer_type,
@@ -457,6 +659,7 @@ class ExecEvidenceAssembler:
                 "doc_kinds": list(plan.retrieval_plan.doc_kinds),
                 "queries": list(plan.retrieval_plan.queries),
             },
+            "contract_linkage": contract_linkage,
             "selected_sections": selected_sections,
             "selected_evidence": all_evidence,
             "selected_evidence_ids": [
@@ -484,5 +687,11 @@ class ExecEvidenceAssembler:
                     Counter(str(item.get("doc_kind") or "unknown") for item in all_evidence)
                 ),
                 "geo_count": len(grouped.get("by_geo", {})),
+                "contract_linkage_summary": {
+                    "phase3_with_ctgov_results_evidence": contract_linkage.get("phase3_results", {}).get("phase3_with_ctgov_results_evidence", 0),
+                    "ip_regions_with_expiry": sorted((contract_linkage.get("ip_window", {}).get("expiry_by_region") or {}).keys()),
+                    "eaeu_has_valid_to": contract_linkage.get("eaeu_registration", {}).get("has_valid_to", False),
+                    "eaeu_has_identifier_mah_linkage": contract_linkage.get("eaeu_registration", {}).get("has_identifier_mah_linkage", False),
+                },
             },
         }

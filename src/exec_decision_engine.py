@@ -325,15 +325,27 @@ class ExecDecisionEngine:
         for section in block_spec.sections:
             selected_refs.update(_iter_evidence_refs(packet.get(section)))
         evidence_registry = dossier.get("evidence_registry", []) or []
-        filtered_evidence = []
+        section_linked_evidence = []
+        allowed_kind_evidence = []
+        seen_evidence = set()
         allowed_doc_kinds = set(packet["allowed_doc_kinds"])
         for item in evidence_registry:
             evidence_id = str(item.get("evidence_id") or "")
             doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
-            if evidence_id in selected_refs or doc_kind in allowed_doc_kinds:
-                filtered_evidence.append(item)
-                if evidence_id:
-                    selected_refs.add(evidence_id)
+            if evidence_id in seen_evidence:
+                continue
+            if evidence_id in selected_refs:
+                section_linked_evidence.append(item)
+                seen_evidence.add(evidence_id)
+                continue
+            if doc_kind in allowed_doc_kinds:
+                allowed_kind_evidence.append(item)
+                seen_evidence.add(evidence_id)
+        filtered_evidence = section_linked_evidence + allowed_kind_evidence
+        for item in filtered_evidence[:80]:
+            evidence_id = str(item.get("evidence_id") or "")
+            if evidence_id:
+                selected_refs.add(evidence_id)
         packet["evidence_registry"] = filtered_evidence[:80]
         packet["evidence_ids"] = list(selected_refs)[:120]
         packet["critical_unknowns"] = (

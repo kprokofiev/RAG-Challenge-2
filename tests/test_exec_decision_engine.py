@@ -172,6 +172,38 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertEqual([item["region"] for item in packet["registrations"]], ["RU"])
         self.assertTrue(packet["critical_unknowns"])
 
+    def test_packet_builder_preserves_section_linked_evidence_before_truncation(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["asset_attractiveness"]
+        dossier = _sample_dossier()
+        dossier["clinical_studies"][0]["evidence_refs"] = ["ev-linked-late"]
+        dossier["clinical_studies"][0]["phase"]["evidence_refs"] = ["ev-linked-late"]
+        dossier["evidence_registry"] = [
+            {
+                "evidence_id": f"ev-filler-{idx}",
+                "doc_id": f"doc-filler-{idx}",
+                "page": 1,
+                "snippet": "FDA filler",
+                "doc_kind": "us_fda",
+            }
+            for idx in range(100)
+        ] + [
+            {
+                "evidence_id": "ev-linked-late",
+                "doc_id": "doc-linked",
+                "page": 1,
+                "snippet": "Late Phase 3 ctgov results",
+                "doc_kind": "ctgov_results",
+            }
+        ]
+
+        packet = engine._build_packet(dossier, "case-1", block_spec)
+
+        self.assertIn(
+            "ev-linked-late",
+            {item.get("evidence_id") for item in packet["evidence_registry"]},
+        )
+
     def test_sufficiency_gate_flags_unknowns(self):
         engine = ExecDecisionEngine()
         output = ExecReasonerOutput(
@@ -412,6 +444,68 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertIn("selected_evidence", evidence_packet)
         self.assertTrue(any(item["doc_kind"] == "ru_registration_export" for item in evidence_packet["selected_evidence"]))
         self.assertIn("direct_ru_registration_confirmation", evidence_packet["missing_evidence_classes"])
+
+    def test_evidence_assembler_emits_contract_linkage(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "allowed_doc_kinds": ["ctgov_results", "patent_expiry_us", "eaeu_document"],
+            "required_sections": ["clinical_studies", "patent_families", "registrations"],
+            "clinical_studies": [
+                {
+                    "study_id": {"value": "NCT-1", "evidence_refs": ["ev-clin"]},
+                    "phase": {"value": "Phase 3", "evidence_refs": ["ev-clin"]},
+                    "status": {"value": "Completed", "evidence_refs": ["ev-clin"]},
+                    "conclusion": {"value": "Primary endpoint results were reported.", "evidence_refs": ["ev-clin"]},
+                    "evidence_refs": ["ev-clin"],
+                }
+            ],
+            "patent_families": [
+                {
+                    "family_id": "fam-1",
+                    "representative_pub": {"value": "US123", "evidence_refs": ["ev-pat-us"]},
+                    "expiry_by_country": [
+                        {"value": "US: 2046-02-12", "evidence_refs": ["ev-pat-us"]},
+                        {"value": "EP: 2046-03-04", "evidence_refs": ["ev-pat-eu"]},
+                    ],
+                    "evidence_refs": ["ev-pat-us", "ev-pat-eu"],
+                }
+            ],
+            "registrations": [
+                {
+                    "region": "EAEU",
+                    "status": {"value": "Authorised", "evidence_refs": ["ev-eaeu"]},
+                    "mah": {"value": "MAH Ltd", "evidence_refs": ["ev-eaeu"]},
+                    "identifiers": [{"value": "LP-001", "evidence_refs": ["ev-eaeu"]}],
+                    "forms_strengths": [{"value": "tablet | 5 mg", "evidence_refs": ["ev-eaeu"]}],
+                    "evidence_refs": ["ev-eaeu"],
+                }
+            ],
+            "evidence_registry": [
+                {"evidence_id": "ev-clin", "doc_id": "doc-clin", "doc_kind": "ctgov_results", "snippet": "Phase 3 primary endpoint results"},
+                {"evidence_id": "ev-pat-us", "doc_id": "doc-pat-us", "doc_kind": "patent_expiry_us", "snippet": "US: 2046-02-12"},
+                {"evidence_id": "ev-pat-eu", "doc_id": "doc-pat-eu", "doc_kind": "patent_expiry_us", "snippet": "EP: 2046-03-04"},
+                {"evidence_id": "ev-eaeu", "doc_id": "doc-eaeu", "doc_kind": "eaeu_document", "snippet": "Status: Authorised\nValid To:\nMAH (Holder): MAH Ltd"},
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="asset_attractiveness",
+            answer_type="go_no_go",
+            needed_dossier_sections=["clinical_studies", "patent_families", "registrations"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["ctgov_results", "patent_expiry_us", "eaeu_document"],
+                queries=["apixaban evidence"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        self.assertEqual(linkage["phase3_results"]["phase3_with_ctgov_results_evidence"], 1)
+        self.assertIn("US", linkage["ip_window"]["expiry_by_region"])
+        self.assertIn("EU", linkage["ip_window"]["expiry_by_region"])
+        self.assertIn("RU", linkage["ip_window"]["missing_required_regions"])
+        self.assertFalse(linkage["eaeu_registration"]["has_valid_to"])
+        self.assertTrue(linkage["eaeu_registration"]["has_identifier_mah_linkage"])
 
     def test_retrieval_assembler_expands_queries_but_keeps_canonical_filter(self):
         class FakeRetriever:
