@@ -525,6 +525,7 @@ class ExecVerifierTests(unittest.TestCase):
             next_actions=[],
         )
         packet = _sample_dossier()
+        packet["dossier_quality_v2"]["decision_readiness"]["context_integrity"] = "GREEN"
         packet["registrations"][0]["status"] = {"value": "active", "evidence_refs": ["ev-reg-ru"]}
         packet["commercial_signals"][0]["verdict"] = "confirmed"
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
@@ -546,6 +547,32 @@ class ExecVerifierTests(unittest.TestCase):
                 "The RU packet confirms ACTIVE registration and RU commercial support, "
                 "but the answer still points to LEGAL_STATUS_NOT_AVAILABLE and asks for "
                 "non-suspension/non-revocation confirmation."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["dossier_quality_v2"]["decision_readiness"]["context_integrity"] = "GREEN"
+        packet["registrations"][0]["status"] = {"value": "active", "evidence_refs": ["ev-reg-ru"]}
+        packet["commercial_signals"][0]["verdict"] = "confirmed"
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+
+    def test_verifier_repairs_rf_entry_when_procurement_or_route_corroboration_overconstrains(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="NO_GO",
+            confidence="MEDIUM",
+            sufficiency="INSUFFICIENT",
+            short_answer="RU GRLS is active, but procurement shows no matching rows and route/dosage form is not corroborated beyond GRLS.",
+            full_answer=(
+                "RU commercial signals are otherwise confirmed, but the answer still blocks on no matching procurement rows "
+                "and says it lacks a clear RU instruction / identity fields beyond GRLS."
             ),
             why_this_verdict=[],
             decision_blockers=[],
@@ -588,6 +615,32 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.verdict, "HOLD")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
+
+    def test_verifier_downgrades_conditional_go_with_blockers_to_hold(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Conditional go despite unresolved blockers.",
+            full_answer="Positive verdict conflicts with explicit blockers.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "blk-1",
+                    "title": "Missing payer evidence",
+                    "severity": "MUST_VERIFY_NOW",
+                    "rationale": "Still unresolved.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+        )
+        repaired, verification = verifier.verify_and_repair(block, _sample_dossier(), block_spec=None, allow_repair=True)
+        self.assertEqual(repaired.verdict, "HOLD")
+        self.assertEqual(verification.overall_status, "PASS")
 
 
 class ExecRetrievalEscalationTests(unittest.TestCase):

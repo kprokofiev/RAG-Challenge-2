@@ -289,6 +289,8 @@ class ExecVerifier:
             return False
         if _positive_commercial_signal_count(packet, "RU") <= 0:
             return False
+        if not _has_context_integrity_green(packet):
+            return False
         text = _block_text(block).lower()
         scope_markers = (
             "eaeu",
@@ -300,6 +302,11 @@ class ExecVerifier:
             "non-suspension",
             "non-revocation",
             "legal/entry-critical readiness",
+            "procurement",
+            "no matching procurement rows",
+            "route/dosage form",
+            "identity fields beyond grls",
+            "lacks a clear ru instruction",
         )
         return any(marker in text for marker in scope_markers) and not _has_explicit_negative_evidence(text)
 
@@ -489,7 +496,7 @@ class ExecVerifier:
             )
 
         if any(issue.issue_type == "verdict_blocker_conflict" for issue in verification.issues):
-            if repaired.verdict == "GO":
+            if repaired.verdict in {"GO", "CONDITIONAL_GO"}:
                 repaired.verdict = "HOLD"
             elif repaired.verdict == "OPEN":
                 repaired.verdict = "LIMITED"
