@@ -305,7 +305,11 @@ class ExecVerifier:
         allow_repair: bool = True,
     ) -> Tuple[ExecDecisionBlock, ExecVerificationReport]:
         verification = self.verify_block(block, packet, block_spec)
-        if verification.overall_status != "FAIL" or not allow_repair:
+        reparable_warns = {"confidence_mismatch", "missing_partial_route_caveat"}
+        has_reparable_warn = any(
+            issue.issue_type in reparable_warns for issue in verification.issues
+        )
+        if (verification.overall_status != "FAIL" and not has_reparable_warn) or not allow_repair:
             return block, verification
         repaired_block, repaired_verification = self.repair_block(block, packet, verification)
         return repaired_block, repaired_verification

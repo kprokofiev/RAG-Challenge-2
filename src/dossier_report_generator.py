@@ -3342,6 +3342,8 @@ class DossierReportGenerator:
                 locator=f"{locator_prefix}/{key}",
             )
             self._evidence_registry[ev.evidence_id] = ev
+            if region_label == "RU" and doc_kind == "grls":
+                return None, "indefinite", [ev.evidence_id]
             return None, "missing_in_source", [ev.evidence_id]
 
         for key in type_keys:
@@ -5179,6 +5181,41 @@ class DossierReportGenerator:
                 # No RU registration from LLM at all — create a minimal stub
                 # so the deterministic status isn't silently lost.
                 pass  # Don't create a stub without reg_number — would be misleading
+
+        # Deterministic fallback for US registration status.
+        # FDA approval letters / Drugs@FDA pages are sufficient to confirm an
+        # approved US registration when the LLM extracts identifiers/forms/MAH
+        # but misses the explicit status string.
+        us_status_doc_kinds = {"approval_letter", "us_fda", "label"}
+        for us_reg in [r for r in registrations if r.region.upper() == "US"]:
+            if us_reg.status and us_reg.status.value:
+                continue
+            candidate_ev_id = None
+            for ev_id in us_reg.evidence_refs:
+                ev = self._evidence_registry.get(ev_id)
+                if ev and (ev.doc_kind or "").lower() in us_status_doc_kinds:
+                    candidate_ev_id = ev.evidence_id
+                    break
+            if candidate_ev_id is None:
+                for ev in self._evidence_registry.values():
+                    if (ev.doc_kind or "").lower() in us_status_doc_kinds:
+                        candidate_ev_id = ev.evidence_id
+                        break
+            if candidate_ev_id is None:
+                continue
+            has_us_reg_signal = bool(us_reg.identifiers or us_reg.mah or us_reg.forms_strengths)
+            if not has_us_reg_signal:
+                continue
+            us_reg.status = EvidencedValue(
+                value="approved",
+                evidence_refs=[candidate_ev_id],
+            )
+            if candidate_ev_id not in us_reg.evidence_refs:
+                us_reg.evidence_refs.append(candidate_ev_id)
+            logger.info(
+                "us_reg_status patched by deterministic approval evidence: ev=%s",
+                candidate_ev_id,
+            )
 
         if not any(r.region.upper() == "EAEU" for r in registrations):
             registrations.extend(self._derive_eaeu_registrations_from_ru_route_markers(registrations))

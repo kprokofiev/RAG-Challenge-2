@@ -2115,6 +2115,14 @@ def compute_dossier_quality_v2(
     if missing_expected_regions and registrations_gate == "GREEN":
         registrations_gate = "YELLOW"
 
+    eaeu_missing_validity = [
+        r for r in report.registrations
+        if (r.region or "").upper().strip() == "EAEU"
+        and (getattr(r, "validity_type", "") or "missing_in_source") == "missing_in_source"
+    ]
+    if eaeu_missing_validity and registrations_gate == "GREEN":
+        registrations_gate = "YELLOW"
+
     # Sprint 13 WS3: Clinical readiness — semantic-aware gate
     # Uses both field coverage AND core-field completeness
     clinical_cov = coverage.get("clinical", 0)
@@ -2269,6 +2277,12 @@ def compute_dossier_quality_v2(
             "count": len(missing_expected_regions),
             "impact": f"Expected regions {missing_expected_regions} have no registration data",
         })
+    if eaeu_missing_validity:
+        critical_unknowns.append({
+            "reason_code": "EAEU_VALIDITY_NOT_CONFIRMED",
+            "count": len(eaeu_missing_validity),
+            "impact": f"registrations={registrations_gate}",
+        })
 
     notes: List[str] = []
     if ctx_count > 1:
@@ -2299,6 +2313,10 @@ def compute_dossier_quality_v2(
     if passport_scope == "multi_regional_context" and context_integrity == "GREEN":
         notes.append(
             f"{ctx_count} regional product contexts are route/form-converged but kept separate by region/MAH/registration identity"
+        )
+    if eaeu_missing_validity:
+        notes.append(
+            "EAEU registration validity remains missing in the source snapshot (blank valid_to / end-date); do not treat current authorization term as date-verified."
         )
     if us_expiry_expected and not us_expiry_covered:
         notes.append("US patent expiry evidence is still missing; do not treat US/EU expiry as fully verified.")

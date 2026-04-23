@@ -458,6 +458,29 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.why_this_verdict[0].claim_type, "hard_evidence_backed")
         self.assertEqual(repaired.why_this_verdict[0].evidence_refs, ["ev-clin-results"])
 
+    def test_verifier_repairs_confidence_mismatch_warns(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="generic_opportunity",
+            title="Generic opportunity",
+            verdict="NOT_EVIDENCED",
+            confidence="HIGH",
+            sufficiency="PARTIAL",
+            short_answer="Insufficient",
+            full_answer="Insufficient",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        repaired, verification = verifier.verify_and_repair(
+            block,
+            {"evidence_ids": [], "critical_unknowns": []},
+            block_spec=None,
+            allow_repair=True,
+        )
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.confidence, "LOW")
+
 
 class ExecRetrievalEscalationTests(unittest.TestCase):
     def test_commercial_priority_prefers_source_native(self):
