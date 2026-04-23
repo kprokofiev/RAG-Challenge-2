@@ -15,6 +15,7 @@ import redis as redis_lib
 from src.pipeline import Pipeline
 from src.dd_report_generator import DDReportGenerator
 from src.dossier_report_generator import DossierReportGenerator, RateLimitExhausted
+from src.dossier_schema_v3 import sync_run_manifest_counts
 from src.case_view_v2_generator import CaseViewV2Generator
 from src.pubmed_pipeline import PubMedIngestor
 from src.storage_client import StorageClient
@@ -2255,6 +2256,7 @@ class DossierGenerateProcessor:
                         ] if dossier else None,
                     )
                     dossier.coverage_ledger = coverage_ledger
+                    sync_run_manifest_counts(dossier)
                     logger.info(
                         "coverage_ledger_built case=%s readiness=%s declared=%d indexed=%d",
                         case_id,

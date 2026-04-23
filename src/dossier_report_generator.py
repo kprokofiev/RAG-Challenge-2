@@ -46,6 +46,7 @@ from src.dossier_schema_v3 import (
     build_product_contexts,
     classify_synthesis_kind,
     compute_dossier_quality_v2,
+    sync_run_manifest_counts,
 )
 from src.evidence_builder import EvidenceCandidatesBuilder
 from src.registration_truth import (
@@ -7169,6 +7170,7 @@ class DossierReportGenerator:
             operator_actions=operator_actions,
             critical_failures=_critical_failures,
         )
+        sync_run_manifest_counts(report)
 
         logger.info(
             "DossierReport v3.0 assembled: contexts=%d registrations=%d "

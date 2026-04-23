@@ -586,6 +586,43 @@ class DossierReport(BaseModel):
         extra = "allow"
 
 
+def sync_run_manifest_counts(report: DossierReport) -> None:
+    """
+    Keep run_manifest telemetry aligned with evidence_registry / coverage_ledger.
+
+    `run_manifest` is the reproducibility header customers see first; it should
+    never report zero attached/indexed docs when the dossier contains evidence or
+    a coverage ledger with non-zero corpus totals.
+    """
+    if report.run_manifest is None:
+        return
+
+    ledger_totals = ((report.coverage_ledger or {}).get("totals") or {})
+    evidence_doc_ids = {
+        str(ev.doc_id).strip()
+        for ev in report.evidence_registry or []
+        if str(getattr(ev, "doc_id", "") or "").strip()
+    }
+    evidence_doc_count = len(evidence_doc_ids)
+
+    attached_docs = int(ledger_totals.get("attached_docs") or 0)
+    indexed_docs = int(ledger_totals.get("indexed_docs") or 0)
+    failed_docs = int(
+        ledger_totals.get("failed_docs")
+        or ledger_totals.get("docs_failed")
+        or 0
+    )
+
+    if attached_docs <= 0:
+        attached_docs = evidence_doc_count
+    if indexed_docs <= 0:
+        indexed_docs = evidence_doc_count
+
+    report.run_manifest.docs_attached = attached_docs
+    report.run_manifest.docs_indexed = indexed_docs
+    report.run_manifest.docs_failed = failed_docs
+
+
 # ── Exec Decision Engine v1 ───────────────────────────────────────────────────
 
 ExecClaimType = Literal["hard_evidence_backed", "inference", "tentative"]
