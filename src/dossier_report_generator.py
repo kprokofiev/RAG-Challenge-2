@@ -551,6 +551,38 @@ _COMMERCIAL_SOURCE_PRIORITY = {
     "payer_policy": 38,
 }
 
+_EAEU_RECORD_SPLIT_RE = re.compile(r"(?m)^##\s*Record\s+\d+\s*$")
+_EAEU_ESKLP_HIT_SPLIT_RE = re.compile(r"(?m)^##\s*Hit\s+\d+\s*$")
+_LABELED_LINE_RE_TEMPLATE = r"(?im)^\s*(?:{labels})\s*:\s*(.+?)\s*$"
+
+
+def _normalized_text_key(raw: str) -> str:
+    text = str(raw or "").strip().upper().replace("№", "N")
+    return re.sub(r"[^0-9A-ZА-Я]+", "", text)
+
+
+def _normalized_registration_key(raw: str) -> str:
+    return _normalized_text_key(raw)
+
+
+def _iso_date_from_dotted_text(raw: str) -> Optional[str]:
+    value = str(raw or "").strip()
+    match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", value)
+    if not match:
+        return None
+    day, month, year = match.groups()
+    return f"{year}-{month}-{day}"
+
+
+def _extract_labeled_line(text: str, *labels: str) -> str:
+    if not text or not labels:
+        return ""
+    pattern = _LABELED_LINE_RE_TEMPLATE.format(
+        labels="|".join(re.escape(label) for label in labels)
+    )
+    match = re.search(pattern, text)
+    return re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+
 
 def _build_evidence(doc_id: str, page: Optional[int], snippet: str,
                     title: Optional[str], source_url: Optional[str],
@@ -879,6 +911,9 @@ class DossierReportGenerator:
         )
         self._source_verdicts: Dict[str, str] = {}
         self._synthesis_reranker: Optional[LLMReranker] = None
+        self._parsed_doc_text_cache: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
+        self._eaeu_text_registration_index_cache: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        self._eaeu_esklp_summary_cache: Optional[List[Dict[str, Any]]] = None
 
     @staticmethod
     def _clone_results(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1140,6 +1175,289 @@ class DossierReportGenerator:
                 record[key] = value
         return record
 
+    def _parsed_doc_texts(self, allowed_doc_kinds: set[str]) -> List[Dict[str, Any]]:
+        cache_key = tuple(sorted(allowed_doc_kinds))
+        cached = self._parsed_doc_text_cache.get(cache_key)
+        if cached is not None:
+            return [dict(item) for item in cached]
+
+        collected: Dict[str, Dict[str, Any]] = {}
+        for chunk in self._iter_parsed_doc_chunks(set(), allowed_doc_kinds=allowed_doc_kinds) or []:
+            doc_id = str(chunk.get("doc_id") or "")
+            if not doc_id:
+                continue
+            item = collected.setdefault(
+                doc_id,
+                {
+                    "doc_id": doc_id,
+                    "doc_kind": str(chunk.get("doc_kind") or "").strip().lower(),
+                    "doc_title": chunk.get("doc_title") or doc_id,
+                    "source_url": chunk.get("source_url") or "",
+                    "content_hash": chunk.get("content_hash"),
+                    "parts": [],
+                },
+            )
+            item["parts"].append(str(chunk.get("text") or ""))
+
+        normalized: List[Dict[str, Any]] = []
+        for item in collected.values():
+            parts = item.pop("parts", [])
+            item["text"] = "\n".join(part for part in parts if part)
+            normalized.append(item)
+
+        self._parsed_doc_text_cache[cache_key] = [dict(item) for item in normalized]
+        return [dict(item) for item in normalized]
+
+    def _register_derived_evidence(
+        self,
+        *,
+        doc_id: str,
+        doc_title: str,
+        source_url: str,
+        doc_kind: str,
+        content_hash: Optional[str],
+        locator: str,
+        snippet: str,
+    ) -> str:
+        evidence = _build_evidence(
+            doc_id,
+            None,
+            snippet,
+            doc_title,
+            source_url,
+            doc_kind=doc_kind,
+            content_hash=content_hash,
+            locator=locator,
+        )
+        self._evidence_registry[evidence.evidence_id] = evidence
+        return evidence.evidence_id
+
+    @staticmethod
+    def _eaeu_status_rank(status_raw: str) -> int:
+        status = str(status_raw or "").strip().lower()
+        if not status:
+            return 0
+        if any(marker in status for marker in ("действует", "active", "authorised", "authorized", "approved")):
+            return 3
+        if any(marker in status for marker in ("не действует", "withdrawn", "revoked", "expired", "cancelled", "canceled")):
+            return 1
+        return 2
+
+    def _extract_eaeu_text_registration_index(self) -> Dict[str, List[Dict[str, Any]]]:
+        if self._eaeu_text_registration_index_cache is not None:
+            return {
+                key: [dict(item) for item in value]
+                for key, value in self._eaeu_text_registration_index_cache.items()
+            }
+
+        index: Dict[str, List[Dict[str, Any]]] = {}
+        seen: set[Tuple[str, str, str, str, str]] = set()
+
+        for doc in self._parsed_doc_texts({"eaeu_document"}):
+            text = str(doc.get("text") or "")
+            if "Окончание:" not in text or ("Номер РУ:" not in text and "Рег. номер:" not in text):
+                continue
+            blocks = [
+                block.strip()
+                for block in _EAEU_RECORD_SPLIT_RE.split(text)
+                if ("Номер РУ:" in block or "Рег. номер:" in block)
+            ]
+            for idx, block in enumerate(blocks):
+                reg_no = _extract_labeled_line(block, "Номер РУ", "Рег. номер")
+                reg_key = _normalized_registration_key(reg_no)
+                if not reg_key:
+                    continue
+                holder = _extract_labeled_line(block, "Держатель РУ", "MAH (Holder)", "Holder")
+                status_raw = _extract_labeled_line(block, "Статус РУ", "Status", "Registration status")
+                valid_to_raw = _extract_labeled_line(block, "Окончание", "Valid To", "Valid until")
+                valid_to_iso = (
+                    _iso_date_from_dotted_text(valid_to_raw)
+                    or (valid_to_raw if re.match(r"\d{4}-\d{2}-\d{2}$", valid_to_raw) else None)
+                )
+                trade_name = _extract_labeled_line(block, "Торговое наименование", "Trade name")
+                jnvlp_raw = _extract_labeled_line(block, "ЖНВЛП")
+                dosage = _extract_labeled_line(block, "Дозировка ГРЛС", "Дозировки")
+                dosage_form = _extract_labeled_line(block, "Лек. форма ГРЛС", "Лек. форма")
+                dedupe_key = (
+                    str(doc.get("doc_id") or ""),
+                    reg_key,
+                    _normalized_text_key(holder),
+                    status_raw,
+                    valid_to_iso or valid_to_raw,
+                )
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+
+                lines_for_summary = [f"Номер РУ: {reg_no}"]
+                if holder:
+                    lines_for_summary.append(f"Держатель РУ: {holder}")
+                if valid_to_raw:
+                    lines_for_summary.append(f"Окончание: {valid_to_raw}")
+                if status_raw:
+                    lines_for_summary.append(f"Статус РУ: {status_raw}")
+
+                reg_ref = self._register_derived_evidence(
+                    doc_id=str(doc.get("doc_id") or ""),
+                    doc_title=str(doc.get("doc_title") or doc.get("doc_id") or ""),
+                    source_url=str(doc.get("source_url") or ""),
+                    doc_kind=str(doc.get("doc_kind") or "eaeu_document"),
+                    content_hash=doc.get("content_hash"),
+                    locator=f"$.derived.eaeu_export.record[{idx}].reg_no",
+                    snippet="\n".join(lines_for_summary[:2]),
+                )
+                valid_ref = None
+                if valid_to_raw:
+                    valid_ref = self._register_derived_evidence(
+                        doc_id=str(doc.get("doc_id") or ""),
+                        doc_title=str(doc.get("doc_title") or doc.get("doc_id") or ""),
+                        source_url=str(doc.get("source_url") or ""),
+                        doc_kind=str(doc.get("doc_kind") or "eaeu_document"),
+                        content_hash=doc.get("content_hash"),
+                        locator=f"$.derived.eaeu_export.record[{idx}].valid_to",
+                        snippet=f"Номер РУ: {reg_no}\nОкончание: {valid_to_raw}",
+                    )
+                status_ref = None
+                if status_raw:
+                    status_ref = self._register_derived_evidence(
+                        doc_id=str(doc.get("doc_id") or ""),
+                        doc_title=str(doc.get("doc_title") or doc.get("doc_id") or ""),
+                        source_url=str(doc.get("source_url") or ""),
+                        doc_kind=str(doc.get("doc_kind") or "eaeu_document"),
+                        content_hash=doc.get("content_hash"),
+                        locator=f"$.derived.eaeu_export.record[{idx}].status",
+                        snippet=f"Номер РУ: {reg_no}\nСтатус РУ: {status_raw}",
+                    )
+                jnvlp_ref = None
+                if jnvlp_raw:
+                    jnvlp_ref = self._register_derived_evidence(
+                        doc_id=str(doc.get("doc_id") or ""),
+                        doc_title=str(doc.get("doc_title") or doc.get("doc_id") or ""),
+                        source_url=str(doc.get("source_url") or ""),
+                        doc_kind=str(doc.get("doc_kind") or "eaeu_document"),
+                        content_hash=doc.get("content_hash"),
+                        locator=f"$.derived.eaeu_export.record[{idx}].jnvlp",
+                        snippet=f"Номер РУ: {reg_no}\nЖНВЛП: {jnvlp_raw}",
+                    )
+
+                record = {
+                    "doc_id": str(doc.get("doc_id") or ""),
+                    "doc_title": str(doc.get("doc_title") or doc.get("doc_id") or ""),
+                    "source_url": str(doc.get("source_url") or ""),
+                    "doc_kind": str(doc.get("doc_kind") or "eaeu_document"),
+                    "content_hash": doc.get("content_hash"),
+                    "reg_no": reg_no,
+                    "reg_key": reg_key,
+                    "holder": holder,
+                    "holder_key": _normalized_text_key(holder),
+                    "status_raw": status_raw,
+                    "trade_name": trade_name,
+                    "trade_name_key": _normalized_text_key(trade_name),
+                    "valid_to_raw": valid_to_raw,
+                    "valid_to_iso": valid_to_iso,
+                    "jnvlp_raw": jnvlp_raw,
+                    "dosage": dosage,
+                    "dosage_form": dosage_form,
+                    "reg_ref": reg_ref,
+                    "status_ref": status_ref,
+                    "validity_evidence_refs": [ref for ref in [valid_ref] if ref],
+                    "status_evidence_refs": [ref for ref in [status_ref] if ref],
+                    "jnvlp_evidence_refs": [ref for ref in [jnvlp_ref] if ref],
+                }
+                index.setdefault(reg_key, []).append(record)
+
+        self._eaeu_text_registration_index_cache = {
+            key: [dict(item) for item in value]
+            for key, value in index.items()
+        }
+        return {
+            key: [dict(item) for item in value]
+            for key, value in index.items()
+        }
+
+    def _match_eaeu_text_registration(
+        self,
+        reg_no: str,
+        holder: str,
+    ) -> Optional[Dict[str, Any]]:
+        reg_key = _normalized_registration_key(reg_no)
+        if not reg_key:
+            return None
+        candidates = list(self._extract_eaeu_text_registration_index().get(reg_key) or [])
+        if not candidates:
+            return None
+
+        holder_key = _normalized_text_key(holder)
+        if holder_key:
+            holder_matches = [
+                item for item in candidates
+                if item.get("holder_key")
+                and (
+                    holder_key in str(item.get("holder_key") or "")
+                    or str(item.get("holder_key") or "") in holder_key
+                )
+            ]
+            if holder_matches:
+                candidates = holder_matches
+
+        def _score(item: Dict[str, Any]) -> Tuple[int, int, int]:
+            return (
+                self._eaeu_status_rank(str(item.get("status_raw") or "")),
+                1 if item.get("valid_to_iso") else 0,
+                1 if item.get("holder_key") == holder_key and holder_key else 0,
+            )
+
+        return max(candidates, key=_score)
+
+    def _extract_eaeu_esklp_summaries(self) -> List[Dict[str, Any]]:
+        if self._eaeu_esklp_summary_cache is not None:
+            return [dict(item) for item in self._eaeu_esklp_summary_cache]
+
+        summaries: List[Dict[str, Any]] = []
+        for doc in self._parsed_doc_texts({"eaeu_document"}):
+            text = str(doc.get("text") or "")
+            title = str(doc.get("doc_title") or "")
+            if "Detected hits:" not in text or ("ESKLP" not in text and "esklp" not in title.lower()):
+                continue
+            detected_hits_match = re.search(r"Detected hits:\s*(\d+)", text)
+            detected_hits = int(detected_hits_match.group(1)) if detected_hits_match else 0
+            reg_numbers: List[str] = []
+            strengths: List[str] = []
+            row_count = 0
+            for block in _EAEU_ESKLP_HIT_SPLIT_RE.split(text):
+                row = _extract_labeled_line(block, "Row")
+                if not row:
+                    continue
+                row_count += 1
+                columns = [part.strip() for part in row.split("|")]
+                reg_candidates = [item for item in columns if "(РГ-RU)" in item or "(RG-RU)" in item.upper()]
+                if reg_candidates:
+                    reg_numbers.extend(reg_candidates[:1])
+                for idx in range(len(columns) - 1):
+                    if re.match(r"^\d+(?:\.\d+)?$", columns[idx]) and columns[idx + 1].lower() in {"мг", "mg"}:
+                        strengths.append(f"{columns[idx]} {columns[idx + 1]}")
+                        break
+
+            reg_numbers = list(dict.fromkeys(item for item in reg_numbers if item))
+            strengths = list(dict.fromkeys(item for item in strengths if item))
+            if not detected_hits and not row_count:
+                continue
+            summaries.append(
+                {
+                    "doc_id": str(doc.get("doc_id") or ""),
+                    "doc_title": title or str(doc.get("doc_id") or ""),
+                    "source_url": str(doc.get("source_url") or ""),
+                    "doc_kind": str(doc.get("doc_kind") or "eaeu_document"),
+                    "content_hash": doc.get("content_hash"),
+                    "detected_hits": detected_hits or row_count,
+                    "reg_numbers": reg_numbers,
+                    "strengths": strengths,
+                }
+            )
+
+        self._eaeu_esklp_summary_cache = [dict(item) for item in summaries]
+        return [dict(item) for item in summaries]
+
     def _commercial_doc_kinds(self) -> set[str]:
         raw = settings.ddkit_commercial_signal_doc_kinds or ""
         return {
@@ -1254,6 +1572,182 @@ class DossierReportGenerator:
             retrieved_at=retrieved_at,
         )
         return signal
+
+    def _append_eaeu_derived_commercial_signals(
+        self,
+        signals: Dict[Tuple[str, str], DossierCommercialSignal],
+        signal_order: List[Tuple[str, str]],
+    ) -> None:
+        registration_index = self._extract_eaeu_text_registration_index()
+        seen_records: Dict[Tuple[str, str, str, str], Dict[str, Any]] = {}
+        for records in registration_index.values():
+            for record in records:
+                dedupe_key = (
+                    str(record.get("reg_key") or ""),
+                    str(record.get("holder_key") or ""),
+                    str(record.get("status_raw") or ""),
+                    str(record.get("valid_to_iso") or record.get("valid_to_raw") or ""),
+                )
+                seen_records[dedupe_key] = record
+
+        registration_records = list(seen_records.values())
+        if registration_records:
+            anchor = registration_records[0]
+            active_count = sum(
+                1 for item in registration_records
+                if self._eaeu_status_rank(str(item.get("status_raw") or "")) >= 3
+            )
+            trade_count = len({item.get("trade_name_key") for item in registration_records if item.get("trade_name_key")})
+            mah_count = len({item.get("holder_key") for item in registration_records if item.get("holder_key")})
+            jnvlp_yes_rows = sum(
+                1 for item in registration_records
+                if "да" in str(item.get("jnvlp_raw") or "").strip().lower()
+            )
+            reg_summary = (
+                f"EAEU registration export summary contains {len(registration_records)} matching rows, "
+                f"{active_count} active registration rows, {trade_count} trade names, and {mah_count} MAH holders for {self.inn}."
+            )
+            reg_evidence_id = self._register_derived_evidence(
+                doc_id=str(anchor.get("doc_id") or ""),
+                doc_title=str(anchor.get("doc_title") or anchor.get("doc_id") or ""),
+                source_url=str(anchor.get("source_url") or ""),
+                doc_kind=str(anchor.get("doc_kind") or "eaeu_document"),
+                content_hash=anchor.get("content_hash"),
+                locator="$.derived.eaeu_export.registration_footprint",
+                snippet=reg_summary,
+            )
+            signal = self._upsert_commercial_signal(
+                signals,
+                signal_order,
+                region="EAEU",
+                category="registration_footprint",
+                verdict="confirmed" if active_count else "partial",
+                summary=reg_summary,
+                evidence_id=reg_evidence_id,
+                source_name=str(anchor.get("doc_title") or "eaeu_document"),
+                source_tier="support_summary",
+                source_priority=56,
+            )
+            signal.metrics.extend([
+                DossierCommercialMetric(
+                    name="matching_rows",
+                    value=EvidencedValue(value=str(len(registration_records)), evidence_refs=[reg_evidence_id]),
+                ),
+                DossierCommercialMetric(
+                    name="active_registration_count",
+                    value=EvidencedValue(value=str(active_count), evidence_refs=[reg_evidence_id]),
+                ),
+                DossierCommercialMetric(
+                    name="trade_name_count",
+                    value=EvidencedValue(value=str(trade_count), evidence_refs=[reg_evidence_id]),
+                ),
+                DossierCommercialMetric(
+                    name="mah_count",
+                    value=EvidencedValue(value=str(mah_count), evidence_refs=[reg_evidence_id]),
+                ),
+            ])
+            if mah_count:
+                self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region="EAEU",
+                    category="mah_landscape",
+                    verdict="confirmed" if active_count else "partial",
+                    summary=f"EAEU registration export lists {mah_count} MAH holder(s) for {self.inn}.",
+                    evidence_id=reg_evidence_id,
+                    source_name=str(anchor.get("doc_title") or "eaeu_document"),
+                    source_tier="support_summary",
+                    source_priority=56,
+                )
+            if jnvlp_yes_rows:
+                jnvlp_signal = self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region="EAEU",
+                    category="jnvlp_status",
+                    verdict="partial",
+                    summary=(
+                        f"EAEU registration export marks {jnvlp_yes_rows} row(s) as JNVLP-positive for {self.inn}; "
+                        "this is RU access evidence linked to EAEU registration identities."
+                    ),
+                    evidence_id=reg_evidence_id,
+                    source_name=str(anchor.get("doc_title") or "eaeu_document"),
+                    source_tier="support_summary",
+                    source_priority=56,
+                )
+                jnvlp_signal.metrics.append(
+                    DossierCommercialMetric(
+                        name="jnvlp_yes_rows",
+                        value=EvidencedValue(value=str(jnvlp_yes_rows), evidence_refs=[reg_evidence_id]),
+                    )
+                )
+
+        for summary in self._extract_eaeu_esklp_summaries():
+            detected_hits = int(summary.get("detected_hits") or 0)
+            if not detected_hits:
+                continue
+            source_name = str(summary.get("doc_title") or summary.get("doc_id") or "eaeu_document")
+            source_url = str(summary.get("source_url") or "")
+            strength_count = len(summary.get("strengths") or [])
+            reg_number_count = len(summary.get("reg_numbers") or [])
+            evidence_id = self._register_derived_evidence(
+                doc_id=str(summary.get("doc_id") or ""),
+                doc_title=source_name,
+                source_url=source_url,
+                doc_kind=str(summary.get("doc_kind") or "eaeu_document"),
+                content_hash=summary.get("content_hash"),
+                locator="$.derived.eaeu_esklp.formulary_presence",
+                snippet=(
+                    f"RU ESKLP snapshot contains {detected_hits} hit(s) for {self.inn} and links "
+                    f"{reg_number_count} EAEU-style registration number(s): {', '.join(summary.get('reg_numbers') or [])[:180]}"
+                ),
+            )
+            formulary_signal = self._upsert_commercial_signal(
+                signals,
+                signal_order,
+                region="EAEU",
+                category="formulary_presence",
+                verdict="partial",
+                summary=(
+                    f"RU ESKLP snapshot contains {detected_hits} hit(s) for {self.inn} and links "
+                    f"{reg_number_count} EAEU-style registration number(s), giving an EAEU-identity-to-formulary access signal."
+                ),
+                evidence_id=evidence_id,
+                source_name=source_name,
+                source_tier="support_summary",
+                source_priority=54,
+            )
+            formulary_signal.metrics.extend([
+                DossierCommercialMetric(
+                    name="detected_hits",
+                    value=EvidencedValue(value=str(detected_hits), evidence_refs=[evidence_id]),
+                ),
+                DossierCommercialMetric(
+                    name="reg_number_count",
+                    value=EvidencedValue(value=str(reg_number_count), evidence_refs=[evidence_id]),
+                ),
+            ])
+            if strength_count:
+                strength_signal = self._upsert_commercial_signal(
+                    signals,
+                    signal_order,
+                    region="EAEU",
+                    category="strength_coverage",
+                    verdict="partial",
+                    summary=(
+                        f"RU ESKLP snapshot captures {strength_count} strength row(s) linked to EAEU-style registration numbers for {self.inn}."
+                    ),
+                    evidence_id=evidence_id,
+                    source_name=source_name,
+                    source_tier="support_summary",
+                    source_priority=54,
+                )
+                strength_signal.metrics.append(
+                    DossierCommercialMetric(
+                        name="strength_count",
+                        value=EvidencedValue(value=str(strength_count), evidence_refs=[evidence_id]),
+                    )
+                )
 
     def _generate_commercial_signals(
         self,
@@ -1548,6 +2042,8 @@ class DossierReportGenerator:
                     )
                 )
                 continue
+
+        self._append_eaeu_derived_commercial_signals(signals, signal_order)
 
         for chunk in self._iter_parsed_doc_chunks(set(), allowed_doc_kinds=allowed_doc_kinds):
             text = str(chunk.get("text") or "")
@@ -3727,6 +4223,7 @@ class DossierReportGenerator:
     def _extract_eaeu_registrations_from_original_json(self) -> List[DossierRegistration]:
         registrations: List[DossierRegistration] = []
         seen_reg_nos: set[str] = set()
+        text_registration_index = self._extract_eaeu_text_registration_index()
 
         for item in self._iter_original_json_docs({"eaeu_document", "eaeu_registration"}) or []:
             data = item["data"] or {}
@@ -3826,6 +4323,43 @@ class DossierReportGenerator:
                     content_hash=content_hash,
                     locator_prefix=f"/items/{idx}",
                 )
+                matched_text_reg = None
+                if reg_no:
+                    matched_text_reg = self._match_eaeu_text_registration(reg_no, holder)
+                elif text_registration_index:
+                    matched_text_reg = None
+                if matched_text_reg:
+                    if (not valid_to or validity_type == "missing_in_source") and matched_text_reg.get("valid_to_iso"):
+                        valid_to = EvidencedValue(
+                            value=str(matched_text_reg.get("valid_to_iso") or ""),
+                            evidence_refs=list(matched_text_reg.get("validity_evidence_refs") or []),
+                        )
+                        validity_type = "date_present"
+                        validity_refs = list(matched_text_reg.get("validity_evidence_refs") or [])
+                    elif validity_type == "missing_in_source" and matched_text_reg.get("validity_evidence_refs"):
+                        validity_refs = list(
+                            dict.fromkeys(
+                                list(validity_refs)
+                                + list(matched_text_reg.get("validity_evidence_refs") or [])
+                            )
+                        )
+                    if (status is None or not str(status.value or "").strip()) and matched_text_reg.get("status_raw"):
+                        status = EvidencedValue(
+                            value=str(matched_text_reg.get("status_raw") or ""),
+                            evidence_refs=list(matched_text_reg.get("status_evidence_refs") or []),
+                        )
+                    if (mah is None or not str(mah.value or "").strip()) and matched_text_reg.get("holder"):
+                        mah = EvidencedValue(
+                            value=str(matched_text_reg.get("holder") or ""),
+                            evidence_refs=[str(matched_text_reg.get("reg_ref") or "")],
+                        )
+                    if not identifiers and matched_text_reg.get("reg_no"):
+                        identifiers.append(
+                            EvidencedValue(
+                                value=str(matched_text_reg.get("reg_no") or ""),
+                                evidence_refs=[str(matched_text_reg.get("reg_ref") or "")],
+                            )
+                        )
 
                 evidence_refs: List[str] = []
                 if status:
@@ -3837,6 +4371,8 @@ class DossierReportGenerator:
                 evidence_refs.extend(validity_refs)
                 for ev in identifiers + forms_strengths:
                     evidence_refs.extend(ev.evidence_refs)
+                if matched_text_reg:
+                    evidence_refs.extend(matched_text_reg.get("status_evidence_refs") or [])
 
                 if not any([status, mah, identifiers, forms_strengths]):
                     continue
