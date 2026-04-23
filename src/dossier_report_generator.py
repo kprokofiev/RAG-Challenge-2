@@ -7849,18 +7849,22 @@ class DossierReportGenerator:
         if len(product_contexts) > 1:
             # Multiple regional registrations can converge by route/form while
             # remaining distinct product identities by region, reg_no, and MAH.
-            ctx_routes = {c.route for c in product_contexts if c.route}
+            scope_contexts = [
+                c for c in product_contexts
+                if (getattr(c, "context_strength", None) or "") != "weak_signal"
+            ] or product_contexts
+            ctx_routes = {c.route for c in scope_contexts if c.route}
             if len(ctx_routes) <= 1:
                 passport.passport_scope = "multi_regional_context"
                 if ctx_routes:
                     passport.passport_notice = (
-                        f"{len(product_contexts)} regional product contexts detected. "
+                        f"{len(scope_contexts)} regional product contexts detected. "
                         f"They converge to route={next(iter(ctx_routes))}, but remain separate "
                         "by jurisdiction, registration number, MAH, and/or product identifier."
                     )
                 else:
                     passport.passport_notice = (
-                        f"{len(product_contexts)} regional product contexts detected. "
+                        f"{len(scope_contexts)} regional product contexts detected. "
                         "They remain separate by jurisdiction, registration number, MAH, and/or product identifier."
                     )
             else:

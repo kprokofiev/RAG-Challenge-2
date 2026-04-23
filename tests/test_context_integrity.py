@@ -6,9 +6,11 @@ from src.dossier_schema_v3 import (
     DossierReport,
     ProductContext,
     RunManifest,
+    _normalize_route_family,
     compute_dossier_quality_v2,
     sync_run_manifest_counts,
 )
+from src.registration_truth import VERDICT_CONFIRMED, infer_registration_verdict
 from src.scope_resolver import ScopeResolver
 
 
@@ -70,6 +72,54 @@ class ContextIntegrityTests(unittest.TestCase):
         self.assertEqual(scope.entity_mode, "inn")
         self.assertFalse(scope.scope_warnings)
         self.assertIn("route-converged confirmed contexts", scope.reason)
+
+    def test_multi_regional_context_stays_green_with_same_region_evidence_variant(self):
+        report = DossierReport(
+            report_id="rep-2",
+            case_id="case-2",
+            run_id="run-2",
+            generated_at="2026-04-23T00:00:00Z",
+            passport=DossierPassport(
+                inn="apixaban",
+                passport_scope="multi_regional_context",
+                passport_notice="Route-converged regional contexts detected.",
+            ),
+            product_contexts=[
+                _ctx("US"),
+                _ctx("EU"),
+                _ctx("RU"),
+                _ctx("EAEU"),
+                ProductContext(
+                    context_id="ctx-us-capsule",
+                    label="US - capsule (oral) - [evidence_supported]",
+                    region="US",
+                    route="oral",
+                    dosage_forms=["capsule"],
+                    strengths=[],
+                    mah=None,
+                    identifiers=[],
+                    context_strength="evidence_supported",
+                    context_origin="evidence: us_fda snippet",
+                ),
+            ],
+        )
+
+        quality = compute_dossier_quality_v2(report)
+
+        self.assertEqual(quality.decision_readiness["context_integrity"], "GREEN")
+
+    def test_pulmonary_embolism_does_not_map_to_inhalation_route(self):
+        self.assertIsNone(_normalize_route_family("treatment of pulmonary embolism"))
+
+    def test_approval_letter_status_counts_as_confirmed_registration(self):
+        verdict = infer_registration_verdict(
+            status="FDA NDA approval letter (approval letter content present)",
+            mah="Bristol-Myers Squibb",
+            identifiers=["NDA 220073"],
+            forms_strengths=["Eliquis 5 mg tablets"],
+        )
+
+        self.assertEqual(verdict, VERDICT_CONFIRMED)
 
     def test_run_manifest_counts_sync_from_coverage_ledger(self):
         report = DossierReport(

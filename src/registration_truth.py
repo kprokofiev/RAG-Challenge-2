@@ -66,7 +66,9 @@ def registration_status_role(status_value: str | None) -> str:
     )
     positive_markers = (
         "approved",
+        "approval letter",
         "approval letter referenced",
+        "approval letter content present",
         "fda approval",
         "registered",
         "registration active",

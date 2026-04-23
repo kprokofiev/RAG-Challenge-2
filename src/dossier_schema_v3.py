@@ -1169,7 +1169,7 @@ _ROUTE_FAMILIES = {
     "topical": {"topical", "cutaneous", "dermal", "transdermal", "patch",
                 # RU
                 "наружно", "наружное применение", "накожно", "трансдермально"},
-    "inhalation": {"inhalation", "inhaled", "nasal", "intranasal", "pulmonary",
+    "inhalation": {"inhalation", "inhaled", "nasal", "intranasal",
                    # RU
                    "ингаляционно", "ингаляционный", "назально", "интраназально"},
     "ophthalmic": {"ophthalmic", "eye", "ocular",
@@ -2049,13 +2049,43 @@ def compute_dossier_quality_v2(
         for c in report.product_contexts
         if str(getattr(c, "route", "") or "").strip()
     }
+
+    confirmed_routes_by_region: Dict[str, set[str]] = {}
+    for ctx in report.product_contexts:
+        if getattr(ctx, "context_strength", None) != "registration_confirmed":
+            continue
+        region_key = str(getattr(ctx, "region", "") or "").strip().upper()
+        if not region_key:
+            continue
+        confirmed_routes_by_region.setdefault(region_key, set())
+        route_key = _normalize_route_family(str(getattr(ctx, "route", "") or "").strip())
+        if route_key:
+            confirmed_routes_by_region[region_key].add(route_key)
+
+    evidence_supported_covered = True
+    for ctx in report.product_contexts:
+        if getattr(ctx, "context_strength", None) != "evidence_supported":
+            continue
+        region_key = str(getattr(ctx, "region", "") or "").strip().upper()
+        if not region_key or region_key not in confirmed_routes_by_region:
+            evidence_supported_covered = False
+            break
+        route_key = _normalize_route_family(str(getattr(ctx, "route", "") or "").strip())
+        confirmed_routes = confirmed_routes_by_region.get(region_key, set())
+        if route_key and confirmed_routes and route_key not in confirmed_routes:
+            evidence_supported_covered = False
+            break
+
     if passport_scope == "single_context":
         if weak_signal_ctx == 0 and len(route_families) <= 1 and reg_confirmed_ctx >= max(ctx_count, 1):
             context_integrity = "GREEN"
         else:
             context_integrity = "YELLOW"
     elif passport_scope == "multi_regional_context":
-        if weak_signal_ctx == 0 and len(route_families) <= 1 and reg_confirmed_ctx >= max(ctx_count, 1):
+        if weak_signal_ctx == 0 and len(route_families) <= 1 and (
+            reg_confirmed_ctx >= max(ctx_count, 1)
+            or (reg_confirmed_ctx > 0 and evidence_supported_covered)
+        ):
             context_integrity = "GREEN"
         elif weak_signal_ctx == 0 and len(route_families) <= 1:
             context_integrity = "YELLOW"
