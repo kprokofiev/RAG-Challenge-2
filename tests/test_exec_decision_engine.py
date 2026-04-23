@@ -533,6 +533,33 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "SUFFICIENT")
         self.assertTrue(any("EAEU" in caveat for caveat in repaired.caveats))
 
+    def test_verifier_repairs_rf_entry_when_only_legal_status_unknown_blocks_ru_go(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="INSUFFICIENT_EVIDENCE",
+            confidence="MEDIUM",
+            sufficiency="INSUFFICIENT",
+            short_answer="RU GRLS is active, but LEGAL_STATUS_NOT_AVAILABLE still blocks RF entry.",
+            full_answer=(
+                "The RU packet confirms ACTIVE registration and RU commercial support, "
+                "but the answer still points to LEGAL_STATUS_NOT_AVAILABLE and asks for "
+                "non-suspension/non-revocation confirmation."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["dossier_quality_v2"]["decision_readiness"]["context_integrity"] = "GREEN"
+        packet["registrations"][0]["status"] = {"value": "active", "evidence_refs": ["ev-reg-ru"]}
+        packet["commercial_signals"][0]["verdict"] = "confirmed"
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+
     def test_verifier_promotes_eaeu_insufficiency_to_hold_when_reg_anchor_exists(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(

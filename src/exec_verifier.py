@@ -290,7 +290,18 @@ class ExecVerifier:
         if _positive_commercial_signal_count(packet, "RU") <= 0:
             return False
         text = _block_text(block).lower()
-        return ("eaeu" in text or "valid_to" in text or "underlying authorization" in text) and not _has_explicit_negative_evidence(text)
+        scope_markers = (
+            "eaeu",
+            "valid_to",
+            "underlying authorization",
+            "legal_status_not_available",
+            "critical unknown",
+            "expiry date",
+            "non-suspension",
+            "non-revocation",
+            "legal/entry-critical readiness",
+        )
+        return any(marker in text for marker in scope_markers) and not _has_explicit_negative_evidence(text)
 
     def _eaeu_holdable_regulatory_position(
         self,
