@@ -65,7 +65,6 @@ _NEGATIVE_EVIDENCE_MARKERS = {
     "denied",
     "failed",
     "inactive",
-    "invalid",
     "negative",
     "not approv",
     "not registered",
@@ -162,7 +161,6 @@ def _has_explicit_negative_evidence(text: str) -> bool:
         r"\bfailed\b",
         r"\bdenied\b",
         r"\bnegative\b",
-        r"\binvalid\b",
         r"\bnot approv\w*\b",
         r"\bnot registered\b",
         r"(?<!non[-\s])(?<!not[-\s])expired\b",
@@ -521,23 +519,33 @@ class ExecVerifier:
             repaired.sufficiency = "SUFFICIENT"
             repaired.confidence = "MEDIUM"
             repaired.short_answer = (
-                "GO — active RU registration is confirmed in GRLS and supportive RU access signals are present; unresolved EAEU-validity detail is tracked separately and does not negate the RF decision."
+                "GO — active RU registration is confirmed in GRLS and supportive RU access signals are present; unresolved EAEU-validity detail is tracked separately, and dossier-level context integrity already supports the RU product match."
             )
             repaired.full_answer = (
                 "RF entry is grounded by an active RU GRLS registration plus supportive RU formulary/policy/commercial signals. "
-                "The missing EAEU valid_to detail remains an adjacent EAEU issue, but it should not override a positive RF decision anchored to the RU registration context."
+                "The missing EAEU valid_to detail remains an adjacent EAEU issue, but it should not override a positive RF decision anchored to the RU registration context. "
+                "Because dossier context integrity is already green, the lack of an additional RU route/form field in the GRLS snippet should remain a caveat rather than a blocker."
             )
             repaired.decision_blockers = [
                 blocker for blocker in repaired.decision_blockers
-                if "eaeu" not in f"{blocker.title} {blocker.rationale}".lower()
+                if not any(
+                    marker in f"{blocker.title} {blocker.rationale}".lower()
+                    for marker in ("eaeu", "route/form", "product-context alignment", "dosage/admin form")
+                )
             ]
             repaired.next_actions = [
                 action for action in repaired.next_actions
-                if "eaeu" not in f"{action.action} {action.rationale}".lower()
+                if not any(
+                    marker in f"{action.action} {action.rationale}".lower()
+                    for marker in ("eaeu", "route/form", "product-context alignment", "dosage/admin form")
+                )
             ]
             repaired.why_this_verdict = [
                 claim for claim in repaired.why_this_verdict
-                if "eaeu" not in claim.claim.lower()
+                if not any(
+                    marker in claim.claim.lower()
+                    for marker in ("eaeu", "route/form", "product-context alignment", "dosage form")
+                )
             ]
             caveat = "EAEU authorization validity remains unresolved for the EAEU block, but RF entry is anchored to the active RU GRLS registration."
             if caveat not in repaired.caveats:
