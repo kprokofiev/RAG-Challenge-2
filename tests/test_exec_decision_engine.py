@@ -1419,6 +1419,101 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             0,
         )
 
+    def test_evidence_assembler_retains_clearance_checks_without_promoting_to_events(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "ip_legal_window",
+            "inn": "apixaban",
+            "allowed_doc_kinds": [
+                "patent_term_extension",
+                "patent_file_wrapper",
+                "patent_legal_events",
+                "ru_patent_fips",
+                "uspto_assignment",
+            ],
+            "required_sections": ["patent_families"],
+            "patent_families": [
+                {
+                    "family_id": "fam-claim",
+                    "representative_pub": {"value": "US11896586", "evidence_refs": ["ev-family"]},
+                    "what_blocks": {"value": "compound claims for apixaban", "evidence_refs": ["ev-family"]},
+                    "evidence_refs": ["ev-family"],
+                }
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-pte-check",
+                    "doc_id": "doc-pte-check",
+                    "doc_kind": "patent_term_extension",
+                    "snippet": "CLEARANCE_CHECK | source=uspto_pte | jurisdiction=US | patent=US11896586 | check_class=PTE | status=no_public_listing_found | sources_checked=2",
+                },
+                {
+                    "evidence_id": "ev-wrapper-limited",
+                    "doc_id": "doc-wrapper-limited",
+                    "doc_kind": "patent_file_wrapper",
+                    "snippet": "CLEARANCE_CHECK | source=uspto_patent_center_file_wrapper | jurisdiction=US | patent=US11896586 | check_class=terminal_disclaimer_file_wrapper | status=source_not_collected | limitation=manual Patent Center review required",
+                },
+                {
+                    "evidence_id": "ev-epo-check",
+                    "doc_id": "doc-epo-check",
+                    "doc_kind": "patent_legal_events",
+                    "snippet": "CLEARANCE_CHECK | source=epo_register | jurisdiction=EU | patent=EP4353312 | check_class=SPC | status=no_source_event_found",
+                },
+                {
+                    "evidence_id": "ev-ru-conflict",
+                    "doc_id": "doc-ru-conflict",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "CLEARANCE_CHECK | source=ru_eaeu_conflict_classifier | jurisdiction=EAEU | check_class=eapo_term_no_hit_vs_fips_future_expiry | status=conflict_requires_review | conclusion=TERM_NO_HIT_NOT_FTO_CLEARANCE",
+                },
+                {
+                    "evidence_id": "ev-rights-check",
+                    "doc_id": "doc-rights-check",
+                    "doc_kind": "uspto_assignment",
+                    "snippet": "RIGHTS_CLEARANCE_CHECK | source=uspto_assignment | jurisdiction=US | patent=US11896586 | check_class=assignment_transferability | status=no_source_native_assignment_terms_found",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="ip_legal_window",
+            answer_type="window",
+            needed_dossier_sections=["patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=[
+                    "patent_term_extension",
+                    "patent_file_wrapper",
+                    "patent_legal_events",
+                    "ru_patent_fips",
+                    "uspto_assignment",
+                ],
+                queries=["apixaban clearance checks"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        family_events = linkage["family_legal_events_snapshot"]
+        self.assertNotIn("PTE", family_events.get("event_types_by_region", {}).get("US", []))
+        self.assertIn("PTE", family_events["coverage_by_region"]["US"]["checked_missing_event_classes"])
+        self.assertIn("terminal_disclaimer_file_wrapper", family_events["coverage_by_region"]["US"]["limited_event_checks"])
+        self.assertIn("SPC", family_events["coverage_by_region"]["EU"]["checked_missing_event_classes"])
+
+        rights = linkage["rights_transferability_snapshot"]
+        self.assertEqual(rights["conclusion"], "SOURCE_CHECKS_ONLY_TERMS_MISSING")
+        self.assertEqual(rights["record_count"], 0)
+        self.assertEqual(rights["clearance_check_count"], 1)
+
+        manifest = linkage["source_evidence_manifest"]
+        statuses = {source["source_id"]: source["status"] for source in manifest["sources"]}
+        self.assertEqual(statuses["uspto_pte_file_wrapper"], "limited")
+        self.assertEqual(statuses["rospatent_searchplatform"], "checked_with_conflict")
+        self.assertGreaterEqual(manifest["limited_source_count"], 2)
+
+        retention = linkage["priority_evidence_retention"]
+        self.assertEqual(retention["status"], "ok")
+        self.assertIn("ev-pte-check", retention["retained_refs"])
+        self.assertIn("ev-rights-check", retention["retained_refs"])
+
     def test_market_entry_linkage_uses_product_context_form_and_strength_bridge(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {

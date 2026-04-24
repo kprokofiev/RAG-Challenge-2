@@ -168,6 +168,11 @@ _LEGAL_EVENT_SIGNAL_RE = re.compile(
     r"(прекращен|аннулирован|истек|пошлин|продлен|выдан)",
     re.IGNORECASE,
 )
+_CLEARANCE_CHECK_DOC_KINDS = _LEGAL_EVENT_DOC_KINDS | _RIGHTS_DOC_KINDS
+_CLEARANCE_CHECK_SIGNAL_RE = re.compile(
+    r"\b(?:CLEARANCE_CHECK|RIGHTS_CLEARANCE_CHECK)\s*\|",
+    re.IGNORECASE,
+)
 _POSITIVE_STATUS_MARKERS = {
     "active",
     "approved",
@@ -235,6 +240,8 @@ def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
     if doc_kind in _LEGAL_EVENT_DOC_KINDS and "LEGAL_EVENT |" in snippet:
         return True
     if doc_kind in _RIGHTS_DOC_KINDS and "RIGHTS_RECORD |" in snippet:
+        return True
+    if doc_kind in _CLEARANCE_CHECK_DOC_KINDS and _CLEARANCE_CHECK_SIGNAL_RE.search(snippet):
         return True
     if doc_kind != "ru_patent_fips":
         return False
@@ -629,6 +636,41 @@ def _structured_legal_events_from_snippet(
     return events
 
 
+def _structured_clearance_checks_from_snippet(
+    item: Dict[str, Any],
+    evidence_ref: str,
+    doc_kind: str,
+) -> List[Dict[str, Any]]:
+    checks: List[Dict[str, Any]] = []
+    for prefix in ("CLEARANCE_CHECK", "RIGHTS_CLEARANCE_CHECK"):
+        for line in _iter_structured_lines(str(item.get("snippet") or ""), prefix):
+            fields = _parse_pipe_fields(line)
+            check_class = str(fields.get("check_class") or fields.get("class") or "").strip()
+            if not check_class:
+                continue
+            jurisdiction = _canonical_ip_region(
+                fields.get("jurisdiction")
+                or fields.get("region")
+                or _region_from_evidence_text(item)
+            )
+            status = str(fields.get("status") or "").strip() or "checked"
+            checks.append(
+                {
+                    "category": "rights" if prefix == "RIGHTS_CLEARANCE_CHECK" else "legal_events",
+                    "source": str(fields.get("source") or "").strip(),
+                    "check_class": check_class,
+                    "jurisdiction": jurisdiction,
+                    "patent_no": _first_patent_number(fields.get("patent") or line),
+                    "status": status,
+                    "conclusion": str(fields.get("conclusion") or "").strip(),
+                    "limitation": str(fields.get("limitation") or "").strip(),
+                    "source_doc_kind": doc_kind,
+                    "evidence_refs": [evidence_ref],
+                }
+            )
+    return checks
+
+
 def _structured_source_entries_from_snippet(
     item: Dict[str, Any],
     evidence_ref: str,
@@ -714,6 +756,8 @@ def _extract_rights_records(selected_evidence: List[Dict[str, Any]]) -> List[Dic
         doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
         snippet = str(item.get("snippet") or "")
         if doc_kind not in _RIGHTS_DOC_KINDS and not _RIGHTS_SIGNAL_RE.search(snippet):
+            continue
+        if _CLEARANCE_CHECK_SIGNAL_RE.search(snippet) and "RIGHTS_RECORD |" not in snippet:
             continue
         evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
         if not evidence_ref:
@@ -825,6 +869,8 @@ def _extract_legal_events(selected_evidence: List[Dict[str, Any]]) -> List[Dict[
                 }
             )
             continue
+        if _CLEARANCE_CHECK_SIGNAL_RE.search(snippet) and "LEGAL_EVENT |" not in snippet:
+            continue
         event_type = _legal_event_type(snippet, doc_kind)
         if not event_type:
             continue
@@ -842,9 +888,33 @@ def _extract_legal_events(selected_evidence: List[Dict[str, Any]]) -> List[Dict[
     return events
 
 
-def _rights_transferability_snapshot(rights_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _extract_clearance_checks(selected_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    checks: List[Dict[str, Any]] = []
+    for item in selected_evidence:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        snippet = str(item.get("snippet") or "")
+        if doc_kind not in _CLEARANCE_CHECK_DOC_KINDS or not _CLEARANCE_CHECK_SIGNAL_RE.search(snippet):
+            continue
+        evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if not evidence_ref:
+            continue
+        checks.extend(_structured_clearance_checks_from_snippet(item, evidence_ref, doc_kind))
+    return checks
+
+
+def _rights_transferability_snapshot(
+    rights_records: List[Dict[str, Any]],
+    clearance_checks: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    checks = [
+        check for check in (clearance_checks or [])
+        if str(check.get("category") or "") == "rights"
+    ]
     evidence_refs = list(
-        dict.fromkeys(ref for record in rights_records for ref in record.get("evidence_refs", []) or [])
+        dict.fromkeys(
+            [ref for record in rights_records for ref in record.get("evidence_refs", []) or []]
+            + [ref for check in checks for ref in check.get("evidence_refs", []) or []]
+        )
     )
     known_transferability = [
         record for record in rights_records
@@ -860,12 +930,16 @@ def _rights_transferability_snapshot(rights_records: List[Dict[str, Any]]) -> Di
         conclusion = "TRANSFERABILITY_TERMS_EVIDENCED"
     elif rights_records:
         conclusion = "PUBLIC_RECORDS_ONLY_TERMS_MISSING"
+    elif checks:
+        conclusion = "SOURCE_CHECKS_ONLY_TERMS_MISSING"
     else:
         conclusion = "NO_SOURCE_NATIVE_RIGHTS_EVIDENCE"
     return {
         "conclusion": conclusion,
         "records": rights_records[:12],
+        "clearance_checks": checks[:12],
         "record_count": len(rights_records),
+        "clearance_check_count": len(checks),
         "observed_record_types": sorted({str(record.get("record_type") or "") for record in rights_records if record.get("record_type")}),
         "transferability_evidence": "source_native_terms_present" if known_transferability else "unknown_or_not_public",
         "licensing_scope_known": bool(scope_records),
@@ -881,6 +955,7 @@ def _rights_transferability_snapshot(rights_records: List[Dict[str, Any]]) -> Di
 def _family_legal_events_snapshot(
     legal_events: List[Dict[str, Any]],
     patent_snapshot: Dict[str, Dict[str, Any]],
+    clearance_checks: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     required_by_region = {
         "US": {"PTE", "terminal_disclaimer", "expiry"},
@@ -897,6 +972,25 @@ def _family_legal_events_snapshot(
         if event_type and event_type not in event_types_by_region[region]:
             event_types_by_region[region].append(event_type)
         refs.extend(list(event.get("evidence_refs") or []))
+    checked_missing_by_region: Dict[str, List[str]] = {}
+    limited_checks_by_region: Dict[str, List[str]] = {}
+    for check in clearance_checks or []:
+        if str(check.get("category") or "") != "legal_events":
+            continue
+        region = _canonical_ip_region(str(check.get("jurisdiction") or "GLOBAL"))
+        check_class = str(check.get("check_class") or "").strip()
+        if not check_class:
+            continue
+        status = str(check.get("status") or "").strip().lower()
+        if status in {"no_public_listing_found", "no_source_event_found"}:
+            checked_missing_by_region.setdefault(region, [])
+            if check_class not in checked_missing_by_region[region]:
+                checked_missing_by_region[region].append(check_class)
+        else:
+            limited_checks_by_region.setdefault(region, [])
+            if check_class not in limited_checks_by_region[region]:
+                limited_checks_by_region[region].append(check_class)
+        refs.extend(list(check.get("evidence_refs") or []))
     coverage = {}
     for region, required in required_by_region.items():
         observed = set(event_types_by_region.get(region, []))
@@ -912,6 +1006,8 @@ def _family_legal_events_snapshot(
         coverage[region] = {
             "observed_event_types": sorted(observed),
             "missing_event_classes": missing,
+            "checked_missing_event_classes": sorted(checked_missing_by_region.get(region, [])),
+            "limited_event_checks": sorted(limited_checks_by_region.get(region, [])),
             "has_country_or_family_status": snapshot_payload.get("window_status") != "missing" or bool(observed),
             "status_basis": snapshot_payload.get("status_basis"),
         }
@@ -1020,6 +1116,7 @@ def _source_evidence_manifest(
     selected_evidence: List[Dict[str, Any]],
     rights_records: List[Dict[str, Any]],
     legal_events: List[Dict[str, Any]],
+    clearance_checks: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     refs_by_kind: Dict[str, List[str]] = defaultdict(list)
     for item in selected_evidence:
@@ -1042,11 +1139,52 @@ def _source_evidence_manifest(
         ]),
         _source_manifest_status("sec_edgar_contracts", "SEC EDGAR material agreements", ["licensing terms if public company disclosed them"], refs_by_kind.get("sec_filing", []) + refs_by_kind.get("licensing_agreement", [])),
     ]
+    source_alias = {
+        "uspto_pte": "uspto_pte_file_wrapper",
+        "uspto_patent_center_file_wrapper": "uspto_pte_file_wrapper",
+        "epo_register": "epo_register",
+        "rospatent_searchplatform": "rospatent_searchplatform",
+        "ru_eaeu_conflict_classifier": "rospatent_searchplatform",
+        "eapo_pharma_register": "eapo_pharma_register",
+        "uspto_assignment": "uspto_assignment",
+        "sec_edgar": "sec_edgar_contracts",
+    }
+    checks_by_source: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for check in clearance_checks or []:
+        source_id = source_alias.get(str(check.get("source") or "").strip())
+        if source_id:
+            checks_by_source[source_id].append(check)
+    for source in sources:
+        source_checks = checks_by_source.get(source["source_id"], [])
+        if not source_checks:
+            continue
+        refs = [
+            ref
+            for check in source_checks
+            for ref in check.get("evidence_refs", []) or []
+            if str(ref or "").strip()
+        ]
+        source["evidence_refs"] = list(dict.fromkeys(list(source.get("evidence_refs") or []) + refs))[:8]
+        statuses = {str(check.get("status") or "").strip().lower() for check in source_checks}
+        if statuses & {"source_not_collected", "source_unavailable"}:
+            source["status"] = "limited"
+        elif "conflict_requires_review" in statuses:
+            source["status"] = "checked_with_conflict"
+        elif source["evidence_refs"]:
+            source["status"] = "checked"
+        source.setdefault("notes", [])
+        source["notes"].append(
+            "clearance_checks="
+            + ",".join(sorted({str(check.get("check_class") or "") for check in source_checks if check.get("check_class")})[:6])
+        )
     checked = [source for source in sources if source["status"] == "checked"]
+    limited = [source for source in sources if source["status"] in {"limited", "checked_with_conflict"}]
     return {
         "sources": sources,
         "checked_source_count": len(checked),
-        "missing_source_count": len(sources) - len(checked),
+        "limited_source_count": len(limited),
+        "missing_source_count": len([source for source in sources if source["status"] == "missing"]),
+        "clearance_checks": (clearance_checks or [])[:24],
         "rights_evidence_refs": list(dict.fromkeys(rights_refs))[:12],
         "legal_event_evidence_refs": list(dict.fromkeys(event_refs))[:12],
     }
@@ -1080,6 +1218,8 @@ def _priority_evidence_retention_manifest(
             priority_reason = "structured_legal_event"
         elif "RIGHTS_RECORD |" in snippet:
             priority_reason = "structured_rights_record"
+        elif _CLEARANCE_CHECK_SIGNAL_RE.search(snippet):
+            priority_reason = "structured_clearance_check"
         else:
             priority_reason = "fips_expiry_record"
         expected.append(
@@ -1925,11 +2065,12 @@ class ExecEvidenceAssembler:
             region for region, payload in patent_snapshot.items()
             if payload.get("window_status") != "missing"
         }
+        clearance_checks = _extract_clearance_checks(selected_evidence)
         rights_records = _extract_rights_records(selected_evidence)
         legal_events = _extract_legal_events(selected_evidence)
-        family_legal_events = _family_legal_events_snapshot(legal_events, patent_snapshot)
+        family_legal_events = _family_legal_events_snapshot(legal_events, patent_snapshot, clearance_checks)
         fto_screening = _fto_screening_snapshot(selected_sections, patent_snapshot, family_legal_events)
-        source_manifest = _source_evidence_manifest(selected_evidence, rights_records, legal_events)
+        source_manifest = _source_evidence_manifest(selected_evidence, rights_records, legal_events, clearance_checks)
         registration_context_relationships: List[Dict[str, Any]] = []
         ru_entries = registrations_by_region.get("RU", [])
         eaeu_entries = registrations_by_region.get("EAEU", [])
@@ -2193,7 +2334,8 @@ class ExecEvidenceAssembler:
             "registration_identity_map": registration_identity_map[:12],
             "registration_context_relationships": registration_context_relationships,
             "market_entry_linkage": market_entry_linkage,
-            "rights_transferability_snapshot": _rights_transferability_snapshot(rights_records),
+            "clearance_checks": clearance_checks[:24],
+            "rights_transferability_snapshot": _rights_transferability_snapshot(rights_records, clearance_checks),
             "family_legal_events_snapshot": family_legal_events,
             "fto_screening_snapshot": fto_screening,
             "source_evidence_manifest": source_manifest,
