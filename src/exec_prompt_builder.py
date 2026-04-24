@@ -257,7 +257,7 @@ def _prompt_contract(block_spec: BlockSpec) -> str:
 
 def _planner_prompt_contract(block_spec: BlockSpec, question_trace: Dict[str, Any]) -> str:
     verdicts = ", ".join(block_spec.verdicts)
-    return (
+    contract = (
         f"You are planning evidence requirements for the '{block_spec.title}' executive question.\n"
         f"Verdict family: {block_spec.verdict_family}. Allowed verdicts later: {verdicts}.\n"
         f"Business lens: {question_trace.get('business_lens', '') or 'exec'}.\n"
@@ -272,12 +272,33 @@ def _planner_prompt_contract(block_spec: BlockSpec, question_trace: Dict[str, An
         "7. Reuse dossier sections only as compressed memory, not as the primary evidence base.\n"
         "8. Return only the structured schema."
     )
+    notes = _block_specific_policy_notes(block_spec)
+    if notes:
+        contract += "\nAdditional block policies:\n" + "\n".join(
+            f"{idx + 1}. {note}" for idx, note in enumerate(notes)
+        )
+    return contract
+
+
+def _block_specific_policy_notes(block_spec: BlockSpec) -> List[str]:
+    notes: List[str] = []
+    if block_spec.block_id == "asset_attractiveness":
+        notes.append("Treat official RU/EAEU no-hit patent snapshots as residual-risk evidence, not as automatic negative evidence.")
+    if block_spec.block_id == "rf_entry":
+        notes.append("RF entry must stay anchored to RU registration identity plus RU-linked commercial/access evidence; unresolved EAEU details are adjacent, not automatic RF blockers.")
+    if block_spec.block_id == "eaeu_entry":
+        notes.append("Different RU and EAEU registration identifiers may represent separate product contexts; GRLS same-id corroboration is optional when EAEU-native identity, status, and validity are already confirmed.")
+    if block_spec.block_id in {"generic_opportunity", "licensing_opportunity"}:
+        notes.append("Reason region-by-region; do not collapse RU/EAEU opportunity with EU/US unresolved or blocked positions into one global unsupported verdict.")
+    if block_spec.block_id in {"asset_attractiveness", "rf_entry", "eaeu_entry", "generic_opportunity", "licensing_opportunity", "portfolio_opportunity"}:
+        notes.append("Treat synthesis/manufacturing evidence as technical screening unless the question is explicitly CMC/manufacturing.")
+    return notes
 
 
 def _answer_prompt_contract(block_spec: BlockSpec, plan: ExecQuestionPlan) -> str:
     verdicts = ", ".join(block_spec.verdicts)
     positive_gates = ", ".join(plan.gates.positive_verdict_requires) or "none"
-    return (
+    contract = (
         f"You are answering the '{block_spec.title}' executive question.\n"
         f"Verdict family: {block_spec.verdict_family}. Allowed verdicts: {verdicts}.\n"
         f"Question contract answer type: {plan.answer_type}.\n"
@@ -290,6 +311,12 @@ def _answer_prompt_contract(block_spec: BlockSpec, plan: ExecQuestionPlan) -> st
         "5. Translate evidence into decision language, not signal counting prose.\n"
         "6. Return only the structured schema."
     )
+    notes = _block_specific_policy_notes(block_spec)
+    if notes:
+        contract += "\nAdditional block policies:\n" + "\n".join(
+            f"{idx + 1}. {note}" for idx, note in enumerate(notes)
+        )
+    return contract
 
 
 def _truncate_payload(value: Any, max_chars: int = 12000, compact: bool = False) -> str:

@@ -96,6 +96,17 @@ _OFFICIAL_PATENT_REGISTER_NO_HIT_RE = re.compile(
     r"OFFICIAL_PATENT_REGISTER_NO_HIT\s*\|\s*region=([A-Z]+)\s*\|\s*search_term=([^|]+)\|\s*patents=0(?:\s*\|\s*as_of=([\d-]+))?",
     re.IGNORECASE,
 )
+_POSITIVE_STATUS_MARKERS = {
+    "active",
+    "approved",
+    "authorised",
+    "authorized",
+    "confirmed",
+    "in force",
+    "registered",
+    "valid",
+}
+_STRENGTH_TOKEN_RE = re.compile(r"\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|%)\b", re.IGNORECASE)
 
 
 def normalize_exec_doc_kind(value: Any) -> str:
@@ -223,6 +234,28 @@ def _value_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _normalize_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", _value_text(value or "")).strip()
+
+
+def _status_positive(value: Any) -> bool:
+    text = _normalize_text(value).lower()
+    return any(marker in text for marker in _POSITIVE_STATUS_MARKERS)
+
+
+def _dedupe_text(values: Iterable[Any]) -> List[str]:
+    seen = set()
+    result: List[str] = []
+    for value in values or []:
+        text = _normalize_text(value)
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+    return result
+
+
 def _compact_refs(value: Any, limit: int = 8) -> List[str]:
     return list(dict.fromkeys(_iter_evidence_refs(value)))[:limit]
 
@@ -337,6 +370,7 @@ def _extract_ru_fips_source_entries(snippet: str, evidence_ref: str) -> List[Dic
                 "legal_status": "no_listed_pharma_patents",
                 "search_term": str(search_term or "").strip(),
                 "status_date": str(as_of or "").strip(),
+                "source_kind": "official_no_hit",
                 "evidence_refs": [evidence_ref],
             }
         )
@@ -359,10 +393,149 @@ def _extract_ru_fips_source_entries(snippet: str, evidence_ref: str) -> List[Dic
                 "expiry_date": expiry_value,
                 "remaining_time_months": _remaining_months(expiry_value),
                 "legal_status": "",
+                "source_kind": "fips_expiry_record",
                 "evidence_refs": [evidence_ref],
             }
         )
     return entries
+
+
+def _extract_forms_strengths(
+    registration: Dict[str, Any],
+    product_contexts: List[Dict[str, Any]],
+) -> Dict[str, List[str]]:
+    forms_strengths: List[str] = []
+    dosage_forms: List[str] = []
+    strengths: List[str] = []
+
+    for item in registration.get("forms_strengths", []) or []:
+        raw = _normalize_text(item)
+        if not raw:
+            continue
+        forms_strengths.append(raw)
+        for match in _STRENGTH_TOKEN_RE.finditer(raw):
+            strengths.append(match.group(0))
+        form_candidate = _STRENGTH_TOKEN_RE.sub("", raw.split("|", 1)[0])
+        form_candidate = re.sub(r"[;,:()]+", " ", form_candidate)
+        form_candidate = re.sub(r"\s+", " ", form_candidate).strip(" |-")
+        if form_candidate and not form_candidate.isdigit():
+            dosage_forms.append(form_candidate)
+
+    for context in product_contexts:
+        if not isinstance(context, dict):
+            continue
+        dosage_forms.extend(context.get("dosage_forms", []) or [])
+        strengths.extend(context.get("strengths", []) or [])
+
+    return {
+        "forms_strengths": _dedupe_text(forms_strengths),
+        "dosage_forms": _dedupe_text(dosage_forms),
+        "strengths": _dedupe_text(strengths),
+    }
+
+
+def _infer_registration_source_class(
+    region: str,
+    evidence_refs: List[str],
+    evidence_by_ref: Dict[str, Dict[str, Any]],
+) -> str:
+    doc_kinds = {
+        normalize_exec_doc_kind((evidence_by_ref.get(ref) or {}).get("doc_kind"))
+        for ref in evidence_refs
+        if str(ref or "").strip()
+    }
+    if region == "EAEU" and doc_kinds & {"eaeu_document", "eaeu_registration"}:
+        return "EAEU-native"
+    if region == "RU" and doc_kinds & {"grls", "grls_card", "ru_registration_export"}:
+        return "GRLS"
+    if region == "EU" and doc_kinds & {"smpc", "epar", "assessment_report", "eu_regulatory_summary"}:
+        return "EU-native"
+    if region == "US" and doc_kinds & {"label", "us_fda", "approval_letter"}:
+        return "US-native"
+    return "mixed"
+
+
+def _identity_confidence(
+    *,
+    region: str,
+    status_text: str,
+    identifiers: List[str],
+    evidence_refs: List[str],
+    source_class: str,
+    validity_type: str = "",
+) -> str:
+    source_native = source_class in {"EAEU-native", "GRLS", "EU-native", "US-native"}
+    if _status_positive(status_text) and identifiers and evidence_refs and source_native:
+        if region != "EAEU" or validity_type in {"date_present", "indefinite"}:
+            return "HIGH"
+        return "MEDIUM"
+    if _status_positive(status_text) and evidence_refs:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _signal_searchable_text(
+    signal: Dict[str, Any],
+    evidence_by_ref: Dict[str, Dict[str, Any]],
+) -> str:
+    parts = [
+        _normalize_text(signal.get("summary")),
+        _normalize_text(signal.get("category")),
+        _normalize_text(signal.get("source_name")),
+        _normalize_text(signal.get("region")),
+    ]
+    for ref in _compact_refs(signal):
+        item = evidence_by_ref.get(ref) or {}
+        parts.extend(
+            [
+                _normalize_text(item.get("title")),
+                _normalize_text(item.get("snippet")),
+                _normalize_text(item.get("source_label")),
+            ]
+        )
+    return " ".join(part for part in parts if part).lower()
+
+
+def _best_identity_match(
+    searchable_text: str,
+    identifiers: List[str],
+    mah: str,
+    dosage_forms: List[str],
+    strengths: List[str],
+) -> str:
+    if not searchable_text:
+        return "none"
+    for identifier in identifiers:
+        token = _normalize_text(identifier).lower()
+        if len(token) >= 4 and token in searchable_text:
+            return "same_identifier"
+    mah_token = _normalize_text(mah).lower()
+    if mah_token and mah_token in searchable_text:
+        return "mah_or_product_context"
+    for token in _dedupe_text(list(dosage_forms) + list(strengths)):
+        lowered = token.lower()
+        if len(lowered) >= 3 and lowered in searchable_text:
+            return "mah_or_product_context"
+    return "inn_level_only"
+
+
+def _identity_match_rank(value: str) -> int:
+    return {
+        "none": 0,
+        "inn_level_only": 1,
+        "mah_or_product_context": 2,
+        "same_identifier": 3,
+    }.get(str(value or "").strip().lower(), 0)
+
+
+def _commercial_linkage_confidence(match_level: str, signal_count: int) -> str:
+    if match_level == "same_identifier":
+        return "HIGH"
+    if match_level == "mah_or_product_context":
+        return "MEDIUM"
+    if match_level == "inn_level_only" and signal_count > 0:
+        return "LOW"
+    return "LOW"
 
 
 class ExecEvidenceAssembler:
@@ -626,6 +799,55 @@ class ExecEvidenceAssembler:
         def _doc_kind(ref: str) -> str:
             return normalize_exec_doc_kind((evidence_by_ref.get(ref) or {}).get("doc_kind"))
 
+        product_contexts_by_region: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for context in selected_sections.get("product_contexts", []) or []:
+            if not isinstance(context, dict):
+                continue
+            product_contexts_by_region[_region_from_record(context)].append(context)
+
+        registration_identity_map: List[Dict[str, Any]] = []
+        registrations_by_region: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for reg in selected_sections.get("registrations", []) or []:
+            if not isinstance(reg, dict):
+                continue
+            region = _region_from_record(reg)
+            refs = _compact_refs(reg)
+            identifiers = _dedupe_text(
+                _value_text(item)
+                for item in reg.get("identifiers", []) or []
+                if _value_text(item)
+            )
+            mah = _normalize_text(reg.get("mah"))
+            forms_payload = _extract_forms_strengths(reg, product_contexts_by_region.get(region, []))
+            validity_type = str(reg.get("validity_type") or "").strip().lower() or "missing_in_source"
+            valid_to_value = _normalize_text(reg.get("valid_to")) or None
+            status_text = _normalize_text(reg.get("status") or reg.get("verdict"))
+            source_class = _infer_registration_source_class(region, refs, evidence_by_ref)
+            identity_entry = {
+                "context": region,
+                "status": status_text,
+                "status_positive": _status_positive(status_text),
+                "mah": mah,
+                "identifiers": identifiers[:6],
+                "forms_strengths": forms_payload["forms_strengths"][:6],
+                "dosage_forms": forms_payload["dosage_forms"][:6],
+                "strengths": forms_payload["strengths"][:6],
+                "valid_to": valid_to_value,
+                "validity_type": validity_type,
+                "source_class": source_class,
+                "identity_confidence": _identity_confidence(
+                    region=region,
+                    status_text=status_text,
+                    identifiers=identifiers,
+                    evidence_refs=refs,
+                    source_class=source_class,
+                    validity_type=validity_type,
+                ),
+                "evidence_refs": refs[:8],
+            }
+            registration_identity_map.append(identity_entry)
+            registrations_by_region[region].append(identity_entry)
+
         clinical_linked: List[Dict[str, Any]] = []
         phase3_with_results_refs = 0
         for study in selected_sections.get("clinical_studies", []) or []:
@@ -738,6 +960,9 @@ class ExecEvidenceAssembler:
                     "expiry_date": entry.get("expiry_date") or "",
                     "remaining_time_months": entry.get("remaining_time_months"),
                     "legal_status": entry.get("legal_status") or "",
+                    "search_term": entry.get("search_term") or "",
+                    "status_date": entry.get("status_date") or "",
+                    "source_kind": entry.get("source_kind") or "",
                     "evidence_refs": list(entry.get("evidence_refs") or [])[:5],
                 }
                 dedupe_key = (
@@ -843,21 +1068,288 @@ class ExecEvidenceAssembler:
             evidence_refs = list(dict.fromkeys(payload.get("evidence_refs", []) or []))
             family_entries = payload.get("family_entries", []) or []
             source_only_entries = payload.get("source_only_entries", []) or []
+            official_no_hit_supported = any(
+                str(item.get("source_kind") or "").strip() == "official_no_hit"
+                or "no_listed_pharma_patents" in str(item.get("legal_status") or "").strip().lower()
+                for item in source_only_entries
+            )
+            window_status = _infer_region_window_status(
+                legal_statuses=legal_statuses,
+                expiry_dates=expiry_dates,
+                has_source_only=bool(source_only_entries),
+            )
+            if official_no_hit_supported:
+                conclusion = "NO_LISTED_BLOCKING_PATENT_EVIDENCE"
+                status_basis = "official_no_hit"
+            elif window_status == "open":
+                conclusion = "OPEN_WINDOW_EVIDENCE"
+                status_basis = "expiry_or_status_evidence"
+            elif window_status == "potentially_blocked":
+                conclusion = "BLOCKING_OR_PENDING_EVIDENCE_PRESENT"
+                status_basis = "active_or_future_expiry_evidence"
+            elif window_status == "unresolved_with_source_evidence":
+                conclusion = "SOURCE_EVIDENCE_PRESENT_BUT_WINDOW_UNRESOLVED"
+                status_basis = "source_only_partial"
+            else:
+                conclusion = "UNRESOLVED"
+                status_basis = "missing"
+            sources_checked = []
+            for entry in source_only_entries[:8]:
+                source_kind = str(entry.get("source_kind") or "").strip()
+                if source_kind == "official_no_hit":
+                    source_name = "EAPO pharma register" if region == "EAEU" else "FIPS / official patent register"
+                    result_text = "0 listed patents / no listed blocking pharma patents found"
+                elif source_kind == "fips_expiry_record":
+                    source_name = "FIPS / patent record"
+                    expiry_text = str(entry.get("expiry_date") or "").strip()
+                    result_text = f"expiry evidence {expiry_text}" if expiry_text else "source patent record"
+                else:
+                    source_name = "official source snippet"
+                    result_text = str(entry.get("legal_status") or entry.get("expiry_date") or "source evidence").strip()
+                sources_checked.append(
+                    {
+                        "source": source_name,
+                        "query": str(entry.get("search_term") or "").strip() or None,
+                        "result": result_text,
+                        "status_date": str(entry.get("status_date") or "").strip() or None,
+                        "evidence_refs": list(entry.get("evidence_refs") or [])[:5],
+                    }
+                )
             patent_snapshot[region] = {
-                "window_status": _infer_region_window_status(
-                    legal_statuses=legal_statuses,
-                    expiry_dates=expiry_dates,
-                    has_source_only=bool(source_only_entries),
-                ),
+                "window_status": window_status,
+                "conclusion": conclusion,
+                "status_basis": status_basis,
+                "official_no_hit_supported": official_no_hit_supported,
                 "family_entries": family_entries[:8],
                 "source_only_entries": source_only_entries[:8],
                 "legal_statuses": legal_statuses[:6],
                 "expiry_dates": expiry_dates[:8],
+                "sources_checked": sources_checked,
                 "evidence_refs": evidence_refs[:10],
             }
         resolved_ip_regions = {
             region for region, payload in patent_snapshot.items()
             if payload.get("window_status") != "missing"
+        }
+        registration_context_relationships: List[Dict[str, Any]] = []
+        ru_entries = registrations_by_region.get("RU", [])
+        eaeu_entries = registrations_by_region.get("EAEU", [])
+        if ru_entries and eaeu_entries:
+            ru_identifiers = {identifier for entry in ru_entries for identifier in entry.get("identifiers", []) or []}
+            eaeu_identifiers = {identifier for entry in eaeu_entries for identifier in entry.get("identifiers", []) or []}
+            ru_mahs = {entry.get("mah") for entry in ru_entries if entry.get("mah")}
+            eaeu_mahs = {entry.get("mah") for entry in eaeu_entries if entry.get("mah")}
+            if (ru_identifiers and eaeu_identifiers and ru_identifiers.isdisjoint(eaeu_identifiers)) or (
+                ru_mahs and eaeu_mahs and ru_mahs.isdisjoint(eaeu_mahs)
+            ):
+                registration_context_relationships.append(
+                    {
+                        "relationship": "separate_product_contexts",
+                        "regions": ["RU", "EAEU"],
+                        "basis": "Different RU and EAEU identifiers/MAH are treated as separate product contexts unless same-id linkage is evidenced.",
+                        "evidence_refs": list(
+                            dict.fromkeys(
+                                [
+                                    ref
+                                    for entry in (ru_entries[:2] + eaeu_entries[:2])
+                                    for ref in entry.get("evidence_refs", []) or []
+                                ]
+                            )
+                        )[:10],
+                    }
+                )
+
+        commercial_signals = [item for item in selected_sections.get("commercial_signals", []) or [] if isinstance(item, dict)]
+        market_entry_linkage: Dict[str, Dict[str, Any]] = {}
+        for target_region in ("RU", "EAEU"):
+            identity_entries = registrations_by_region.get(target_region, [])
+            if target_region == "RU":
+                relevant_signals = [item for item in commercial_signals if _region_from_record(item) == "RU"]
+                proxy_signals: List[Dict[str, Any]] = []
+            else:
+                relevant_signals = [
+                    item for item in commercial_signals
+                    if _region_from_record(item) in ({"EAEU"} | (_EAEU_MEMBER_STATES - {"RU"}))
+                ]
+                proxy_signals = [item for item in commercial_signals if _region_from_record(item) == "RU"]
+            identifiers = _dedupe_text(
+                identifier
+                for entry in identity_entries
+                for identifier in entry.get("identifiers", []) or []
+            )
+            mahs = _dedupe_text(entry.get("mah") for entry in identity_entries if entry.get("mah"))
+            dosage_forms = _dedupe_text(
+                form
+                for entry in identity_entries
+                for form in entry.get("dosage_forms", []) or []
+            )
+            strengths = _dedupe_text(
+                strength
+                for entry in identity_entries
+                for strength in entry.get("strengths", []) or []
+            )
+            best_match = "none"
+            linkage_refs: List[str] = []
+            signal_regions = set()
+            for signal in relevant_signals:
+                searchable_text = _signal_searchable_text(signal, evidence_by_ref)
+                match_level = _best_identity_match(
+                    searchable_text,
+                    identifiers,
+                    "; ".join(mahs),
+                    dosage_forms,
+                    strengths,
+                )
+                if _identity_match_rank(match_level) > _identity_match_rank(best_match):
+                    best_match = match_level
+                signal_regions.add(_region_from_record(signal))
+                if _identity_match_rank(match_level) >= 2:
+                    linkage_refs.extend(_compact_refs(signal))
+            all_signal_refs = [
+                ref
+                for item in relevant_signals
+                for ref in _compact_refs(item)
+            ]
+            market_entry_linkage[target_region] = {
+                "registration_anchor_present": any(entry.get("status_positive") for entry in identity_entries),
+                "identity_confidence": max(
+                    (str(entry.get("identity_confidence") or "LOW") for entry in identity_entries),
+                    default="LOW",
+                    key=lambda value: {"LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(value, 0),
+                ),
+                "registration_identifiers": identifiers[:6],
+                "registration_mahs": mahs[:4],
+                "dosage_forms": dosage_forms[:6],
+                "strengths": strengths[:6],
+                "commercial_signal_count": len(relevant_signals),
+                "ru_proxy_signal_count": len(proxy_signals),
+                "signal_regions": sorted(signal_regions),
+                "identity_match": best_match if relevant_signals else "none",
+                "linkage_confidence": _commercial_linkage_confidence(best_match, len(relevant_signals)),
+                "validity_confirmed": any(
+                    str(entry.get("validity_type") or "").strip().lower() in {"date_present", "indefinite"}
+                    for entry in identity_entries
+                ),
+                "same_identifier_confirmed": best_match == "same_identifier",
+                "product_context_match_confirmed": _identity_match_rank(best_match) >= 2,
+                "evidence_refs": list(dict.fromkeys(linkage_refs or all_signal_refs))[:10],
+            }
+
+        ru_eaeu_sources = []
+        ru_eaeu_evidence_refs: List[str] = []
+        ru_eaeu_as_of_dates = []
+        for region in ("RU", "EAEU"):
+            region_payload = patent_snapshot.get(region, {}) or {}
+            for source in region_payload.get("sources_checked", []) or []:
+                ru_eaeu_sources.append(
+                    {
+                        "source": source.get("source"),
+                        "jurisdiction": region,
+                        "query": source.get("query"),
+                        "result": source.get("result"),
+                        "as_of_date": source.get("status_date"),
+                        "evidence_refs": list(source.get("evidence_refs") or [])[:5],
+                    }
+                )
+                ru_eaeu_evidence_refs.extend(list(source.get("evidence_refs") or [])[:5])
+                if source.get("status_date"):
+                    ru_eaeu_as_of_dates.append(str(source.get("status_date")))
+        ru_eaeu_region_conclusions = {
+            region: str((patent_snapshot.get(region) or {}).get("conclusion") or "UNRESOLVED")
+            for region in ("RU", "EAEU")
+        }
+        if all(
+            value in {"NO_LISTED_BLOCKING_PATENT_EVIDENCE", "OPEN_WINDOW_EVIDENCE"}
+            for value in ru_eaeu_region_conclusions.values()
+        ):
+            ru_eaeu_conclusion = "NO_LISTED_BLOCKING_PATENT_EVIDENCE"
+        elif any(value == "BLOCKING_OR_PENDING_EVIDENCE_PRESENT" for value in ru_eaeu_region_conclusions.values()):
+            ru_eaeu_conclusion = "BLOCKING_OR_PENDING_EVIDENCE_PRESENT"
+        elif any(value in {"NO_LISTED_BLOCKING_PATENT_EVIDENCE", "OPEN_WINDOW_EVIDENCE"} for value in ru_eaeu_region_conclusions.values()):
+            ru_eaeu_conclusion = "PARTIAL_OPEN_WINDOW_EVIDENCE"
+        else:
+            ru_eaeu_conclusion = "UNRESOLVED"
+        ru_eaeu_confidence = (
+            "MEDIUM_HIGH"
+            if ru_eaeu_conclusion == "NO_LISTED_BLOCKING_PATENT_EVIDENCE" and ru_eaeu_sources
+            else "MEDIUM"
+            if ru_eaeu_conclusion == "PARTIAL_OPEN_WINDOW_EVIDENCE"
+            else "LOW"
+        )
+
+        regional_generic_opportunity = {}
+        regional_licensing_opportunity = {}
+        for region in ("RU", "EAEU", "EU", "US"):
+            registration_supported = any(entry.get("status_positive") for entry in registrations_by_region.get(region, []))
+            patent_payload = patent_snapshot.get(region, {}) or {}
+            patent_conclusion = str(patent_payload.get("conclusion") or "UNRESOLVED")
+            generic_refs = list(
+                dict.fromkeys(
+                    [
+                        ref
+                        for entry in registrations_by_region.get(region, [])
+                        for ref in entry.get("evidence_refs", []) or []
+                    ]
+                    + list(patent_payload.get("evidence_refs", []) or [])
+                )
+            )[:10]
+            if region in {"RU", "EAEU"} and registration_supported and patent_conclusion in {
+                "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
+                "OPEN_WINDOW_EVIDENCE",
+            }:
+                generic_verdict = "POTENTIAL_GO"
+                generic_reason = "Registration anchor exists and checked RU/EAEU patent sources do not show listed blocking window evidence."
+            elif patent_conclusion == "BLOCKING_OR_PENDING_EVIDENCE_PRESENT":
+                generic_verdict = "HOLD_OR_NO_GO"
+                generic_reason = "Patent expiry/legal-status evidence still indicates active or pending blocker risk."
+            else:
+                generic_verdict = "NOT_EVIDENCED"
+                generic_reason = "Generic opportunity remains region-dependent and not yet decision-grade for this jurisdiction."
+            regional_generic_opportunity[region] = {
+                "verdict": generic_verdict,
+                "reason": generic_reason,
+                "evidence_refs": generic_refs,
+            }
+
+            commercial_support = market_entry_linkage.get(region, {}) or {}
+            if registration_supported and int(commercial_support.get("commercial_signal_count") or 0) > 0:
+                licensing_verdict = "LOW"
+                licensing_reason = "Registration/access context already exists, so the packet does not show a strong licensing gap in this jurisdiction."
+            elif registration_supported:
+                licensing_verdict = "LOW"
+                licensing_reason = "Registration context exists, but the current packet does not show a clear incremental licensing unlock."
+            elif clinical_linked:
+                licensing_verdict = "MEDIUM"
+                licensing_reason = "Clinical maturity exists, but jurisdiction-specific registration/access gap would still need active business development work."
+            else:
+                licensing_verdict = "NOT_EVIDENCED"
+                licensing_reason = "Licensing opportunity is not evidenced in the current packet for this jurisdiction."
+            regional_licensing_opportunity[region] = {
+                "verdict": licensing_verdict,
+                "reason": licensing_reason,
+                "evidence_refs": generic_refs[:8],
+            }
+
+        synthesis_steps = selected_sections.get("synthesis_steps", []) or []
+        synthesis_screening = {
+            "step_count": len(synthesis_steps),
+            "route_found": bool(synthesis_steps),
+            "corroboration_level": (
+                "partial"
+                if (base_packet or {}).get("partial_route_corroboration")
+                else "supported"
+                if len(synthesis_steps) >= 2
+                else "limited"
+                if synthesis_steps
+                else "missing"
+            ),
+            "decision_use": "technical_screening_only",
+            "business_blocker": False,
+            "summary": (
+                "Synthesis evidence is suitable for initial technical screening, not for a manufacturing / CMC decision."
+                if synthesis_steps
+                else "No synthesis route evidence was selected for this packet."
+            ),
         }
         return {
             "phase3_results": {
@@ -877,13 +1369,40 @@ class ExecEvidenceAssembler:
                 "resolved_regions": sorted(resolved_ip_regions),
                 "unresolved_regions": sorted(ip_regions_required - resolved_ip_regions),
             },
+            "ru_eaeu_ip_window_snapshot": {
+                "inn": _normalize_text((base_packet or {}).get("inn") or ((base_packet or {}).get("passport") or {}).get("inn")),
+                "jurisdictions": ["RU", "EAEU"],
+                "as_of_date": sorted(ru_eaeu_as_of_dates)[-1] if ru_eaeu_as_of_dates else None,
+                "sources_checked": ru_eaeu_sources[:10],
+                "conclusion": ru_eaeu_conclusion,
+                "confidence": ru_eaeu_confidence,
+                "region_conclusions": ru_eaeu_region_conclusions,
+                "residual_risk": ru_eaeu_conclusion in {"NO_LISTED_BLOCKING_PATENT_EVIDENCE", "PARTIAL_OPEN_WINDOW_EVIDENCE"},
+                "limitations": [
+                    "Official no-hit and expiry snapshots are not a full freedom-to-operate opinion.",
+                    "Unlisted formulation, process, or non-pharma patents may still exist.",
+                ],
+                "evidence_refs": list(dict.fromkeys(ru_eaeu_evidence_refs))[:10],
+            },
+            "registration_identity_map": registration_identity_map[:12],
+            "registration_context_relationships": registration_context_relationships,
+            "market_entry_linkage": market_entry_linkage,
             "eaeu_registration": {
                 "registrations": eaeu_regs[:6],
                 "has_identifier_mah_linkage": any(item["identifier_mah_linked"] for item in eaeu_regs),
                 "has_valid_to": any(item["validity_type"] == "date_present" for item in eaeu_regs),
                 "has_validity_state": any(item["validity_type"] != "missing_in_source" for item in eaeu_regs),
                 "validity_types": sorted({item["validity_type"] for item in eaeu_regs if item.get("validity_type")}),
+                "has_source_native_identity_anchor": any(
+                    entry.get("context") == "EAEU"
+                    and entry.get("source_class") == "EAEU-native"
+                    and entry.get("identity_confidence") in {"HIGH", "MEDIUM"}
+                    for entry in registration_identity_map
+                ),
             },
+            "generic_opportunity_by_region": regional_generic_opportunity,
+            "licensing_opportunity_by_region": regional_licensing_opportunity,
+            "synthesis_screening": synthesis_screening,
         }
 
     def assemble(
@@ -963,10 +1482,20 @@ class ExecEvidenceAssembler:
                     "phase3_with_ctgov_results_evidence": contract_linkage.get("phase3_results", {}).get("phase3_with_ctgov_results_evidence", 0),
                     "ip_regions_with_expiry": sorted((contract_linkage.get("ip_window", {}).get("expiry_by_region") or {}).keys()),
                     "ip_regions_resolved": list((contract_linkage.get("patent_legal_status_snapshot", {}) or {}).get("resolved_regions", [])),
+                    "ru_eaeu_ip_conclusion": (contract_linkage.get("ru_eaeu_ip_window_snapshot", {}) or {}).get("conclusion"),
+                    "ru_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("identity_match"),
+                    "eaeu_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("identity_match"),
                     "eaeu_has_valid_to": contract_linkage.get("eaeu_registration", {}).get("has_valid_to", False),
                     "eaeu_has_validity_state": contract_linkage.get("eaeu_registration", {}).get("has_validity_state", False),
                     "eaeu_validity_types": list((contract_linkage.get("eaeu_registration", {}) or {}).get("validity_types", [])),
                     "eaeu_has_identifier_mah_linkage": contract_linkage.get("eaeu_registration", {}).get("has_identifier_mah_linkage", False),
+                    "generic_regions_with_potential": sorted(
+                        [
+                            region
+                            for region, payload in (contract_linkage.get("generic_opportunity_by_region", {}) or {}).items()
+                            if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"
+                        ]
+                    ),
                 },
             },
         }

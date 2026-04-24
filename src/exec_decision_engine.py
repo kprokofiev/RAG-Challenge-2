@@ -726,6 +726,7 @@ class ExecDecisionEngine:
         verification_packet["critical_unknowns"] = list(
             evidence_packet.get("critical_unknowns", packet.get("critical_unknowns", [])) or []
         )
+        verification_packet["contract_linkage"] = dict(evidence_packet.get("contract_linkage", {}) or {})
         verification_packet["partial_route_corroboration"] = packet.get("partial_route_corroboration")
         return verification_packet
 

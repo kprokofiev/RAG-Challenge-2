@@ -13,7 +13,6 @@ blocks:
       - registrations
       - clinical_studies
       - patent_families
-      - synthesis_steps
       - commercial_signals
       - product_contexts
       - unknowns
@@ -25,7 +24,6 @@ blocks:
       - registrations
       - clinical_studies
       - patent_families
-      - synthesis_steps
       - commercial_signals
     allowed_doc_kinds:
       - label
