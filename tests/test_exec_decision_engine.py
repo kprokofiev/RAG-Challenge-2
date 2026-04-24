@@ -720,6 +720,71 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
 
+    def test_verifier_moves_generic_eaeu_coverage_blocker_to_caveat_when_native_entry_is_strong(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="GO",
+            confidence="MEDIUM",
+            sufficiency="SUFFICIENT",
+            short_answer="EAEU entry is positive, but the answer still mentions GRLS same-id corroboration.",
+            full_answer="The EAEU-native registration is active, but the narrative still asks for GRLS same-id corroboration.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "eaeu_entry_blocker_1",
+                    "title": "Decision-grade dossier coverage is incomplete",
+                    "severity": "DECISION_BLOCKING",
+                    "rationale": (
+                        "The coverage ledger still flags decision_readiness as insufficient and "
+                        "the source manifest shows missing source classes."
+                    ),
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[
+                {
+                    "action_id": "eaeu_entry_action_1",
+                    "action": "Attach missing source classes from the source manifest.",
+                    "priority": "HIGH",
+                    "rationale": "Needed to move the coverage ledger to decision-grade readiness.",
+                    "evidence_refs": [],
+                }
+            ],
+            caveats=[
+                "The packet is source-native for the EAEU registration decision, but dossier readiness is still below the threshold for a positive verdict."
+            ],
+        )
+        packet = {
+            "evidence_ids": ["ev-eaeu"],
+            "critical_unknowns": [],
+            "contract_linkage": {
+                "registration_identity_map": [
+                    {
+                        "context": "EAEU",
+                        "source_class": "EAEU-native",
+                        "identity_confidence": "HIGH",
+                        "status_positive": True,
+                        "validity_type": "date_present",
+                        "valid_to": "2029-11-19",
+                        "identifiers": ["LP-EAEU-1"],
+                        "evidence_refs": ["ev-eaeu"],
+                    }
+                ],
+                "market_entry_linkage": {
+                    "EAEU": {"commercial_signal_count": 1}
+                },
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertFalse(repaired.decision_blockers)
+        self.assertFalse(repaired.next_actions)
+        self.assertIn("dedicated blocks", " ".join(repaired.caveats))
+
     def test_verifier_lifts_asset_when_ru_eaeu_ip_snapshot_supports_no_hit(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(

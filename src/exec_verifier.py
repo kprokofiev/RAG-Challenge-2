@@ -272,6 +272,43 @@ def _ru_eaeu_ip_snapshot(packet: Dict[str, Any]) -> Dict[str, Any]:
     return (_contract_linkage(packet).get("ru_eaeu_ip_window_snapshot", {}) or {})
 
 
+def _eaeu_native_entry_decision_supported(packet: Dict[str, Any]) -> bool:
+    identity_entry = _identity_entry(packet, "EAEU")
+    if not identity_entry:
+        return False
+    source_class = str(identity_entry.get("source_class") or "").strip().lower()
+    confidence = str(identity_entry.get("identity_confidence") or "").strip().upper()
+    validity_type = str(identity_entry.get("validity_type") or "").strip().lower()
+    has_validity = validity_type in {"date_present", "indefinite"} or bool(str(identity_entry.get("valid_to") or "").strip())
+    has_explicit_negative_status = identity_entry.get("status_positive") is False and not _has_positive_registration(packet, "EAEU")
+    return (
+        source_class == "eaeu-native"
+        and confidence in {"HIGH", "MEDIUM"}
+        and has_validity
+        and not has_explicit_negative_status
+    )
+
+
+def _is_eaeu_dossier_wide_coverage_text(value: Any) -> bool:
+    text = str(value or "").lower().replace("_", " ")
+    markers = (
+        "coverage ledger",
+        "decision grade dossier coverage",
+        "decision-grade dossier coverage",
+        "decision grade coverage",
+        "decision-grade coverage",
+        "decision readiness",
+        "dossier coverage",
+        "dossier readiness",
+        "evidence sufficiency",
+        "insufficient readiness",
+        "missing source class",
+        "missing source classes",
+        "source manifest",
+    )
+    return any(marker in text for marker in markers)
+
+
 def _regional_opportunity(packet: Dict[str, Any], block_id: str) -> Dict[str, Any]:
     return (_contract_linkage(packet).get(f"{block_id}_by_region", {}) or {})
 
@@ -433,12 +470,8 @@ class ExecVerifier:
             "different registration",
             "corroboration",
         )
-        validity_type = str(identity_entry.get("validity_type") or "").strip().lower()
         return (
-            bool(identity_entry)
-            and str(identity_entry.get("source_class") or "") == "EAEU-native"
-            and str(identity_entry.get("identity_confidence") or "") in {"HIGH", "MEDIUM"}
-            and validity_type in {"date_present", "indefinite"}
+            _eaeu_native_entry_decision_supported(packet)
             and _contains_any_marker(text, same_id_markers)
             and not _has_explicit_negative_evidence(text)
         )
@@ -880,6 +913,7 @@ class ExecVerifier:
             has_commercial = int(linkage.get("commercial_signal_count") or 0) > 0
             identifier = ", ".join((identity_entry.get("identifiers") or [])[:1])
             validity_value = str(identity_entry.get("valid_to") or "").strip() or str(identity_entry.get("validity_type") or "").strip()
+            supports_native_entry_go = _eaeu_native_entry_decision_supported(packet)
             repaired.verdict = "GO" if has_commercial else "CONDITIONAL_GO"
             repaired.sufficiency = "SUFFICIENT" if has_commercial else "PARTIAL"
             repaired.confidence = "MEDIUM"
@@ -896,20 +930,35 @@ class ExecVerifier:
             repaired.top_evidence_refs = list(dict.fromkeys(list(identity_entry.get("evidence_refs") or []) + list(repaired.top_evidence_refs)))[:8]
             repaired.decision_blockers = [
                 blocker for blocker in repaired.decision_blockers
-                if not _contains_any_marker(f"{blocker.title} {blocker.rationale}", ("same-id", "same id", "grls", "identifier", "corroboration"))
+                if not (
+                    _contains_any_marker(f"{blocker.title} {blocker.rationale}", ("same-id", "same id", "grls", "identifier", "corroboration"))
+                    or (supports_native_entry_go and _is_eaeu_dossier_wide_coverage_text(f"{blocker.title} {blocker.rationale}"))
+                )
             ]
             repaired.next_actions = [
                 action for action in repaired.next_actions
-                if not _contains_any_marker(f"{action.action} {action.rationale}", ("same-id", "same id", "grls", "identifier", "corroboration"))
+                if not (
+                    _contains_any_marker(f"{action.action} {action.rationale}", ("same-id", "same id", "grls", "identifier", "corroboration"))
+                    or (supports_native_entry_go and _is_eaeu_dossier_wide_coverage_text(f"{action.action} {action.rationale}"))
+                )
+            ]
+            repaired.caveats = [
+                caveat for caveat in repaired.caveats
+                if not (supports_native_entry_go and _is_eaeu_dossier_wide_coverage_text(caveat))
             ]
             caveat = "RU and EAEU registrations are treated as separate product contexts unless the packet explicitly proves same-identifier linkage."
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
+            coverage_caveat = "Dossier-wide IP/FTO and rights gaps remain in their dedicated blocks; they do not override the EAEU registration-entry conclusion when EAEU-native identity, status, and validity are source-backed."
+            if supports_native_entry_go and coverage_caveat not in repaired.caveats:
+                repaired.caveats.append(coverage_caveat)
             if not has_commercial:
                 commercial_caveat = "EAEU commercial/access evidence is still thinner than the regulatory anchor and should be completed separately."
                 if commercial_caveat not in repaired.caveats:
                     repaired.caveats.append(commercial_caveat)
             applied_changes.append("removed_same_id_grls_overconstraint_from_eaeu")
+            if supports_native_entry_go:
+                applied_changes.append("moved_eaeu_dossier_wide_coverage_gap_to_caveat")
 
         if any(issue.issue_type == "asset_ip_window_overconstraint" for issue in verification.issues) or self._asset_ip_window_overconstraint(repaired, packet):
             snapshot = _ru_eaeu_ip_snapshot(packet)
