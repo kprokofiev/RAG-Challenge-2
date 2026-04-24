@@ -15,6 +15,9 @@ blocks:
       - patent_families
       - commercial_signals
       - product_contexts
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
       - unknowns
       - dossier_quality_v2
       - coverage_ledger
@@ -41,6 +44,17 @@ blocks:
       - patent_family_summary
       - patent_legal_events
       - patent_expiry_us
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - patent_rights_record
+      - patent_assignment
+      - uspto_assignment
+      - rospatent_rights_record
+      - eapo_rights_record
+      - licensing_agreement
+      - sec_filing
+      - eaeu_pharma_register
       - ru_patent_fips
       - ru_registration_export
       - ru_esklp_snapshot
@@ -148,6 +162,8 @@ blocks:
       - registrations
       - patent_families
       - synthesis_steps
+      - legal_events_enrichment
+      - fto_screening
       - unknowns
       - dossier_quality_v2
       - coverage_ledger
@@ -160,6 +176,10 @@ blocks:
       - patent_family_summary
       - patent_legal_events
       - patent_expiry_us
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - eaeu_pharma_register
       - ru_patent_fips
       - patent_discovery_us
       - grls
@@ -182,6 +202,7 @@ blocks:
       - registrations
       - clinical_studies
       - commercial_signals
+      - rights_enrichment
       - unknowns
       - dossier_quality_v2
     field_prefixes:
@@ -199,6 +220,13 @@ blocks:
       - eaeu_document
       - ru_registration_export
       - ru_commercial_summary
+      - patent_rights_record
+      - patent_assignment
+      - uspto_assignment
+      - rospatent_rights_record
+      - eapo_rights_record
+      - licensing_agreement
+      - sec_filing
     escalation_classes:
       - out_of_region_registration
       - clinical_maturity
@@ -218,6 +246,9 @@ blocks:
       - clinical_studies
       - patent_families
       - commercial_signals
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
       - unknowns
       - dossier_quality_v2
       - coverage_ledger
@@ -235,6 +266,13 @@ blocks:
       - eaeu_document
       - ctgov
       - patent_family_summary
+      - patent_legal_events
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - patent_rights_record
+      - licensing_agreement
+      - sec_filing
       - ru_registration_export
       - ru_esklp_snapshot
       - ru_procurement_snapshot
@@ -254,6 +292,8 @@ blocks:
     sections:
       - patent_families
       - synthesis_steps
+      - legal_events_enrichment
+      - fto_screening
       - unknowns
       - dossier_quality_v2
       - coverage_ledger
@@ -264,6 +304,10 @@ blocks:
       - patent_family_summary
       - patent_legal_events
       - patent_expiry_us
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - eaeu_pharma_register
       - patent_discovery_us
       - ru_patent_fips
     escalation_classes:
@@ -320,6 +364,9 @@ blocks:
       - patent_families
       - synthesis_steps
       - commercial_signals
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
       - unknowns
       - dossier_quality_v2
     field_prefixes:
@@ -333,6 +380,13 @@ blocks:
       - smpc
       - ctgov
       - patent_family_summary
+      - patent_legal_events
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - patent_rights_record
+      - licensing_agreement
+      - sec_filing
       - ru_patent_fips
       - ru_registration_export
       - ru_official_act
@@ -356,6 +410,9 @@ blocks:
       - patent_families
       - commercial_signals
       - synthesis_steps
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
     field_prefixes:
       - unknowns
       - registrations
@@ -364,6 +421,12 @@ blocks:
       - synthesis_steps
     allowed_doc_kinds:
       - patent_legal_events
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - patent_rights_record
+      - licensing_agreement
+      - sec_filing
       - ru_patent_fips
       - ru_registration_export
       - ru_official_act
@@ -388,6 +451,9 @@ blocks:
       - patent_families
       - commercial_signals
       - synthesis_steps
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
     field_prefixes:
       - unknowns
       - registrations
@@ -396,6 +462,12 @@ blocks:
       - synthesis_steps
     allowed_doc_kinds:
       - patent_legal_events
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - patent_rights_record
+      - licensing_agreement
+      - sec_filing
       - ru_patent_fips
       - ru_registration_export
       - ru_official_act
@@ -418,6 +490,9 @@ blocks:
       - coverage_ledger
       - run_manifest
       - evidence_registry
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
     field_prefixes:
       - unknowns
     allowed_doc_kinds:
@@ -425,6 +500,11 @@ blocks:
       - smpc
       - ctgov
       - patent_family_summary
+      - patent_legal_events
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - patent_rights_record
       - ru_registration_export
     escalation_classes:
       - coverage_gap

@@ -1207,6 +1207,127 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(linkage["generic_opportunity_by_region"]["EAEU"]["verdict"], "POTENTIAL_GO")
         self.assertEqual(linkage["registration_context_relationships"][0]["relationship"], "separate_product_contexts")
 
+    def test_evidence_assembler_builds_rights_legal_events_and_fto_snapshots(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "ip_legal_window",
+            "inn": "apixaban",
+            "allowed_doc_kinds": [
+                "patent_family_summary",
+                "patent_legal_events",
+                "patent_term_extension",
+                "patent_file_wrapper",
+                "patent_national_legal_status",
+                "uspto_assignment",
+                "sec_filing",
+                "ru_patent_fips",
+            ],
+            "required_sections": ["patent_families"],
+            "patent_families": [
+                {
+                    "family_id": "fam-us-eu-1",
+                    "representative_pub": {"value": "US12345678", "evidence_refs": ["ev-family"]},
+                    "what_blocks": {"value": "compound claims for apixaban", "evidence_refs": ["ev-family"]},
+                    "technical_focus": {"value": "composition", "evidence_refs": ["ev-family"]},
+                    "expiry_by_country": [
+                        {"value": "US: 2027-01-01", "evidence_refs": ["ev-us-pte"]},
+                        {"value": "EP: 2028-02-02", "evidence_refs": ["ev-eu-spc"]},
+                    ],
+                    "evidence_refs": ["ev-family"],
+                }
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-family",
+                    "doc_id": "doc-family",
+                    "doc_kind": "patent_family_summary",
+                    "snippet": "US12345678 family contains compound claims for apixaban.",
+                },
+                {
+                    "evidence_id": "ev-us-pte",
+                    "doc_id": "doc-pte",
+                    "doc_kind": "patent_term_extension",
+                    "snippet": "US12345678 patent term extension PTE granted 2027-01-01.",
+                },
+                {
+                    "evidence_id": "ev-us-td",
+                    "doc_id": "doc-wrapper",
+                    "doc_kind": "patent_file_wrapper",
+                    "snippet": "US12345678 terminal disclaimer recorded 2024-01-15.",
+                },
+                {
+                    "evidence_id": "ev-eu-spc",
+                    "doc_id": "doc-spc",
+                    "doc_kind": "patent_legal_events",
+                    "snippet": "EP1234567 SPC granted 2028-02-02; opposition filed 2024-03-01.",
+                },
+                {
+                    "evidence_id": "ev-us-assignment",
+                    "doc_id": "doc-assignment",
+                    "doc_kind": "uspto_assignment",
+                    "snippet": "US12345678 assignment recorded 2024-02-02 Assignor A Assignee B.",
+                },
+                {
+                    "evidence_id": "ev-sec-license",
+                    "doc_id": "doc-sec",
+                    "doc_kind": "sec_filing",
+                    "snippet": "Exclusive license agreement territory US: licensee may sublicense, but may not assign without prior written consent.",
+                },
+                {
+                    "evidence_id": "ev-eapo-nohit",
+                    "doc_id": "doc-eapo-nohit",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="ip_legal_window",
+            answer_type="window",
+            needed_dossier_sections=["patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=[
+                    "patent_family_summary",
+                    "patent_legal_events",
+                    "patent_term_extension",
+                    "patent_file_wrapper",
+                    "patent_national_legal_status",
+                    "uspto_assignment",
+                    "sec_filing",
+                    "ru_patent_fips",
+                ],
+                queries=["apixaban patent legal events and rights"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        rights = linkage["rights_transferability_snapshot"]
+        self.assertEqual(rights["conclusion"], "TRANSFERABILITY_TERMS_EVIDENCED")
+        self.assertIn("assignment", rights["observed_record_types"])
+        self.assertIn("license", rights["observed_record_types"])
+        self.assertTrue(any(record["transferability"] == "prohibited" for record in rights["records"]))
+
+        family_events = linkage["family_legal_events_snapshot"]
+        self.assertIn("PTE", family_events["event_types_by_region"]["US"])
+        self.assertIn("terminal_disclaimer", family_events["event_types_by_region"]["US"])
+        self.assertIn("SPC", family_events["event_types_by_region"]["EU"])
+        self.assertFalse(family_events["decision_grade"])
+
+        fto = linkage["fto_screening_snapshot"]
+        self.assertEqual(fto["screening_level"], "FTO_SCREENING_ONLY")
+        self.assertTrue(fto["claim_scope_evidence_present"])
+        self.assertFalse(fto["full_fto_verdict_allowed"])
+        self.assertIn("FAMILY_LEGAL_EVENTS_INCOMPLETE", fto["decision_grade_blockers"])
+
+        manifest = linkage["source_evidence_manifest"]
+        self.assertGreaterEqual(manifest["checked_source_count"], 5)
+        self.assertEqual(
+            evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]["rights_conclusion"],
+            "TRANSFERABILITY_TERMS_EVIDENCED",
+        )
+
 
 class ExecLlmEnvTests(unittest.TestCase):
     def test_require_exec_openai_api_key_loads_explicit_env_file(self):

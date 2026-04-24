@@ -42,6 +42,17 @@ _DOC_KIND_LABELS = {
     "patent_family_summary": "Patent family summary",
     "patent_legal_events": "Patent legal events",
     "patent_expiry_us": "US patent expiry",
+    "patent_term_extension": "Patent term extension / SPC record",
+    "patent_file_wrapper": "Patent file wrapper",
+    "patent_national_legal_status": "National patent legal status",
+    "patent_rights_record": "Patent rights record",
+    "patent_assignment": "Patent assignment record",
+    "uspto_assignment": "USPTO assignment record",
+    "rospatent_rights_record": "Rospatent rights record",
+    "eapo_rights_record": "EAPO rights record",
+    "licensing_agreement": "Licensing agreement",
+    "sec_filing": "SEC filing",
+    "eaeu_pharma_register": "EAPO pharma register",
     "ru_patent_fips": "RU / FIPS patent registry",
     "formulary": "Formulary source",
     "pricing": "Pricing source",
@@ -63,6 +74,23 @@ _DOC_KIND_ALIASES = {
     "epo_register": "patent_legal_events",
     "epo_legal": "patent_legal_events",
     "spc": "patent_legal_events",
+    "spc_register": "patent_term_extension",
+    "uspto_pte": "patent_term_extension",
+    "pte": "patent_term_extension",
+    "patent_term_adjustment": "patent_term_extension",
+    "terminal_disclaimer": "patent_file_wrapper",
+    "uspto_terminal_disclaimer": "patent_file_wrapper",
+    "file_wrapper": "patent_file_wrapper",
+    "federated_register": "patent_national_legal_status",
+    "national_register": "patent_national_legal_status",
+    "patent_assignment_record": "patent_assignment",
+    "assignment": "patent_assignment",
+    "license_agreement": "licensing_agreement",
+    "licence_agreement": "licensing_agreement",
+    "material_contract": "sec_filing",
+    "edgar": "sec_filing",
+    "eapo_pharma_register": "eaeu_pharma_register",
+    "eapo_farma_register": "eaeu_pharma_register",
 }
 
 _DOC_KIND_EXPANSIONS = {
@@ -70,7 +98,14 @@ _DOC_KIND_EXPANSIONS = {
     "eu_regulatory_summary": ["eu_regulatory_summary", "epar", "assessment_report", "smpc"],
     "eaeu_document": ["eaeu_document", "eaeu_registration"],
     "grls": ["grls", "grls_card", "ru_instruction"],
-    "patent_legal_events": ["patent_legal_events", "ru_patent_fips"],
+    "patent_legal_events": [
+        "patent_legal_events",
+        "patent_term_extension",
+        "patent_file_wrapper",
+        "patent_national_legal_status",
+        "ru_patent_fips",
+        "eaeu_pharma_register",
+    ],
     "patent_expiry_us": ["patent_expiry_us"],
 }
 
@@ -94,6 +129,40 @@ _RU_FIPS_JURISDICTION_RE = re.compile(
 )
 _OFFICIAL_PATENT_REGISTER_NO_HIT_RE = re.compile(
     r"OFFICIAL_PATENT_REGISTER_NO_HIT\s*\|\s*region=([A-Z]+)\s*\|\s*search_term=([^|]+)\|\s*patents=0(?:\s*\|\s*as_of=([\d-]+))?",
+    re.IGNORECASE,
+)
+_PATENT_NUMBER_RE = re.compile(r"\b(?:US|EP|RU|EA|WO)\s?\d{4,}[A-Z]?\d?\b", re.IGNORECASE)
+_DATE_RE = re.compile(r"\b(20\d{2}|19\d{2})-\d{2}-\d{2}\b")
+_REGION_TOKEN_RE = re.compile(r"\b(US|USA|EP|EU|RU|EA|EAEU|BY|KZ|AM|KG|DE|FR|IT|ES|GB|UK)\b", re.IGNORECASE)
+_RIGHTS_DOC_KINDS = {
+    "patent_rights_record",
+    "patent_assignment",
+    "uspto_assignment",
+    "rospatent_rights_record",
+    "eapo_rights_record",
+    "licensing_agreement",
+    "sec_filing",
+}
+_LEGAL_EVENT_DOC_KINDS = {
+    "patent_legal_events",
+    "patent_expiry_us",
+    "patent_term_extension",
+    "patent_file_wrapper",
+    "patent_national_legal_status",
+    "ru_patent_fips",
+    "eaeu_pharma_register",
+}
+_RIGHTS_SIGNAL_RE = re.compile(
+    r"\b(assign(?:ment|ee|or|ed)?|licen[cs]e|sublicen[cs]e|pledge|security\s+interest|"
+    r"transfer(?:ability|able|red)?|exclusive\s+licen[cs]e)\b|"
+    r"(отчуждени|лиценз|сублиценз|залог|распоряжени|передач)",
+    re.IGNORECASE,
+)
+_LEGAL_EVENT_SIGNAL_RE = re.compile(
+    r"\b(PTE|SPC|supplementary\s+protection\s+certificate|terminal\s+disclaimer|opposition|"
+    r"revocation|revoked|lapse|lapsed|expired|withdrawn|maintenance|grant(?:ed)?|"
+    r"patent\s+term\s+extension)\b|"
+    r"(прекращен|аннулирован|истек|пошлин|продлен|выдан)",
     re.IGNORECASE,
 )
 _POSITIVE_STATUS_MARKERS = {
@@ -291,6 +360,10 @@ def _has_negative_results_phrase(value: Any) -> bool:
 _EXPIRY_RE = re.compile(r"\b([A-Z]{2,5})\s*:\s*(\d{4}-\d{2}-\d{2})\b")
 def _canonical_ip_region(raw_region: str) -> str:
     region = str(raw_region or "").strip().upper()
+    if region == "USA":
+        return "US"
+    if region == "UK":
+        return "GB"
     if region in {"EP", "EU"}:
         return "EU"
     if region in {"RU", "EA", "EAEU"}:
@@ -407,6 +480,418 @@ def _extract_ru_fips_source_entries(snippet: str, evidence_ref: str) -> List[Dic
             }
         )
     return entries
+
+
+def _region_from_evidence_text(item: Dict[str, Any], default: str = "GLOBAL") -> str:
+    doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+    text = " ".join(
+        str(value or "")
+        for value in (
+            item.get("region"),
+            item.get("jurisdiction"),
+            item.get("source_label"),
+            item.get("title"),
+            item.get("snippet"),
+        )
+    )
+    match = _REGION_TOKEN_RE.search(text)
+    if match:
+        return _canonical_ip_region(match.group(1))
+    patent_no = _first_patent_number(text)
+    if patent_no:
+        if patent_no.startswith("US"):
+            return "US"
+        if patent_no.startswith("EP"):
+            return "EU"
+        if patent_no.startswith("RU"):
+            return "RU"
+        if patent_no.startswith("EA"):
+            return "EAEU"
+    if doc_kind in {"uspto_assignment", "patent_file_wrapper"}:
+        return "US"
+    if doc_kind in {"rospatent_rights_record", "ru_patent_fips"}:
+        return "RU"
+    if doc_kind in {"eapo_rights_record", "eaeu_pharma_register"}:
+        return "EAEU"
+    if doc_kind in {"patent_legal_events", "patent_national_legal_status", "patent_term_extension"}:
+        return "EU"
+    return default
+
+
+def _first_date(text: str) -> Optional[str]:
+    match = _DATE_RE.search(str(text or ""))
+    return match.group(0) if match else None
+
+
+def _first_patent_number(text: str) -> Optional[str]:
+    match = _PATENT_NUMBER_RE.search(str(text or ""))
+    if not match:
+        return None
+    return re.sub(r"\s+", "", match.group(0)).upper()
+
+
+def _rights_record_type(text: str, doc_kind: str) -> str:
+    lower = text.lower()
+    if doc_kind in {"licensing_agreement", "sec_filing"} and ("licen" in lower or "лиценз" in lower):
+        return "license"
+    if "sublicen" in lower or "сублиценз" in lower:
+        return "sublicense"
+    if "licen" in lower or "лиценз" in lower:
+        return "license"
+    if "pledge" in lower or "security interest" in lower or "залог" in lower:
+        return "pledge_or_security_interest"
+    if "termination" in lower or "прекращ" in lower:
+        return "termination"
+    if "amend" in lower or "изменен" in lower:
+        return "amendment"
+    if doc_kind in {"patent_assignment", "uspto_assignment"} or "assign" in lower or "отчуждени" in lower:
+        return "assignment"
+    return "rights_record"
+
+
+def _transferability_from_text(text: str) -> str:
+    lower = text.lower()
+    if re.search(r"\b(may\s+not|shall\s+not|non[-\s]?transferable|not\s+assign(?:able)?)\b", lower):
+        return "prohibited"
+    if "не подлежит передаче" in lower or "без права передачи" in lower:
+        return "prohibited"
+    if "without prior written consent" in lower or "consent required" in lower or "с соглас" in lower:
+        return "consent_required"
+    if re.search(r"\b(may\s+assign|assignable|right\s+to\s+assign|transferable)\b", lower):
+        return "assignable"
+    if "может передать" in lower or "право передачи" in lower:
+        return "assignable"
+    return "unknown"
+
+
+def _sublicense_from_text(text: str) -> str:
+    lower = text.lower()
+    if "sublicen" not in lower and "сублиценз" not in lower:
+        return "unknown"
+    if re.search(r"\b(no|not|without)\s+sublicen[cs]e", lower) or "без права сублиценз" in lower:
+        return "no"
+    return "yes"
+
+
+def _extract_rights_records(selected_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for item in selected_evidence:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        snippet = str(item.get("snippet") or "")
+        if doc_kind not in _RIGHTS_DOC_KINDS and not _RIGHTS_SIGNAL_RE.search(snippet):
+            continue
+        evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if not evidence_ref:
+            continue
+        record_type = _rights_record_type(snippet, doc_kind)
+        exclusive_license = bool(
+            record_type in {"license", "sublicense"}
+            and re.search(r"\bexclusive\s+licen[cs]e\b|исключительн\w*\s+лиценз", snippet, re.IGNORECASE)
+        )
+        source_confidence = (
+            "official_record"
+            if doc_kind in {"patent_rights_record", "patent_assignment", "uspto_assignment", "rospatent_rights_record", "eapo_rights_record"}
+            else "public_contract"
+            if doc_kind in {"licensing_agreement", "sec_filing"}
+            else "snippet_signal"
+        )
+        records.append(
+            {
+                "record_type": record_type,
+                "jurisdiction": _region_from_evidence_text(item),
+                "patent_no": _first_patent_number(snippet),
+                "effective_date": _first_date(snippet),
+                "recordation_date": _first_date(snippet),
+                "territory": _region_from_evidence_text(item),
+                "exclusive_license": exclusive_license,
+                "sublicense_right": _sublicense_from_text(snippet),
+                "transferability": _transferability_from_text(snippet),
+                "source_doc_kind": doc_kind,
+                "source_confidence": source_confidence,
+                "evidence_refs": [evidence_ref],
+            }
+        )
+    return records
+
+
+def _legal_event_type(text: str, doc_kind: str) -> Optional[str]:
+    lower = text.lower()
+    if "terminal disclaimer" in lower:
+        return "terminal_disclaimer"
+    if "patent term extension" in lower or re.search(r"\bPTE\b", text):
+        return "PTE"
+    if "supplementary protection certificate" in lower or re.search(r"\bSPC\b", text):
+        return "SPC"
+    if "opposition" in lower:
+        return "opposition"
+    if "revocation" in lower or "revoked" in lower or "аннулирован" in lower:
+        return "revocation"
+    if "lapse" in lower or "lapsed" in lower or "прекращен" in lower:
+        return "lapse"
+    if "expired" in lower or "истек" in lower:
+        return "expiry"
+    if "withdrawn" in lower:
+        return "withdrawal"
+    if "maintenance" in lower or "fee" in lower or "пошлин" in lower:
+        return "maintenance_fee"
+    if "grant" in lower or "выдан" in lower:
+        return "grant"
+    if doc_kind == "patent_expiry_us":
+        return "expiry"
+    if doc_kind == "ru_patent_fips":
+        return "ru_legal_status"
+    if doc_kind == "eaeu_pharma_register":
+        return "eaeu_pharma_register"
+    return None
+
+
+def _normalized_legal_status(text: str) -> str:
+    lower = text.lower()
+    if any(token in lower for token in ("revoked", "revocation", "аннулирован")):
+        return "revoked"
+    if any(token in lower for token in ("lapsed", "lapse", "прекращен")):
+        return "lapsed"
+    if any(token in lower for token in ("expired", "expiry", "истек")):
+        return "expired"
+    if any(token in lower for token in ("withdrawn", "withdrawal")):
+        return "withdrawn"
+    if any(token in lower for token in ("active", "in force", "granted", "pending", "действует")):
+        return "active_or_pending"
+    return "uncertain"
+
+
+def _extract_legal_events(selected_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    events: List[Dict[str, Any]] = []
+    for item in selected_evidence:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        snippet = str(item.get("snippet") or "")
+        if doc_kind not in _LEGAL_EVENT_DOC_KINDS and not _LEGAL_EVENT_SIGNAL_RE.search(snippet):
+            continue
+        evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if not evidence_ref:
+            continue
+        event_type = _legal_event_type(snippet, doc_kind)
+        if not event_type:
+            continue
+        events.append(
+            {
+                "event_type": event_type,
+                "jurisdiction": _region_from_evidence_text(item),
+                "patent_no": _first_patent_number(snippet),
+                "event_date": _first_date(snippet),
+                "normalized_status": _normalized_legal_status(snippet),
+                "source_doc_kind": doc_kind,
+                "evidence_refs": [evidence_ref],
+            }
+        )
+    return events
+
+
+def _rights_transferability_snapshot(rights_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    evidence_refs = list(
+        dict.fromkeys(ref for record in rights_records for ref in record.get("evidence_refs", []) or [])
+    )
+    known_transferability = [
+        record for record in rights_records
+        if str(record.get("transferability") or "unknown") != "unknown"
+    ]
+    scope_records = [
+        record for record in rights_records
+        if record.get("exclusive_license")
+        or str(record.get("sublicense_right") or "unknown") != "unknown"
+        or str(record.get("territory") or "").upper() not in {"", "GLOBAL"}
+    ]
+    if known_transferability:
+        conclusion = "TRANSFERABILITY_TERMS_EVIDENCED"
+    elif rights_records:
+        conclusion = "PUBLIC_RECORDS_ONLY_TERMS_MISSING"
+    else:
+        conclusion = "NO_SOURCE_NATIVE_RIGHTS_EVIDENCE"
+    return {
+        "conclusion": conclusion,
+        "records": rights_records[:12],
+        "record_count": len(rights_records),
+        "observed_record_types": sorted({str(record.get("record_type") or "") for record in rights_records if record.get("record_type")}),
+        "transferability_evidence": "source_native_terms_present" if known_transferability else "unknown_or_not_public",
+        "licensing_scope_known": bool(scope_records),
+        "public_record_only": bool(rights_records and not known_transferability),
+        "limitations": [
+            "Public assignment/license registers do not usually expose full sublicensing, field, consent, or transfer restriction terms.",
+            "Treat missing contract terms as unknown, not as transferable.",
+        ],
+        "evidence_refs": evidence_refs[:12],
+    }
+
+
+def _family_legal_events_snapshot(
+    legal_events: List[Dict[str, Any]],
+    patent_snapshot: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    required_by_region = {
+        "US": {"PTE", "terminal_disclaimer", "expiry"},
+        "EU": {"SPC", "opposition", "revocation", "lapse"},
+        "RU": {"ru_legal_status", "expiry"},
+        "EAEU": {"eaeu_pharma_register", "ru_legal_status", "expiry"},
+    }
+    event_types_by_region: Dict[str, List[str]] = {}
+    refs: List[str] = []
+    for event in legal_events:
+        region = _canonical_ip_region(str(event.get("jurisdiction") or "GLOBAL"))
+        event_types_by_region.setdefault(region, [])
+        event_type = str(event.get("event_type") or "")
+        if event_type and event_type not in event_types_by_region[region]:
+            event_types_by_region[region].append(event_type)
+        refs.extend(list(event.get("evidence_refs") or []))
+    coverage = {}
+    for region, required in required_by_region.items():
+        observed = set(event_types_by_region.get(region, []))
+        snapshot_payload = patent_snapshot.get(region, {}) or {}
+        if snapshot_payload.get("window_status") != "missing":
+            observed.add("expiry")
+            if region in {"RU", "EAEU"}:
+                observed.add("ru_legal_status")
+        missing = sorted(required - observed)
+        coverage[region] = {
+            "observed_event_types": sorted(observed),
+            "missing_event_classes": missing,
+            "has_country_or_family_status": snapshot_payload.get("window_status") != "missing" or bool(observed),
+            "status_basis": snapshot_payload.get("status_basis"),
+        }
+        refs.extend(list(snapshot_payload.get("evidence_refs") or []))
+    return {
+        "events": legal_events[:20],
+        "event_types_by_region": {region: sorted(types) for region, types in event_types_by_region.items()},
+        "coverage_by_region": coverage,
+        "decision_grade": all(not payload["missing_event_classes"] for payload in coverage.values()),
+        "evidence_refs": list(dict.fromkeys(refs))[:16],
+    }
+
+
+def _claim_scope_refs(selected_sections: Dict[str, Any]) -> List[str]:
+    refs: List[str] = []
+    for family in selected_sections.get("patent_families", []) or []:
+        if not isinstance(family, dict):
+            continue
+        if any(_normalize_text(family.get(key)) for key in ("what_blocks", "technical_focus", "process_relevance")):
+            refs.extend(_compact_refs(family))
+    return list(dict.fromkeys(refs))
+
+
+def _fto_screening_snapshot(
+    selected_sections: Dict[str, Any],
+    patent_snapshot: Dict[str, Dict[str, Any]],
+    family_legal_events: Dict[str, Any],
+) -> Dict[str, Any]:
+    required_regions = ["US", "EU", "RU", "EAEU"]
+    unresolved = [
+        region for region in required_regions
+        if (patent_snapshot.get(region, {}) or {}).get("window_status") == "missing"
+    ]
+    potentially_blocked = [
+        region for region in required_regions
+        if (patent_snapshot.get(region, {}) or {}).get("window_status") == "potentially_blocked"
+    ]
+    claim_refs = _claim_scope_refs(selected_sections)
+    family_events_decision_grade = bool(family_legal_events.get("decision_grade"))
+    blockers = []
+    if not claim_refs:
+        blockers.append("CLAIM_SCOPE_NOT_MAPPED")
+    if unresolved:
+        blockers.append("COUNTRY_LEVEL_LEGAL_STATUS_INCOMPLETE")
+    if not family_events_decision_grade:
+        blockers.append("FAMILY_LEGAL_EVENTS_INCOMPLETE")
+    if potentially_blocked:
+        conclusion = "POTENTIAL_BLOCKERS_REQUIRE_REVIEW"
+    elif not unresolved and claim_refs:
+        conclusion = "SCREENING_OPEN_WITH_RESIDUAL_RISK"
+    else:
+        conclusion = "INSUFFICIENT_FOR_FTO"
+    refs = list(
+        dict.fromkeys(
+            claim_refs
+            + [
+                ref
+                for region in required_regions
+                for ref in (patent_snapshot.get(region, {}) or {}).get("evidence_refs", []) or []
+            ]
+            + list(family_legal_events.get("evidence_refs") or [])
+        )
+    )
+    return {
+        "screening_level": "FTO_SCREENING_ONLY",
+        "conclusion": conclusion,
+        "full_fto_verdict_allowed": bool(claim_refs and not unresolved and family_events_decision_grade),
+        "claim_scope_evidence_present": bool(claim_refs),
+        "country_effect_status_by_region": {
+            region: {
+                "window_status": (patent_snapshot.get(region, {}) or {}).get("window_status"),
+                "conclusion": (patent_snapshot.get(region, {}) or {}).get("conclusion"),
+                "status_basis": (patent_snapshot.get(region, {}) or {}).get("status_basis"),
+            }
+            for region in required_regions
+        },
+        "unresolved_regions": unresolved,
+        "potential_blocker_regions": potentially_blocked,
+        "decision_grade_blockers": blockers,
+        "limitations": [
+            "This is an automated FTO screening signal, not a freedom-to-operate legal opinion.",
+            "Positive screening requires attorney claim mapping and source-native country legal status checks before decision-grade use.",
+        ],
+        "evidence_refs": refs[:16],
+    }
+
+
+def _source_manifest_status(
+    source_id: str,
+    label: str,
+    required_for: List[str],
+    evidence_refs: List[str],
+    notes: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    return {
+        "source_id": source_id,
+        "label": label,
+        "status": "checked" if evidence_refs else "missing",
+        "required_for": required_for,
+        "evidence_refs": list(dict.fromkeys(evidence_refs))[:8],
+        "notes": notes or [],
+    }
+
+
+def _source_evidence_manifest(
+    selected_evidence: List[Dict[str, Any]],
+    rights_records: List[Dict[str, Any]],
+    legal_events: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    refs_by_kind: Dict[str, List[str]] = defaultdict(list)
+    for item in selected_evidence:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if ref:
+            refs_by_kind[doc_kind].append(ref)
+    rights_refs = [ref for record in rights_records for ref in record.get("evidence_refs", []) or []]
+    event_refs = [ref for event in legal_events for ref in event.get("evidence_refs", []) or []]
+    sources = [
+        _source_manifest_status("fda_orange_book", "FDA Orange Book patents/exclusivity", ["US patent expiry/exclusivity"], refs_by_kind.get("patent_expiry_us", [])),
+        _source_manifest_status("uspto_pte_file_wrapper", "USPTO PTE / file wrapper / terminal disclaimer", ["US family legal events"], refs_by_kind.get("patent_term_extension", []) + refs_by_kind.get("patent_file_wrapper", [])),
+        _source_manifest_status("uspto_assignment", "USPTO assignment records", ["ownership and public rights chain"], refs_by_kind.get("uspto_assignment", []) + refs_by_kind.get("patent_assignment", [])),
+        _source_manifest_status("epo_register", "EPO Register legal events", ["EU legal events"], refs_by_kind.get("patent_legal_events", [])),
+        _source_manifest_status("eu_national_registers", "EU national patent/SPC registers", ["EU country-level SPC/lapse/revocation"], refs_by_kind.get("patent_national_legal_status", [])),
+        _source_manifest_status("rospatent_searchplatform", "Rospatent / FIPS patent status", ["RU patent legal status"], refs_by_kind.get("ru_patent_fips", [])),
+        _source_manifest_status("eapo_pharma_register", "EAPO pharmaceutical register", ["EAEU listed pharma patent check"], refs_by_kind.get("eaeu_pharma_register", []) + [
+            ref for ref in refs_by_kind.get("ru_patent_fips", [])
+            if any(ref in (event.get("evidence_refs") or []) for event in legal_events if event.get("jurisdiction") == "EAEU")
+        ]),
+        _source_manifest_status("sec_edgar_contracts", "SEC EDGAR material agreements", ["licensing terms if public company disclosed them"], refs_by_kind.get("sec_filing", []) + refs_by_kind.get("licensing_agreement", [])),
+    ]
+    checked = [source for source in sources if source["status"] == "checked"]
+    return {
+        "sources": sources,
+        "checked_source_count": len(checked),
+        "missing_source_count": len(sources) - len(checked),
+        "rights_evidence_refs": list(dict.fromkeys(rights_refs))[:12],
+        "legal_event_evidence_refs": list(dict.fromkeys(event_refs))[:12],
+    }
 
 
 def _extract_forms_strengths(
@@ -1166,6 +1651,11 @@ class ExecEvidenceAssembler:
             region for region, payload in patent_snapshot.items()
             if payload.get("window_status") != "missing"
         }
+        rights_records = _extract_rights_records(selected_evidence)
+        legal_events = _extract_legal_events(selected_evidence)
+        family_legal_events = _family_legal_events_snapshot(legal_events, patent_snapshot)
+        fto_screening = _fto_screening_snapshot(selected_sections, patent_snapshot, family_legal_events)
+        source_manifest = _source_evidence_manifest(selected_evidence, rights_records, legal_events)
         registration_context_relationships: List[Dict[str, Any]] = []
         ru_entries = registrations_by_region.get("RU", [])
         eaeu_entries = registrations_by_region.get("EAEU", [])
@@ -1422,6 +1912,10 @@ class ExecEvidenceAssembler:
             "registration_identity_map": registration_identity_map[:12],
             "registration_context_relationships": registration_context_relationships,
             "market_entry_linkage": market_entry_linkage,
+            "rights_transferability_snapshot": _rights_transferability_snapshot(rights_records),
+            "family_legal_events_snapshot": family_legal_events,
+            "fto_screening_snapshot": fto_screening,
+            "source_evidence_manifest": source_manifest,
             "eaeu_registration": {
                 "registrations": eaeu_regs[:6],
                 "has_identifier_mah_linkage": any(item["identifier_mah_linked"] for item in eaeu_regs),
@@ -1524,6 +2018,10 @@ class ExecEvidenceAssembler:
                     "eaeu_has_validity_state": contract_linkage.get("eaeu_registration", {}).get("has_validity_state", False),
                     "eaeu_validity_types": list((contract_linkage.get("eaeu_registration", {}) or {}).get("validity_types", [])),
                     "eaeu_has_identifier_mah_linkage": contract_linkage.get("eaeu_registration", {}).get("has_identifier_mah_linkage", False),
+                    "rights_conclusion": (contract_linkage.get("rights_transferability_snapshot", {}) or {}).get("conclusion"),
+                    "fto_screening_conclusion": (contract_linkage.get("fto_screening_snapshot", {}) or {}).get("conclusion"),
+                    "family_legal_events_decision_grade": bool((contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("decision_grade")),
+                    "source_manifest_checked_count": (contract_linkage.get("source_evidence_manifest", {}) or {}).get("checked_source_count", 0),
                     "generic_regions_with_potential": sorted(
                         [
                             region
