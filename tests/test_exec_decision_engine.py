@@ -616,6 +616,157 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "HOLD")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
 
+    def test_verifier_promotes_rf_conditional_go_to_go_when_identity_linkage_is_explicit(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="RU registration exists, but commercial evidence still looks INN-level and not clearly linked to the identifier/MAH.",
+            full_answer="The packet confirms RU registration, but the answer still asks for explicit identifier linkage before a clean GO.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "market_entry_linkage": {
+                "RU": {
+                    "registration_anchor_present": True,
+                    "commercial_signal_count": 1,
+                    "identity_match": "same_identifier",
+                    "evidence_refs": ["ev-com-1"],
+                }
+            }
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+
+    def test_verifier_removes_eaeu_same_id_overconstraint_when_native_identity_is_strong(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="EAEU entry is held because GRLS same-id corroboration is missing.",
+            full_answer="The packet shows an EAEU registration, but the answer still blocks on GRLS same-id corroboration and different registration numbers.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "registration_identity_map": [
+                {
+                    "context": "EAEU",
+                    "source_class": "EAEU-native",
+                    "identity_confidence": "HIGH",
+                    "validity_type": "date_present",
+                    "valid_to": "2029-11-19",
+                    "identifiers": ["LP-EAEU-1"],
+                    "evidence_refs": ["ev-eaeu"],
+                }
+            ],
+            "market_entry_linkage": {
+                "EAEU": {"commercial_signal_count": 0}
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+
+    def test_verifier_lifts_asset_when_ru_eaeu_ip_snapshot_supports_no_hit(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Asset is still on HOLD because RU/EAEU patent expiry and legal status remain missing.",
+            full_answer="Registrations are present, but the answer still treats RU/EAEU patent window missingness as a hold-level blocker.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "ru_eaeu_ip_window_snapshot": {
+                "conclusion": "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
+                "as_of_date": "2025-10-30",
+            }
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+
+    def test_verifier_reframes_generic_opportunity_by_region(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="generic_opportunity",
+            title="Generic opportunity",
+            verdict="NOT_EVIDENCED",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="Generic opportunity is not evidenced globally.",
+            full_answer="EU and US remain unresolved, so the answer collapsed the full generic question into NOT_EVIDENCED.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": [],
+            "critical_unknowns": [],
+            "contract_linkage": {
+                "generic_opportunity_by_region": {
+                    "RU": {"verdict": "POTENTIAL_GO"},
+                    "EAEU": {"verdict": "POTENTIAL_GO"},
+                    "EU": {"verdict": "HOLD_OR_NO_GO"},
+                    "US": {"verdict": "NOT_EVIDENCED"},
+                }
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "MEDIUM")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+
+    def test_verifier_demotes_synthesis_to_screening_scope_for_asset(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="HOLD",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="Asset is on HOLD because synthesis route corroboration is partial.",
+            full_answer="The answer makes synthesis/manufacturing route a primary blocker for the BD asset verdict.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": [],
+            "critical_unknowns": [],
+            "contract_linkage": {
+                "synthesis_screening": {
+                    "decision_use": "technical_screening_only",
+                }
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertIn("screening-grade", " ".join(repaired.caveats).lower())
+
     def test_verifier_downgrades_conditional_go_with_blockers_to_hold(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -815,6 +966,80 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["window_status"],
             "open",
         )
+        self.assertEqual(
+            linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["conclusion"],
+            "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
+        )
+
+    def test_evidence_assembler_builds_identity_maps_and_regional_snapshots(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "asset_attractiveness",
+            "allowed_doc_kinds": ["ru_registration_export", "eaeu_document", "ru_procurement_summary", "ru_patent_fips"],
+            "required_sections": ["registrations", "commercial_signals", "product_contexts", "patent_families"],
+            "registrations": [
+                {
+                    "region": "RU",
+                    "status": {"value": "active", "evidence_refs": ["ev-ru-reg"]},
+                    "mah": {"value": "Canon", "evidence_refs": ["ev-ru-reg"]},
+                    "identifiers": [{"value": "LP-001", "evidence_refs": ["ev-ru-reg"]}],
+                    "forms_strengths": [{"value": "tablet | 5 mg", "evidence_refs": ["ev-ru-reg"]}],
+                    "evidence_refs": ["ev-ru-reg"],
+                },
+                {
+                    "region": "EAEU",
+                    "status": {"value": "Authorised", "evidence_refs": ["ev-eaeu-reg"]},
+                    "mah": {"value": "Lekpharm", "evidence_refs": ["ev-eaeu-reg"]},
+                    "identifiers": [{"value": "LP-EAEU-1", "evidence_refs": ["ev-eaeu-reg"]}],
+                    "forms_strengths": [{"value": "tablet | 5 mg", "evidence_refs": ["ev-eaeu-reg"]}],
+                    "validity_type": "date_present",
+                    "valid_to": {"value": "2029-11-19", "evidence_refs": ["ev-eaeu-reg"]},
+                    "evidence_refs": ["ev-eaeu-reg"],
+                },
+            ],
+            "commercial_signals": [
+                {
+                    "region": "RU",
+                    "category": "procurement",
+                    "summary": {"value": "Procurement for LP-001 Canon tablet 5 mg", "evidence_refs": ["ev-ru-com"]},
+                    "evidence_refs": ["ev-ru-com"],
+                }
+            ],
+            "product_contexts": [
+                {"region": "RU", "dosage_forms": ["tablet"], "strengths": ["5 mg"], "evidence_refs": ["ev-ru-reg"]},
+                {"region": "EAEU", "dosage_forms": ["tablet"], "strengths": ["5 mg"], "evidence_refs": ["ev-eaeu-reg"]},
+            ],
+            "patent_families": [],
+            "evidence_registry": [
+                {"evidence_id": "ev-ru-reg", "doc_id": "doc-ru-reg", "doc_kind": "ru_registration_export", "snippet": "LP-001 Canon tablet 5 mg active"},
+                {"evidence_id": "ev-eaeu-reg", "doc_id": "doc-eaeu-reg", "doc_kind": "eaeu_document", "snippet": "LP-EAEU-1 Authorised Valid To: 2029-11-19 MAH (Holder): Lekpharm"},
+                {"evidence_id": "ev-ru-com", "doc_id": "doc-ru-com", "doc_kind": "ru_procurement_summary", "snippet": "Procurement for LP-001 Canon tablet 5 mg"},
+                {"evidence_id": "ev-ru-nohit", "doc_id": "doc-ru-nohit", "doc_kind": "ru_patent_fips", "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=RU | search_term=апиксабан | patents=0 | as_of=2025-10-30"},
+                {"evidence_id": "ev-eaeu-nohit", "doc_id": "doc-eaeu-nohit", "doc_kind": "ru_patent_fips", "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30"},
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="asset_attractiveness",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations", "commercial_signals", "product_contexts", "patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["ru_registration_export", "eaeu_document", "ru_procurement_summary", "ru_patent_fips"],
+                queries=["apixaban ru/eaeu entry"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        self.assertTrue(any(item["context"] == "RU" and item["source_class"] == "GRLS" for item in linkage["registration_identity_map"]))
+        self.assertEqual(linkage["market_entry_linkage"]["RU"]["identity_match"], "same_identifier")
+        self.assertEqual(
+            linkage["ru_eaeu_ip_window_snapshot"]["conclusion"],
+            "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
+        )
+        self.assertEqual(linkage["generic_opportunity_by_region"]["RU"]["verdict"], "POTENTIAL_GO")
+        self.assertEqual(linkage["generic_opportunity_by_region"]["EAEU"]["verdict"], "POTENTIAL_GO")
+        self.assertEqual(linkage["registration_context_relationships"][0]["relationship"], "separate_product_contexts")
 
 
 class ExecLlmEnvTests(unittest.TestCase):

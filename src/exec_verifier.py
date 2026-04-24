@@ -147,6 +147,11 @@ def _contains_marker(text: str, markers: set[str]) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def _contains_any_marker(text: str, markers: tuple[str, ...] | list[str] | set[str]) -> bool:
+    lowered = str(text or "").lower()
+    return any(str(marker or "").lower() in lowered for marker in markers)
+
+
 def _has_explicit_negative_evidence(text: str) -> bool:
     lowered = text.lower()
     patterns = (
@@ -218,6 +223,46 @@ def _block_text(block: ExecDecisionBlock) -> str:
 def _has_context_integrity_green(packet: Dict[str, Any]) -> bool:
     readiness = ((packet.get("dossier_quality_v2") or {}).get("decision_readiness") or {})
     return str(readiness.get("context_integrity") or "").upper() == "GREEN"
+
+
+def _contract_linkage(packet: Dict[str, Any]) -> Dict[str, Any]:
+    return dict(packet.get("contract_linkage", {}) or {})
+
+
+def _identity_entry(packet: Dict[str, Any], region: str) -> Dict[str, Any]:
+    region = str(region or "").strip().upper()
+    best: Dict[str, Any] = {}
+    best_rank = -1
+    for item in (_contract_linkage(packet).get("registration_identity_map", []) or []):
+        if not isinstance(item, dict) or str(item.get("context") or "").strip().upper() != region:
+            continue
+        rank = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(str(item.get("identity_confidence") or "").upper(), 0)
+        if rank > best_rank:
+            best = item
+            best_rank = rank
+    return best
+
+
+def _market_entry_linkage(packet: Dict[str, Any], region: str) -> Dict[str, Any]:
+    region = str(region or "").strip().upper()
+    return ((_contract_linkage(packet).get("market_entry_linkage", {}) or {}).get(region, {}) or {})
+
+
+def _ru_eaeu_ip_snapshot(packet: Dict[str, Any]) -> Dict[str, Any]:
+    return (_contract_linkage(packet).get("ru_eaeu_ip_window_snapshot", {}) or {})
+
+
+def _regional_opportunity(packet: Dict[str, Any], block_id: str) -> Dict[str, Any]:
+    return (_contract_linkage(packet).get(f"{block_id}_by_region", {}) or {})
+
+
+def _identity_match_rank(value: str) -> int:
+    return {
+        "none": 0,
+        "inn_level_only": 1,
+        "mah_or_product_context": 2,
+        "same_identifier": 3,
+    }.get(str(value or "").strip().lower(), 0)
 
 
 def _grounding_refs_for_claim(claim_text: str, packet: Dict[str, Any], limit: int = 3) -> List[str]:
@@ -321,6 +366,133 @@ class ExecVerifier:
             return False
         text = _block_text(block)
         return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _has_explicit_negative_evidence(text)
+
+    def _rf_underlinked_conditional_go(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "rf_entry" or block.verdict not in {"CONDITIONAL_GO", "HOLD", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        linkage = _market_entry_linkage(packet, "RU")
+        if not linkage.get("registration_anchor_present") or int(linkage.get("commercial_signal_count") or 0) <= 0:
+            return False
+        if _identity_match_rank(str(linkage.get("identity_match") or "")) < 2:
+            return False
+        text = _block_text(block)
+        linkage_markers = (
+            "identifier",
+            "identity match",
+            "mah",
+            "product context",
+            "linkage",
+            "inn-level",
+            "same product",
+        )
+        return (
+            (_contains_any_marker(text, linkage_markers) or block.verdict == "CONDITIONAL_GO")
+            and not _has_explicit_negative_evidence(text)
+        )
+
+    def _eaeu_same_id_overconstraint(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "eaeu_entry" or block.verdict in {"GO", "CONDITIONAL_GO"}:
+            return False
+        linkage = _market_entry_linkage(packet, "EAEU")
+        identity_entry = _identity_entry(packet, "EAEU")
+        text = _block_text(block)
+        same_id_markers = (
+            "same-id",
+            "same id",
+            "grls",
+            "identifier mismatch",
+            "underlying authorization",
+            "different registration",
+            "corroboration",
+        )
+        validity_type = str(identity_entry.get("validity_type") or "").strip().lower()
+        return (
+            bool(identity_entry)
+            and str(identity_entry.get("source_class") or "") == "EAEU-native"
+            and str(identity_entry.get("identity_confidence") or "") in {"HIGH", "MEDIUM"}
+            and validity_type in {"date_present", "indefinite"}
+            and _contains_any_marker(text, same_id_markers)
+            and not _has_explicit_negative_evidence(text)
+        )
+
+    def _asset_ip_window_overconstraint(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "asset_attractiveness" or block.verdict not in {"HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        snapshot = _ru_eaeu_ip_snapshot(packet)
+        conclusion = str(snapshot.get("conclusion") or "")
+        if conclusion not in {"NO_LISTED_BLOCKING_PATENT_EVIDENCE", "PARTIAL_OPEN_WINDOW_EVIDENCE"}:
+            return False
+        if not (_has_positive_registration(packet, "RU") or _has_positive_registration(packet, "EAEU")):
+            return False
+        text = _block_text(block)
+        patent_markers = (
+            "patent",
+            "ip window",
+            "legal status",
+            "expiry",
+            "fips",
+            "eapo",
+        )
+        return _contains_any_marker(text, patent_markers) and not _has_explicit_negative_evidence(text)
+
+    def _regional_generic_collapse(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "generic_opportunity" or block.verdict != "NOT_EVIDENCED":
+            return False
+        regional = _regional_opportunity(packet, "generic_opportunity")
+        verdicts = {str((payload or {}).get("verdict") or "") for payload in regional.values()}
+        return "POTENTIAL_GO" in verdicts and any(value in {"HOLD_OR_NO_GO", "NOT_EVIDENCED"} for value in verdicts)
+
+    def _regional_licensing_collapse(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "licensing_opportunity" or block.verdict != "NOT_EVIDENCED":
+            return False
+        regional = _regional_opportunity(packet, "licensing_opportunity")
+        verdicts = {str((payload or {}).get("verdict") or "") for payload in regional.values()}
+        return any(value in {"LOW", "MEDIUM"} for value in verdicts)
+
+    def _business_block_synthesis_overconstraint(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id not in {
+            "asset_attractiveness",
+            "rf_entry",
+            "eaeu_entry",
+            "generic_opportunity",
+            "licensing_opportunity",
+            "portfolio_opportunity",
+        }:
+            return False
+        if block.verdict not in {"HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE", "NOT_EVIDENCED"}:
+            return False
+        text = _block_text(block)
+        synthesis_markers = ("synthesis", "route", "manufacturing", "process", "cmc")
+        if not _contains_any_marker(text, synthesis_markers):
+            return False
+        screening = (_contract_linkage(packet).get("synthesis_screening", {}) or {})
+        if str(screening.get("decision_use") or "") != "technical_screening_only":
+            return False
+        return not _has_explicit_negative_evidence(text)
 
     def _ground_or_downgrade_unreferenced_hard_claims(
         self,
@@ -451,6 +623,60 @@ class ExecVerifier:
                     issue_type="eaeu_holdable_position",
                     severity="WARN",
                     message="EAEU entry has a confirmed registration anchor and should degrade to HOLD rather than pure insufficiency.",
+                )
+            )
+
+        if self._rf_underlinked_conditional_go(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="rf_identity_underlink",
+                    severity="WARN",
+                    message="RF entry still sits below GO even though RU registration and RU commercial signals already align at product-context level.",
+                )
+            )
+
+        if self._eaeu_same_id_overconstraint(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="eaeu_same_id_overconstraint",
+                    severity="WARN",
+                    message="EAEU entry is overconstrained by GRLS same-id corroboration despite a strong EAEU-native registration identity anchor.",
+                )
+            )
+
+        if self._asset_ip_window_overconstraint(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="asset_ip_window_overconstraint",
+                    severity="WARN",
+                    message="Asset verdict is still being held down by RU/EAEU IP-window missingness despite official no-hit/open-window evidence.",
+                )
+            )
+
+        if self._regional_generic_collapse(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="regional_generic_collapse",
+                    severity="WARN",
+                    message="Generic opportunity collapsed into a global unsupported verdict even though the packet now shows region-dependent opportunity.",
+                )
+            )
+
+        if self._regional_licensing_collapse(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="regional_licensing_collapse",
+                    severity="WARN",
+                    message="Licensing opportunity collapsed into NOT_EVIDENCED even though the packet now shows region-dependent business-development posture.",
+                )
+            )
+
+        if self._business_block_synthesis_overconstraint(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="synthesis_secondary_scope",
+                    severity="WARN",
+                    message="Synthesis/manufacturing evidence should surface as a caveat for BD/entry blocks rather than as a primary blocker.",
                 )
             )
 
@@ -599,6 +825,166 @@ class ExecVerifier:
             )
             applied_changes.append("promoted_eaeu_insufficiency_to_hold")
 
+        if any(issue.issue_type == "rf_identity_underlink" for issue in verification.issues) or self._rf_underlinked_conditional_go(repaired, packet):
+            linkage = _market_entry_linkage(packet, "RU")
+            match_level = str(linkage.get("identity_match") or "")
+            linkage_phrase = (
+                "the same RU registration identifier"
+                if match_level == "same_identifier"
+                else "the same RU MAH / product context"
+            )
+            repaired.verdict = "GO"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                f"GO — active RU registration is confirmed and RU commercial/access signals already map to {linkage_phrase}, so RF entry should not stay at CONDITIONAL_GO."
+            )
+            repaired.full_answer = (
+                "RF entry remains anchored to the active RU registration context. "
+                f"The packet now carries explicit market-entry linkage showing that RU commercial/formulary/procurement evidence maps to {linkage_phrase}. "
+                "That removes the earlier INN-level-only ambiguity and supports a clean GO for the RU block."
+            )
+            repaired.top_evidence_refs = list(dict.fromkeys(list(linkage.get("evidence_refs") or []) + list(repaired.top_evidence_refs)))[:8]
+            caveat = "RU access evidence is now treated as product-context-linked rather than a pure INN-level proxy."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            repaired.decision_blockers = []
+            repaired.next_actions = []
+            applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
+
+        if any(issue.issue_type == "eaeu_same_id_overconstraint" for issue in verification.issues) or self._eaeu_same_id_overconstraint(repaired, packet):
+            identity_entry = _identity_entry(packet, "EAEU")
+            linkage = _market_entry_linkage(packet, "EAEU")
+            has_commercial = int(linkage.get("commercial_signal_count") or 0) > 0
+            identifier = ", ".join((identity_entry.get("identifiers") or [])[:1])
+            validity_value = str(identity_entry.get("valid_to") or "").strip() or str(identity_entry.get("validity_type") or "").strip()
+            repaired.verdict = "GO" if has_commercial else "CONDITIONAL_GO"
+            repaired.sufficiency = "SUFFICIENT" if has_commercial else "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "GO — EAEU-native registration identity, status, and validity are already sufficient for an EAEU regulatory entry conclusion."
+                if has_commercial
+                else "CONDITIONAL_GO — EAEU-native registration identity, status, and validity are already sufficient; remaining commercial follow-up is separate from the same-id question."
+            )
+            repaired.full_answer = (
+                "The packet includes an EAEU-native registration anchor with identifier, status, and validity evidence. "
+                f"Identifier {identifier or 'for the EAEU product context'} remains authorised with validity {validity_value or 'confirmed in-source'}. "
+                "A different RU GRLS identifier is treated as a separate regional product context rather than as a contradiction, so GRLS same-id corroboration should remain optional."
+            )
+            repaired.top_evidence_refs = list(dict.fromkeys(list(identity_entry.get("evidence_refs") or []) + list(repaired.top_evidence_refs)))[:8]
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(f"{blocker.title} {blocker.rationale}", ("same-id", "same id", "grls", "identifier", "corroboration"))
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if not _contains_any_marker(f"{action.action} {action.rationale}", ("same-id", "same id", "grls", "identifier", "corroboration"))
+            ]
+            caveat = "RU and EAEU registrations are treated as separate product contexts unless the packet explicitly proves same-identifier linkage."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            if not has_commercial:
+                commercial_caveat = "EAEU commercial/access evidence is still thinner than the regulatory anchor and should be completed separately."
+                if commercial_caveat not in repaired.caveats:
+                    repaired.caveats.append(commercial_caveat)
+            applied_changes.append("removed_same_id_grls_overconstraint_from_eaeu")
+
+        if any(issue.issue_type == "asset_ip_window_overconstraint" for issue in verification.issues) or self._asset_ip_window_overconstraint(repaired, packet):
+            snapshot = _ru_eaeu_ip_snapshot(packet)
+            as_of_date = str(snapshot.get("as_of_date") or "").strip()
+            repaired.verdict = "CONDITIONAL_GO"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "CONDITIONAL_GO — checked RU/EAEU official patent sources do not show listed blocking pharma patent evidence, so IP remains a residual-risk caveat rather than a hold-level blocker."
+            )
+            repaired.full_answer = (
+                "The packet now carries a normalized RU/EAEU IP-window snapshot. "
+                f"As of {as_of_date or 'the documented source dates'}, checked official sources support a no-listed-blocking-patent or open-window reading for RU/EAEU. "
+                "That is still not a full freedom-to-operate opinion, but it should no longer force asset attractiveness into HOLD purely because expiry/legal-status fields were incomplete."
+            )
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(f"{blocker.title} {blocker.rationale}", ("patent", "ip", "expiry", "legal status", "fips", "eapo"))
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if not _contains_any_marker(f"{action.action} {action.rationale}", ("patent", "ip", "expiry", "legal status", "fips", "eapo"))
+            ]
+            caveat = "RU/EAEU IP conclusion is still a residual-risk legal snapshot, not a formal FTO opinion."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_asset_hold_from_ru_eaeu_ip_missingness")
+
+        if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
+            regional = _regional_opportunity(packet, "generic_opportunity")
+            positive_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"]
+            constrained_regions = [
+                region
+                for region, payload in regional.items()
+                if str((payload or {}).get("verdict") or "") in {"HOLD_OR_NO_GO", "NOT_EVIDENCED"}
+            ]
+            repaired.verdict = "MEDIUM" if positive_regions else "LOW"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM" if positive_regions else "LOW"
+            repaired.short_answer = (
+                f"Region-dependent {repaired.verdict} — {', '.join(positive_regions) or 'some jurisdictions'} show potential generic headroom, while {', '.join(constrained_regions[:3]) or 'other jurisdictions'} remain blocked or unresolved."
+            )
+            repaired.full_answer = (
+                "Generic opportunity should be expressed region-by-region, not collapsed into a single global unsupported verdict. "
+                f"Current packet logic supports potential generic headroom in {', '.join(positive_regions) or 'the supported jurisdictions'}, "
+                f"while {', '.join(constrained_regions[:3]) or 'other jurisdictions'} remain blocked or not yet decision-grade."
+            )
+            repaired.caveats = [
+                caveat for caveat in repaired.caveats
+                if "global unsupported verdict" not in caveat.lower()
+            ]
+            repaired.caveats.append("Generic opportunity remains region-dependent and should not be narrated as one global patent answer.")
+            applied_changes.append("reframed_generic_opportunity_by_region")
+
+        if any(issue.issue_type == "regional_licensing_collapse" for issue in verification.issues) or self._regional_licensing_collapse(repaired, packet):
+            regional = _regional_opportunity(packet, "licensing_opportunity")
+            medium_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "MEDIUM"]
+            low_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "LOW"]
+            repaired.verdict = "MEDIUM" if medium_regions else "LOW"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM" if medium_regions else "LOW"
+            repaired.short_answer = (
+                "Region-dependent licensing posture — some jurisdictions still need BD work, while others already look like established registration/access contexts with only weak licensing upside."
+            )
+            repaired.full_answer = (
+                "Licensing should not be narrated as a single global verdict. "
+                f"Jurisdictions needing active BD work: {', '.join(medium_regions) or 'none surfaced strongly'}; "
+                f"jurisdictions with only weak licensing upside because registration/access is already established: {', '.join(low_regions[:4]) or 'not evidenced'}."
+            )
+            repaired.caveats.append("Licensing opportunity is region-dependent; established registration contexts can legitimately imply weak opportunity rather than no evidence.")
+            applied_changes.append("reframed_licensing_opportunity_by_region")
+
+        if any(issue.issue_type == "synthesis_secondary_scope" for issue in verification.issues) or self._business_block_synthesis_overconstraint(repaired, packet):
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(f"{blocker.title} {blocker.rationale}", ("synthesis", "route", "manufacturing", "process", "cmc"))
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if not _contains_any_marker(f"{action.action} {action.rationale}", ("synthesis", "route", "manufacturing", "process", "cmc"))
+            ]
+            screening_caveat = "Synthesis evidence remains screening-grade and should not be used for manufacturing / CMC conclusions."
+            if screening_caveat not in repaired.caveats:
+                repaired.caveats.append(screening_caveat)
+            if repaired.block_id == "asset_attractiveness" and repaired.verdict in {"HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE"}:
+                repaired.verdict = "CONDITIONAL_GO"
+                repaired.sufficiency = "PARTIAL"
+                repaired.confidence = "MEDIUM"
+                repaired.short_answer = (
+                    "CONDITIONAL_GO — synthesis remains screening-grade, but that should stay a technical caveat rather than a primary BD / market-entry blocker."
+                )
+                repaired.full_answer = (
+                    "Synthesis/manufacturing evidence is still useful only for initial technical screening. "
+                    "For this BD-oriented asset block, that limitation should remain a caveat rather than a hold-level or no-go-level blocker."
+                )
+            applied_changes.append("demoted_synthesis_to_screening_scope")
+
         repaired_verification = self.verify_block(repaired, packet, block_spec=None)
         repaired_verification.repair_applied = bool(applied_changes)
         repaired_verification.repair_reason = "; ".join(applied_changes) if applied_changes else None
@@ -620,6 +1006,12 @@ class ExecVerifier:
             "negative_missing_evidence_overreach",
             "rf_scope_overconstraint",
             "eaeu_holdable_position",
+            "rf_identity_underlink",
+            "eaeu_same_id_overconstraint",
+            "asset_ip_window_overconstraint",
+            "regional_generic_collapse",
+            "regional_licensing_collapse",
+            "synthesis_secondary_scope",
         }
         has_reparable_warn = any(
             issue.issue_type in reparable_warns for issue in verification.issues
@@ -629,6 +1021,12 @@ class ExecVerifier:
                 self._asset_negative_missing_evidence_overreach(block, packet),
                 self._rf_scope_overconstraint(block, packet),
                 self._eaeu_holdable_regulatory_position(block, packet),
+                self._rf_underlinked_conditional_go(block, packet),
+                self._eaeu_same_id_overconstraint(block, packet),
+                self._asset_ip_window_overconstraint(block, packet),
+                self._regional_generic_collapse(block, packet),
+                self._regional_licensing_collapse(block, packet),
+                self._business_block_synthesis_overconstraint(block, packet),
             )
         )
         if (verification.overall_status != "FAIL" and not has_reparable_warn and not needs_policy_repair) or not allow_repair:
