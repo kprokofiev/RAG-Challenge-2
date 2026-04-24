@@ -39,6 +39,14 @@ def _get_llm_timeout_seconds() -> float:
         return 120.0
 
 
+def _get_llm_max_retries() -> int:
+    raw = os.getenv("DDKIT_LLM_MAX_RETRIES", "2")
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 2
+
+
 def _estimate_text_tokens(value: str) -> int:
     try:
         encoding = tiktoken.get_encoding("o200k_base")
@@ -161,7 +169,7 @@ def call_exec_reasoning_model(
     client = OpenAI(
         api_key=api_key,
         timeout=_get_llm_timeout_seconds(),
-        max_retries=2,
+        max_retries=_get_llm_max_retries(),
     )
     prompt_tokens = _estimate_text_tokens(system_content) + _estimate_text_tokens(human_content)
     reasoning_effort = _map_thinking_mode_to_effort(thinking_mode)

@@ -88,6 +88,8 @@ class ExecApiRequestsTests(TestCase):
 
         with mock.patch("src.api_requests.require_exec_openai_api_key", return_value="test-key"), mock.patch(
             "src.api_requests.OpenAI", return_value=fake_client
+        ) as openai_mock, mock.patch.dict(
+            "os.environ", {"DDKIT_LLM_MAX_RETRIES": "0"}, clear=False
         ), mock.patch(
             "src.api_requests.reserve_routed_model", return_value=routed
         ), mock.patch(
@@ -108,6 +110,7 @@ class ExecApiRequestsTests(TestCase):
             )
 
         self.assertEqual(result.parsed_output.foo, "ok")
+        self.assertEqual(openai_mock.call_args.kwargs["max_retries"], 0)
         self.assertEqual(len(fake_client.responses.calls), 2)
         self.assertEqual(fake_client.responses.calls[0]["max_output_tokens"], 2400)
         self.assertGreater(fake_client.responses.calls[1]["max_output_tokens"], 2400)
