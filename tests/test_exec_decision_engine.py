@@ -905,6 +905,38 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertIn("residual-risk", " ".join(repaired.caveats).lower())
 
+    def test_verifier_downgrades_closed_ip_window_when_legal_status_is_not_decision_grade(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="ip_legal_window",
+            title="IP legal window",
+            verdict="CLOSED",
+            confidence="HIGH",
+            sufficiency="SUFFICIENT",
+            short_answer="CLOSED even though RU/EAEU legal status is incomplete and no reconciled SPC/PTE evidence is present.",
+            full_answer="Future expiries exist, but family legal events are mixed, incomplete, and not reconciled source-natively.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": [],
+            "critical_unknowns": [],
+            "contract_linkage": {
+                "family_legal_events_snapshot": {"decision_grade": False},
+                "fto_screening_snapshot": {
+                    "full_fto_verdict_allowed": False,
+                    "potential_blocker_regions": ["US", "EU", "RU", "EAEU"],
+                    "decision_grade_blockers": ["FAMILY_LEGAL_EVENTS_INCOMPLETE"],
+                },
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LIMITED")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("screening-grade", " ".join(repaired.caveats).lower())
+
     def test_verifier_reframes_generic_opportunity_by_region(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(

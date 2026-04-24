@@ -509,6 +509,33 @@ class ExecVerifier:
         )
         return _contains_any_marker(text, patent_markers) and not _has_explicit_negative_evidence(text)
 
+    def _ip_window_closed_without_decision_grade_legal_status(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "ip_legal_window" or block.verdict != "CLOSED":
+            return False
+        linkage = _contract_linkage(packet)
+        fto = linkage.get("fto_screening_snapshot", {}) or {}
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        if bool(fto.get("full_fto_verdict_allowed")) and bool(family_events.get("decision_grade")):
+            return False
+        text = _block_text(block)
+        uncertainty_markers = (
+            "conflict",
+            "contradict",
+            "incomplete",
+            "mixed",
+            "no reconciled",
+            "not reconciled",
+            "not fully",
+            "not source-native",
+            "screening",
+            "unresolved",
+        )
+        return _contains_any_marker(text, uncertainty_markers)
+
     def _regional_generic_collapse(
         self,
         block: ExecDecisionBlock,
@@ -712,6 +739,15 @@ class ExecVerifier:
                     issue_type="asset_ip_window_overconstraint",
                     severity="WARN",
                     message="Asset verdict is still being held down by RU/EAEU IP-window missingness despite official no-hit/open-window evidence.",
+                )
+            )
+
+        if self._ip_window_closed_without_decision_grade_legal_status(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="ip_window_closed_without_decision_grade_legal_status",
+                    severity="WARN",
+                    message="IP legal window is being closed despite incomplete or conflicted source-native family/legal-status coverage.",
                 )
             )
 
@@ -994,6 +1030,31 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("lifted_asset_hold_from_ru_eaeu_ip_missingness")
 
+        if (
+            any(issue.issue_type == "ip_window_closed_without_decision_grade_legal_status" for issue in verification.issues)
+            or self._ip_window_closed_without_decision_grade_legal_status(repaired, packet)
+        ):
+            linkage = _contract_linkage(packet)
+            fto = linkage.get("fto_screening_snapshot", {}) or {}
+            potential_regions = list(fto.get("potential_blocker_regions") or [])
+            repaired.verdict = "LIMITED" if potential_regions else "UNRESOLVED"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "LIMITED — future-dated patent blocker signals are present, but source-native family/legal-event coverage is not decision-grade enough to call the window fully CLOSED."
+                if potential_regions
+                else "UNRESOLVED — the packet does not provide decision-grade source-native family/legal-event coverage for the IP window."
+            )
+            repaired.full_answer = (
+                "The packet can support a screening-level blocker posture, but it also carries unresolved or conflicted legal-status coverage. "
+                "A CLOSED IP-window verdict requires reconciled source-native family status, legal events, and term-extension/SPC/PTE handling. "
+                "Until those are decision-grade, the block should remain LIMITED/UNRESOLVED rather than a full closed-window conclusion."
+            )
+            caveat = "IP-window status is screening-grade until family-by-family legal events and term-extension/SPC/PTE checks are reconciled source-natively."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("downgraded_overclosed_ip_window_to_screening_status")
+
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
             positive_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"]
@@ -1087,6 +1148,7 @@ class ExecVerifier:
             "rf_identity_underlink",
             "eaeu_same_id_overconstraint",
             "asset_ip_window_overconstraint",
+            "ip_window_closed_without_decision_grade_legal_status",
             "regional_generic_collapse",
             "regional_licensing_collapse",
             "synthesis_secondary_scope",
@@ -1102,6 +1164,7 @@ class ExecVerifier:
                 self._rf_underlinked_conditional_go(block, packet),
                 self._eaeu_same_id_overconstraint(block, packet),
                 self._asset_ip_window_overconstraint(block, packet),
+                self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),
