@@ -24,6 +24,7 @@ from src.ddkit_db import DDKitDB
 from src.text_splitter import TextSplitter
 from src.ingestion import VectorDBIngestor
 from src.log_utils import get_bound_logger
+from src.openai_model_router import get_quota_autostop_status
 
 logger = logging.getLogger(__name__)
 
@@ -2037,6 +2038,9 @@ class DossierGenerateProcessor:
                 return True, ""  # no DB → fail-open
         return True, ""
 
+    def _quota_autostop_status(self) -> Dict[str, Any]:
+        return get_quota_autostop_status()
+
     def process_job(self, job_data: Dict[str, Any]) -> bool:
         """
         Process a dossier_generate job.
@@ -2060,6 +2064,29 @@ class DossierGenerateProcessor:
             "dossier_generate_start tenant=%s case=%s report=%s run=%s trace=%s attempt=%d",
             tenant_id, case_id, report_id, run_id, trace_id, attempt,
         )
+
+        quota_autostop = self._quota_autostop_status()
+        if quota_autostop.get("blocked"):
+            exhausted_tiers = ",".join(quota_autostop.get("exhausted_tiers") or []) or "unknown"
+            reason = quota_autostop.get("reason") or (
+                "exec quota autostop active; "
+                f"exhausted_tiers={exhausted_tiers}; "
+                f"reset_at_utc={quota_autostop.get('reset_at_utc')}"
+            )
+            logger.warning(
+                "dossier_generate_quota_autostop_blocked tenant=%s case=%s report=%s "
+                "exhausted_tiers=%s reset_at_utc=%s",
+                tenant_id,
+                case_id,
+                report_id,
+                exhausted_tiers,
+                quota_autostop.get("reset_at_utc"),
+            )
+            if job_id and self.ddkit_db.is_configured():
+                self.ddkit_db.mark_job_failed(job_id, reason)
+            job_data["status"] = "quota_autostop_blocked"
+            job_data["quota_autostop"] = quota_autostop
+            return False
 
         # ── Preflight: wait for corpus to be indexed ──────────────────────────
         ready, reason = self._corpus_ready_for_dossier(tenant_id, case_id, run_id)

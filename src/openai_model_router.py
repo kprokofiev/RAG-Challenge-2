@@ -170,6 +170,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
 def _elite_budget() -> int:
     return _int_env("OPENAI_MODEL_ROUTER_ELITE_DAILY_TOKENS", 250_000)
 
@@ -208,17 +215,22 @@ def _default_state() -> Dict[str, int]:
     }
 
 
-def _read_state(day_key: str) -> Dict[str, int]:
-    state = _default_state()
+def _read_raw_state(day_key: str) -> Dict[str, Any]:
     client = _redis_client()
     if client is None:
-        return state
+        return {}
     key = _redis_state_key(day_key)
     try:
         raw = client.hgetall(key)
     except Exception as exc:  # pragma: no cover
         _log.warning("openai_model_router_read_state_failed: %s", exc)
-        return state
+        return {}
+    return raw or {}
+
+
+def _read_state(day_key: str) -> Dict[str, int]:
+    state = _default_state()
+    raw = _read_raw_state(day_key)
     for field in state:
         try:
             state[field] = int(raw.get(field, state[field]))
@@ -251,6 +263,39 @@ def get_budget_snapshot(day_key: Optional[str] = None) -> Dict[str, Any]:
             "reserve_min_remaining": _reserve_min_for_tier(tier),
         }
     return snapshot
+
+
+def get_quota_autostop_status(day_key: Optional[str] = None) -> Dict[str, Any]:
+    budget_day = day_key or _utc_day_key()
+    raw = _read_raw_state(budget_day)
+    snapshot = get_budget_snapshot(budget_day)
+    exhausted_tiers = [
+        tier for tier in ("elite", "mini") if snapshot.get(tier, {}).get("exhausted")
+    ]
+    enabled = _bool_env("DDKIT_EXEC_QUOTA_AUTOSTOP", False)
+    blocked = enabled and bool(exhausted_tiers)
+    last_errors = {
+        tier: raw.get(f"{tier}_last_error")
+        for tier in ("elite", "mini")
+        if raw.get(f"{tier}_last_error")
+    }
+    reason = None
+    if blocked:
+        reason = (
+            "exec quota autostop active; "
+            f"exhausted_tiers={','.join(exhausted_tiers)}; "
+            f"reset_at_utc={snapshot.get('reset_at_utc')}"
+        )
+    return {
+        "enabled": enabled,
+        "blocked": blocked,
+        "budget_date_utc": budget_day,
+        "reset_at_utc": snapshot.get("reset_at_utc"),
+        "redis_key": _redis_state_key(budget_day),
+        "exhausted_tiers": exhausted_tiers,
+        "last_errors": last_errors,
+        "reason": reason,
+    }
 
 
 def _tier_start_index(requested_model: Optional[str]) -> Optional[int]:

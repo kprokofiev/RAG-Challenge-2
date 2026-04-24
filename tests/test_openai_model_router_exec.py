@@ -165,6 +165,43 @@ class OpenAIModelRouterExecTests(unittest.TestCase):
         self.assertEqual(snapshot["mini"]["remaining_tokens"], 2500000)
         self.assertEqual(attempts, ["redis://redis:6379/0", "redis://localhost:6379/0"])
 
+    def test_quota_autostop_status_disabled_does_not_block(self):
+        state_key = router._redis_state_key(router._utc_day_key())
+        self.redis.hset(
+            state_key,
+            mapping={
+                "mini_exhausted": 1,
+                "mini_last_error": "429 insufficient_quota",
+            },
+        )
+        with mock.patch.dict(os.environ, {"DDKIT_EXEC_QUOTA_AUTOSTOP": "0"}, clear=False):
+            status = router.get_quota_autostop_status()
+
+        self.assertFalse(status["enabled"])
+        self.assertFalse(status["blocked"])
+        self.assertEqual(status["exhausted_tiers"], ["mini"])
+        self.assertEqual(status["last_errors"]["mini"], "429 insufficient_quota")
+
+    def test_quota_autostop_status_blocks_when_enabled_and_tier_exhausted(self):
+        state_key = router._redis_state_key(router._utc_day_key())
+        self.redis.hset(
+            state_key,
+            mapping={
+                "elite_exhausted": 1,
+                "elite_last_error": "billing hard stop",
+                "mini_exhausted": 1,
+                "mini_last_error": "429 insufficient_quota",
+            },
+        )
+        with mock.patch.dict(os.environ, {"DDKIT_EXEC_QUOTA_AUTOSTOP": "1"}, clear=False):
+            status = router.get_quota_autostop_status()
+
+        self.assertTrue(status["enabled"])
+        self.assertTrue(status["blocked"])
+        self.assertEqual(status["exhausted_tiers"], ["elite", "mini"])
+        self.assertIn("reset_at_utc=", status["reason"])
+        self.assertEqual(status["last_errors"]["elite"], "billing hard stop")
+
 
 if __name__ == "__main__":
     unittest.main()

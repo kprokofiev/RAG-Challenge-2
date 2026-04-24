@@ -296,7 +296,7 @@ class DDKitWorker:
     _RATE_LIMIT_DEFER_S = 600
 
     # Statuses set by processors that are "terminal by design" — no retry makes sense.
-    _TERMINAL_STATUSES = {"parsed_empty", "unsupported", "skipped"}
+    _TERMINAL_STATUSES = {"parsed_empty", "unsupported", "skipped", "quota_autostop_blocked"}
 
     def _handle_job_failure(self, job_data: Dict[str, Any], job_id: str, attempt: int, error_msg: Optional[str] = None):
         """Handle job failure: re-queue with backoff or send to DLQ after max attempts (#3).
