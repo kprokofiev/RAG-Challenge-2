@@ -146,8 +146,11 @@ class OpenAIModelRouterExecTests(unittest.TestCase):
             def ping(self):
                 raise OSError("name resolution failed")
 
-        def _from_url(url, decode_responses=True):
+        def _from_url(url, **kwargs):
             attempts.append(url)
+            self.assertEqual(kwargs["decode_responses"], True)
+            self.assertIn("socket_connect_timeout", kwargs)
+            self.assertIn("socket_timeout", kwargs)
             if url == "redis://redis:6379/0":
                 return _FailingRedis()
             self.assertEqual(url, "redis://localhost:6379/0")
@@ -164,6 +167,30 @@ class OpenAIModelRouterExecTests(unittest.TestCase):
 
         self.assertEqual(snapshot["mini"]["remaining_tokens"], 2500000)
         self.assertEqual(attempts, ["redis://redis:6379/0", "redis://localhost:6379/0"])
+
+    def test_router_disabled_does_not_touch_redis_url(self):
+        self.redis_patcher.stop()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "OPENAI_MODEL_ROUTER_ENABLED": "0",
+                "REDIS_URL": "redis://redis:6379/0",
+            },
+            clear=False,
+        ), mock.patch.object(router.redis_lib.Redis, "from_url") as from_url:
+            routed = router.reserve_routed_model(
+                requested_model="gpt-5.4-mini",
+                estimated_total_tokens=10000,
+                block_class="critical",
+                thinking_mode="high",
+            )
+            snapshot = router.get_budget_snapshot()
+
+        self.assertEqual(routed.tier, "disabled")
+        self.assertEqual(routed.model, "gpt-5.4-mini")
+        self.assertEqual(snapshot["mini"]["remaining_tokens"], 2500000)
+        from_url.assert_not_called()
 
     def test_quota_autostop_status_disabled_does_not_block(self):
         state_key = router._redis_state_key(router._utc_day_key())

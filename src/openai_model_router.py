@@ -65,6 +65,14 @@ def _redis_url() -> Optional[str]:
     return None
 
 
+def _redis_timeout_seconds() -> float:
+    raw = (os.getenv("OPENAI_MODEL_ROUTER_REDIS_TIMEOUT_SECONDS") or "2").strip()
+    try:
+        return max(0.1, float(raw))
+    except (TypeError, ValueError):
+        return 2.0
+
+
 def _rebuild_netloc(parsed: ParseResult, host: str, port: Optional[int]) -> str:
     userinfo = ""
     if parsed.username:
@@ -108,6 +116,8 @@ def _redis_url_candidates() -> list[str]:
 
 
 def _redis_client():
+    if not _router_enabled():
+        return None
     if redis_lib is None:
         return None
     urls = _redis_url_candidates()
@@ -119,7 +129,13 @@ def _redis_client():
         if cached is not None:
             return cached
         try:
-            client = redis_lib.Redis.from_url(url, decode_responses=True)
+            timeout = _redis_timeout_seconds()
+            client = redis_lib.Redis.from_url(
+                url,
+                decode_responses=True,
+                socket_connect_timeout=timeout,
+                socket_timeout=timeout,
+            )
             client.ping()
             _redis_client_cache[url] = client
             return client
