@@ -391,7 +391,9 @@ class ExecVerifier:
             return False
         if _positive_commercial_signal_count(packet, "RU") <= 0:
             return False
-        if not _has_context_integrity_green(packet):
+        linkage = _market_entry_linkage(packet, "RU")
+        has_market_entry_anchor = bool(linkage.get("registration_anchor_present")) and int(linkage.get("commercial_signal_count") or 0) > 0
+        if not (_has_context_integrity_green(packet) or has_market_entry_anchor):
             return False
         text = _block_text(block).lower()
         scope_markers = (
@@ -409,6 +411,11 @@ class ExecVerifier:
             "route/dosage form",
             "identity fields beyond grls",
             "lacks a clear ru instruction",
+            "inn-level",
+            "product-context alignment",
+            "product_context_match_confirmed",
+            "same registered ru product identity",
+            "same_identifier_confirmed",
         )
         return any(marker in text for marker in scope_markers) and not _has_explicit_negative_evidence(text)
 

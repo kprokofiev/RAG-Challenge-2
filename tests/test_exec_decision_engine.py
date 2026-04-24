@@ -625,6 +625,57 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "GO")
         self.assertEqual(repaired.sufficiency, "SUFFICIENT")
 
+    def test_verifier_repairs_rf_hold_when_inn_level_commercial_linkage_is_only_caveat(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer=(
+                "RU registration is active and RU access signals are present, but product-context alignment "
+                "is not fully proven."
+            ),
+            full_answer=(
+                "The packet says same_identifier_confirmed is false and product_context_match_confirmed is false, "
+                "so the answer blocks RF entry on INN-level commercial linkage."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "rf_entry_blocker_1",
+                    "title": "Product-context alignment is not fully proven",
+                    "severity": "DECISION_BLOCKING",
+                    "rationale": "Commercial/access signals exist, but linkage is only INN-level.",
+                    "evidence_refs": ["ev-com-1"],
+                }
+            ],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["dossier_quality_v2"]["decision_readiness"]["context_integrity"] = "YELLOW"
+        packet["registrations"][0]["status"] = {"value": "active", "evidence_refs": ["ev-reg-ru"]}
+        packet["commercial_signals"][0]["verdict"] = "confirmed"
+        packet["contract_linkage"] = {
+            "market_entry_linkage": {
+                "RU": {
+                    "registration_anchor_present": True,
+                    "commercial_signal_count": 3,
+                    "identity_match": "inn_level_only",
+                    "same_identifier_confirmed": False,
+                    "product_context_match_confirmed": False,
+                    "evidence_refs": ["ev-com-1"],
+                }
+            }
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertFalse(repaired.decision_blockers)
+        self.assertTrue(any("GRLS" in caveat for caveat in repaired.caveats))
+
     def test_verifier_promotes_eaeu_insufficiency_to_hold_when_reg_anchor_exists(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
