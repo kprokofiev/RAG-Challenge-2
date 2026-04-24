@@ -1059,6 +1059,46 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
         )
 
+    def test_contract_linkage_keeps_priority_patent_snapshot_when_planner_omits_doc_kind(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "asset_attractiveness",
+            "allowed_doc_kinds": ["grls", "ru_patent_fips"],
+            "patent_families": [],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-ru-reg",
+                    "doc_id": "doc-ru-reg",
+                    "doc_kind": "grls",
+                    "snippet": "GRLS active apixaban registration",
+                },
+                {
+                    "evidence_id": "ev-eapo-nohit",
+                    "doc_id": "doc-eapo-nohit",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="asset_attractiveness",
+            answer_type="go_no_go",
+            needed_dossier_sections=["patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["grls"],
+                queries=["apixaban registration"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        self.assertTrue(any(item["doc_id"] == "doc-eapo-nohit" for item in evidence_packet["selected_evidence"]))
+        self.assertEqual(
+            linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["conclusion"],
+            "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
+        )
+
     def test_evidence_assembler_builds_identity_maps_and_regional_snapshots(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {

@@ -627,6 +627,7 @@ class ExecEvidenceAssembler:
     ) -> List[Dict[str, Any]]:
         limits = self._contract_limits(plan)
         allowed_doc_kinds = set(self._resolved_allowed_doc_kinds(base_packet, plan))
+        priority_allowed_doc_kinds = set(normalize_exec_doc_kind_list(base_packet.get("allowed_doc_kinds", []))) or allowed_doc_kinds
         per_kind_limit = limits["max_per_doc_kind"]
         counts = Counter()
         selected: List[Dict[str, Any]] = []
@@ -660,7 +661,7 @@ class ExecEvidenceAssembler:
         registry = list(base_packet.get("evidence_registry", []) or [])
         for item in registry:
             doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
-            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+            if priority_allowed_doc_kinds and doc_kind not in priority_allowed_doc_kinds:
                 continue
             if not _is_priority_contract_evidence(item, doc_kind):
                 continue
