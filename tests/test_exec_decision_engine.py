@@ -708,6 +708,49 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
 
+    def test_verifier_lifts_asset_with_selected_sections_packet_and_negated_negative_phrase(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Asset remains HOLD because RU/EAEU IP-window evidence is unresolved.",
+            full_answer="The gap is not source-backed negative evidence; it is an incomplete IP-window snapshot.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "selected_sections": {
+                "registrations": [
+                    {
+                        "region": "EAEU",
+                        "status": {"value": "Authorised", "evidence_refs": ["ev-eaeu"]},
+                        "evidence_refs": ["ev-eaeu"],
+                    }
+                ]
+            },
+            "contract_linkage": {
+                "registration_identity_map": [
+                    {
+                        "context": "EAEU",
+                        "status_positive": True,
+                        "evidence_refs": ["ev-eaeu"],
+                    }
+                ],
+                "ru_eaeu_ip_window_snapshot": {
+                    "conclusion": "PARTIAL_OPEN_WINDOW_EVIDENCE",
+                    "as_of_date": "2025-10-30",
+                },
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertIn("residual-risk", " ".join(repaired.caveats).lower())
+
     def test_verifier_reframes_generic_opportunity_by_region(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -966,6 +1009,51 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["window_status"],
             "open",
         )
+        self.assertEqual(
+            linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["conclusion"],
+            "NO_LISTED_BLOCKING_PATENT_EVIDENCE",
+        )
+
+    def test_contract_linkage_prioritizes_official_eapo_no_hit_past_chunk_limit(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        filler = [
+            {
+                "evidence_id": f"ev-filler-{idx}",
+                "doc_id": f"doc-filler-{idx}",
+                "doc_kind": "ru_patent_fips",
+                "snippet": f"Filler patent registry snippet {idx} without decision-grade no-hit marker.",
+            }
+            for idx in range(40)
+        ]
+        base_packet = {
+            "block_id": "asset_attractiveness",
+            "allowed_doc_kinds": ["ru_patent_fips"],
+            "patent_families": [],
+            "evidence_registry": filler
+            + [
+                {
+                    "evidence_id": "ev-eapo-nohit",
+                    "doc_id": "doc-eapo-nohit",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30",
+                }
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="asset_attractiveness",
+            answer_type="go_no_go",
+            needed_dossier_sections=["patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["ru_patent_fips"],
+                queries=["apixaban eaeu patent status"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        self.assertLessEqual(len(evidence_packet["selected_evidence"]), 30)
+        self.assertTrue(any(item["doc_id"] == "doc-eapo-nohit" for item in evidence_packet["selected_evidence"]))
         self.assertEqual(
             linkage["patent_legal_status_snapshot"]["regions"]["EAEU"]["conclusion"],
             "NO_LISTED_BLOCKING_PATENT_EVIDENCE",

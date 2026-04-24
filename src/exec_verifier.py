@@ -154,6 +154,11 @@ def _contains_any_marker(text: str, markers: tuple[str, ...] | list[str] | set[s
 
 def _has_explicit_negative_evidence(text: str) -> bool:
     lowered = text.lower()
+    lowered = re.sub(
+        r"\b(?:not|no)\s+(?:source[-\s]backed\s+|explicit\s+)?negative evidence\b",
+        "",
+        lowered,
+    )
     patterns = (
         r"\bwithdrawn\b",
         r"\brevoked\b",
@@ -173,6 +178,16 @@ def _has_explicit_negative_evidence(text: str) -> bool:
     return any(re.search(pattern, lowered) for pattern in patterns)
 
 
+def _packet_section_items(packet: Dict[str, Any], section: str) -> List[Dict[str, Any]]:
+    direct = packet.get(section)
+    if isinstance(direct, list):
+        return [item for item in direct if isinstance(item, dict)]
+    selected = (packet.get("selected_sections", {}) or {}).get(section)
+    if isinstance(selected, list):
+        return [item for item in selected if isinstance(item, dict)]
+    return []
+
+
 def _registration_status_text(item: Dict[str, Any]) -> str:
     return " ".join(
         part for part in (
@@ -184,10 +199,15 @@ def _registration_status_text(item: Dict[str, Any]) -> str:
 
 def _has_positive_registration(packet: Dict[str, Any], region: str) -> bool:
     region = str(region or "").strip().upper()
-    for item in packet.get("registrations", []) or []:
+    for item in _packet_section_items(packet, "registrations"):
         if not isinstance(item, dict) or _region_text(item) != region:
             continue
         if _contains_marker(_registration_status_text(item), _POSITIVE_REGISTRATION_MARKERS):
+            return True
+    for item in (_contract_linkage(packet).get("registration_identity_map", []) or []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("context") or "").strip().upper() == region and bool(item.get("status_positive")):
             return True
     return False
 
@@ -195,7 +215,7 @@ def _has_positive_registration(packet: Dict[str, Any], region: str) -> bool:
 def _positive_commercial_signal_count(packet: Dict[str, Any], region: str) -> int:
     region = str(region or "").strip().upper()
     count = 0
-    for item in packet.get("commercial_signals", []) or []:
+    for item in _packet_section_items(packet, "commercial_signals"):
         if not isinstance(item, dict) or _region_text(item) != region:
             continue
         signal_text = " ".join(
@@ -440,7 +460,9 @@ class ExecVerifier:
         patent_markers = (
             "patent",
             "ip window",
+            "ip-window",
             "legal status",
+            "legal-status",
             "expiry",
             "fips",
             "eapo",

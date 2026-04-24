@@ -157,6 +157,15 @@ def _source_label(item: Dict[str, Any]) -> str:
     return _DOC_KIND_LABELS.get(doc_kind, doc_kind or "evidence")
 
 
+def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
+    if doc_kind != "ru_patent_fips":
+        return False
+    snippet = str(item.get("snippet") or "")
+    if _OFFICIAL_PATENT_REGISTER_NO_HIT_RE.search(snippet):
+        return True
+    return bool(_RU_FIPS_DOC_ID_RE.search(snippet) and _RU_FIPS_EXPIRY_DATE_RE.search(snippet))
+
+
 def _iter_evidence_refs(value: Any) -> Iterable[str]:
     if isinstance(value, dict):
         refs = value.get("evidence_refs", [])
@@ -621,12 +630,18 @@ class ExecEvidenceAssembler:
         per_kind_limit = limits["max_per_doc_kind"]
         counts = Counter()
         selected: List[Dict[str, Any]] = []
-        for item in base_packet.get("evidence_registry", []) or []:
-            doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
-            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
-                continue
-            if per_kind_limit.get(doc_kind) and counts[doc_kind] >= per_kind_limit[doc_kind]:
-                continue
+        seen_keys = set()
+
+        def _append(item: Dict[str, Any], doc_kind: str, *, enforce_per_kind: bool = True) -> bool:
+            key = (
+                str(item.get("evidence_id") or ""),
+                str(item.get("doc_id") or ""),
+                str(item.get("snippet") or "")[:160],
+            )
+            if key in seen_keys:
+                return False
+            if enforce_per_kind and per_kind_limit.get(doc_kind) and counts[doc_kind] >= per_kind_limit[doc_kind]:
+                return False
             selected.append(
                 {
                     "evidence_id": item.get("evidence_id"),
@@ -638,7 +653,26 @@ class ExecEvidenceAssembler:
                     "snippet": item.get("snippet", ""),
                 }
             )
+            seen_keys.add(key)
             counts[doc_kind] += 1
+            return True
+
+        registry = list(base_packet.get("evidence_registry", []) or [])
+        for item in registry:
+            doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+                continue
+            if not _is_priority_contract_evidence(item, doc_kind):
+                continue
+            _append(item, doc_kind, enforce_per_kind=False)
+            if len(selected) >= limits["max_chunks"]:
+                return selected[: limits["max_chunks"]]
+
+        for item in registry:
+            doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+                continue
+            _append(item, doc_kind)
             if len(selected) >= limits["max_chunks"]:
                 break
         return selected[: limits["max_chunks"]]
