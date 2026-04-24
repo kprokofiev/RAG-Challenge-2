@@ -357,8 +357,8 @@ class ExecDecisionEngineTests(unittest.TestCase):
         answer_prompt = build_answer_prompt(block_spec, _stub_question_plan(), snapshot, {"selected_evidence": []}, engine.model_profile)
         self.assertEqual(planner_prompt.thinking_mode, "high")
         self.assertEqual(answer_prompt.thinking_mode, "high")
-        self.assertIsNone(planner_prompt.max_output_tokens)
-        self.assertIsNone(answer_prompt.max_output_tokens)
+        self.assertEqual(planner_prompt.max_output_tokens, 2400)
+        self.assertEqual(answer_prompt.max_output_tokens, 5200)
 
     def test_dossier_snapshot_is_compact_for_planner_stage(self):
         engine = ExecDecisionEngine()
@@ -1327,6 +1327,151 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]["rights_conclusion"],
             "TRANSFERABILITY_TERMS_EVIDENCED",
         )
+
+    def test_evidence_assembler_parses_collector_legal_event_lines_and_retains_priority_manifest(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "ip_legal_window",
+            "inn": "apixaban",
+            "allowed_doc_kinds": ["patent_legal_events", "patent_expiry_us", "ru_patent_fips"],
+            "required_sections": ["patent_families"],
+            "patent_families": [
+                {
+                    "family_id": "fam-claim",
+                    "representative_pub": {"value": "US11896586", "evidence_refs": ["ev-family"]},
+                    "what_blocks": {"value": "compound claims for apixaban", "evidence_refs": ["ev-family"]},
+                    "evidence_refs": ["ev-family"],
+                }
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-family",
+                    "doc_id": "doc-family",
+                    "doc_kind": "patent_family_summary",
+                    "snippet": "US11896586 compound claims for apixaban.",
+                },
+                {
+                    "evidence_id": "ev-ob",
+                    "doc_id": "doc-ob",
+                    "doc_kind": "patent_expiry_us",
+                    "snippet": "LEGAL_EVENT | source=fda_orange_book | jurisdiction=US | patent=US11896586 | event_type=expiry | event_date=2040-11-22 | status=Orange Book listed",
+                },
+                {
+                    "evidence_id": "ev-epo",
+                    "doc_id": "doc-epo",
+                    "doc_kind": "patent_legal_events",
+                    "snippet": "\n".join(
+                        [
+                            "LEGAL_EVENT | source=epo_register | jurisdiction=EU | patent=EP4412586 | event_type=EPIDOSNIGR3 | event_date= | status=EPIDOSNIGR3 | raw={\"date\":\"20260402\",\"text\":\"New entry: Payment of fee for grant\"}",
+                            "LEGAL_EVENT | source=epo_register | jurisdiction=EU | patent=EP4353312 | event_type=expiry | event_date={'date': '2044-04-17', 'method': 'filing_plus_20y_no_pta'} | status=effective expiry reported",
+                        ]
+                    ),
+                },
+                {
+                    "evidence_id": "ev-ru",
+                    "doc_id": "doc-ru",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "LEGAL_EVENT | source=rospatent_searchplatform | jurisdiction=RU | patent=RU2819897 | event_type=ru_legal_status | event_date= | status=unknown | {\"doc_id\":\"RU2819897C1_20240528\",\"jurisdiction\":\"RU\",\"expiry_date\":\"2043-04-28\",\"legal_status\":\"unknown\",\"source\":\"rospatent_searchplatform\"}",
+                },
+                {
+                    "evidence_id": "ev-ea",
+                    "doc_id": "doc-ea",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "LEGAL_EVENT | source=rospatent_searchplatform | jurisdiction=EA | patent=EA0000037815 | event_type=ru_legal_status | event_date= | status=active | {\"doc_id\":\"EA0000037815B1_20210525\",\"jurisdiction\":\"EA\",\"expiry_date\":\"2037-06-19\",\"legal_status\":\"active\",\"source\":\"rospatent_searchplatform\"}",
+                },
+                {
+                    "evidence_id": "ev-eapo-nohit",
+                    "doc_id": "doc-eapo-nohit",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="ip_legal_window",
+            answer_type="window",
+            needed_dossier_sections=["patent_families"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["patent_legal_events", "patent_expiry_us", "ru_patent_fips"],
+                queries=["apixaban collector legal events"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        family_events = linkage["family_legal_events_snapshot"]
+        self.assertIn("expiry", family_events["event_types_by_region"]["US"])
+        self.assertIn("maintenance_fee", family_events["event_types_by_region"]["EU"])
+        self.assertIn("ru_legal_status", family_events["event_types_by_region"]["RU"])
+        self.assertIn("eaeu_pharma_register", family_events["event_types_by_region"]["EAEU"])
+
+        patent_snapshot = linkage["patent_legal_status_snapshot"]["regions"]
+        self.assertEqual(patent_snapshot["RU"]["conclusion"], "BLOCKING_OR_PENDING_EVIDENCE_PRESENT")
+        self.assertEqual(patent_snapshot["EAEU"]["conclusion"], "BLOCKING_OR_PENDING_EVIDENCE_PRESENT")
+        self.assertTrue(patent_snapshot["EAEU"]["official_no_hit_supported"])
+
+        retention = linkage["priority_evidence_retention"]
+        self.assertEqual(retention["status"], "ok")
+        self.assertIn("ev-eapo-nohit", retention["retained_refs"])
+        self.assertEqual(
+            evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]["priority_evidence_missing_count"],
+            0,
+        )
+
+    def test_market_entry_linkage_uses_product_context_form_and_strength_bridge(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "rf_entry",
+            "allowed_doc_kinds": ["ru_registration_export", "ru_commercial_summary"],
+            "required_sections": ["registrations", "commercial_signals", "product_contexts"],
+            "registrations": [
+                {
+                    "region": "RU",
+                    "status": {"value": "active", "evidence_refs": ["ev-reg"]},
+                    "mah": {"value": "Holder A", "evidence_refs": ["ev-reg"]},
+                    "identifiers": [{"value": "LP-777", "evidence_refs": ["ev-reg"]}],
+                    "forms_strengths": [{"value": "film-coated tablet | 5 mg", "evidence_refs": ["ev-reg"]}],
+                    "evidence_refs": ["ev-reg"],
+                }
+            ],
+            "commercial_signals": [
+                {
+                    "region": "RU",
+                    "category": "access",
+                    "summary": {"value": "Regional access signal for film-coated tablets 5 mg in the same product context.", "evidence_refs": ["ev-com"]},
+                    "evidence_refs": ["ev-com"],
+                }
+            ],
+            "product_contexts": [
+                {
+                    "region": "RU",
+                    "label": "Apixaban film-coated tablet 5 mg",
+                    "dosage_forms": ["film-coated tablet"],
+                    "strengths": ["5 mg"],
+                    "evidence_refs": ["ev-reg"],
+                }
+            ],
+            "evidence_registry": [
+                {"evidence_id": "ev-reg", "doc_id": "doc-reg", "doc_kind": "ru_registration_export", "snippet": "LP-777 active Holder A film-coated tablet 5 mg"},
+                {"evidence_id": "ev-com", "doc_id": "doc-com", "doc_kind": "ru_commercial_summary", "snippet": "Regional access signal for film-coated tablets 5 mg."},
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="rf_entry",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations", "commercial_signals", "product_contexts"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["ru_registration_export", "ru_commercial_summary"],
+                queries=["apixaban commercial linkage"],
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        ru_linkage = evidence_packet["contract_linkage"]["market_entry_linkage"]["RU"]
+
+        self.assertEqual(ru_linkage["identity_match"], "mah_or_product_context")
+        self.assertTrue(ru_linkage["product_context_match_confirmed"])
 
 
 class ExecLlmEnvTests(unittest.TestCase):

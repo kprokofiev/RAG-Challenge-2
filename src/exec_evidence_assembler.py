@@ -124,6 +124,9 @@ _RU_FIPS_DOC_ID_RE = re.compile(
 _RU_FIPS_EXPIRY_DATE_RE = re.compile(
     r'"expiry_date"\s*:\s*"([\d\-\s]+?)"',
 )
+_RU_FIPS_LEGAL_STATUS_RE = re.compile(
+    r'"legal_status"\s*:\s*"([^"]*?)"',
+)
 _RU_FIPS_JURISDICTION_RE = re.compile(
     r'"jurisdiction"\s*:\s*"([A-Z]{2})"',
 )
@@ -176,6 +179,7 @@ _POSITIVE_STATUS_MARKERS = {
     "valid",
 }
 _STRENGTH_TOKEN_RE = re.compile(r"\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|%)\b", re.IGNORECASE)
+_COMPACT_DATE_RE = re.compile(r"\b((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b")
 
 
 def normalize_exec_doc_kind(value: Any) -> str:
@@ -227,9 +231,13 @@ def _source_label(item: Dict[str, Any]) -> str:
 
 
 def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
+    snippet = str(item.get("snippet") or "")
+    if doc_kind in _LEGAL_EVENT_DOC_KINDS and "LEGAL_EVENT |" in snippet:
+        return True
+    if doc_kind in _RIGHTS_DOC_KINDS and "RIGHTS_RECORD |" in snippet:
+        return True
     if doc_kind != "ru_patent_fips":
         return False
-    snippet = str(item.get("snippet") or "")
     if _OFFICIAL_PATENT_REGISTER_NO_HIT_RE.search(snippet):
         return True
     return bool(_RU_FIPS_DOC_ID_RE.search(snippet) and _RU_FIPS_EXPIRY_DATE_RE.search(snippet))
@@ -265,6 +273,13 @@ def _compact_value(value: Any) -> Any:
             "region",
             "verdict",
             "context_id",
+            "label",
+            "product_name",
+            "brand_name",
+            "trade_name",
+            "inn",
+            "active_ingredient",
+            "route",
             "status",
             "summary",
             "title",
@@ -422,16 +437,15 @@ def _infer_region_window_status(
     has_source_only: bool,
 ) -> str:
     normalized = [status.strip().lower() for status in legal_statuses if str(status or "").strip()]
-    for status in normalized:
-        if any(marker in status for marker in ("no_listed_pharma_patents", "no patents found", "no_listed_patents")):
-            return "open"
-        if any(marker in status for marker in ("expired", "lapsed", "revoked", "withdrawn", "ceased")):
-            return "open"
-        if any(marker in status for marker in ("granted", "pending", "active", "in force")):
-            return "potentially_blocked"
+    if any(any(marker in status for marker in ("granted", "pending", "active", "in force")) for status in normalized):
+        return "potentially_blocked"
     remaining_months = [months for months in (_remaining_months(item) for item in expiry_dates) if months is not None]
     if remaining_months:
-        return "open" if min(remaining_months) <= 0 else "potentially_blocked"
+        return "potentially_blocked" if any(months > 0 for months in remaining_months) else "open"
+    if any(any(marker in status for marker in ("expired", "lapsed", "revoked", "withdrawn", "ceased")) for status in normalized):
+        return "open"
+    if any(any(marker in status for marker in ("no_listed_pharma_patents", "no patents found", "no_listed_patents")) for status in normalized):
+        return "open"
     if has_source_only:
         return "unresolved_with_source_evidence"
     return "missing"
@@ -467,6 +481,7 @@ def _extract_ru_fips_source_entries(snippet: str, evidence_ref: str) -> List[Dic
         if not re.match(r"\d{4}-\d{2}-\d{2}$", expiry_value):
             continue
         region_match = _RU_FIPS_JURISDICTION_RE.search(window)
+        legal_status_match = _RU_FIPS_LEGAL_STATUS_RE.search(window)
         region = _canonical_ip_region(region_match.group(1) if region_match else "RU")
         entries.append(
             {
@@ -474,7 +489,7 @@ def _extract_ru_fips_source_entries(snippet: str, evidence_ref: str) -> List[Dic
                 "representative_pub": raw_pub,
                 "expiry_date": expiry_value,
                 "remaining_time_months": _remaining_months(expiry_value),
-                "legal_status": "",
+                "legal_status": (legal_status_match.group(1).strip() if legal_status_match else ""),
                 "source_kind": "fips_expiry_record",
                 "evidence_refs": [evidence_ref],
             }
@@ -520,7 +535,13 @@ def _region_from_evidence_text(item: Dict[str, Any], default: str = "GLOBAL") ->
 
 def _first_date(text: str) -> Optional[str]:
     match = _DATE_RE.search(str(text or ""))
-    return match.group(0) if match else None
+    if match:
+        return match.group(0)
+    compact = _COMPACT_DATE_RE.search(str(text or ""))
+    if compact:
+        year, month, day = compact.groups()
+        return f"{year}-{month}-{day}"
+    return None
 
 
 def _first_patent_number(text: str) -> Optional[str]:
@@ -528,6 +549,120 @@ def _first_patent_number(text: str) -> Optional[str]:
     if not match:
         return None
     return re.sub(r"\s+", "", match.group(0)).upper()
+
+
+def _iter_structured_lines(snippet: str, prefix: str) -> Iterable[str]:
+    wanted = prefix.strip().upper()
+    for line in str(snippet or "").splitlines():
+        text = line.strip()
+        if text.upper().startswith(wanted):
+            yield text
+
+
+def _parse_pipe_fields(line: str) -> Dict[str, str]:
+    fields: Dict[str, str] = {}
+    for part in str(line or "").split("|"):
+        text = part.strip()
+        if not text or "=" not in text:
+            continue
+        key, value = text.split("=", 1)
+        normalized_key = key.strip().lower()
+        if normalized_key:
+            fields[normalized_key] = value.strip()
+    return fields
+
+
+def _structured_event_type(fields: Dict[str, str], doc_kind: str) -> Optional[str]:
+    event_type = str(fields.get("event_type") or "").strip()
+    status = str(fields.get("status") or "").strip()
+    combined = " ".join(
+        part for part in (event_type, status, fields.get("raw", ""), fields.get("source", "")) if part
+    )
+    lower_event = event_type.lower()
+    if lower_event in {"expiry", "expiration", "expire"}:
+        return "expiry"
+    if lower_event in {"ru_legal_status", "eaeu_pharma_register"}:
+        return lower_event
+    if lower_event == "spc":
+        return "SPC"
+    if lower_event == "pte":
+        return "PTE"
+    mapped = _legal_event_type(combined, doc_kind)
+    if mapped:
+        return mapped
+    lower = combined.lower()
+    if "pending" in lower:
+        return "pending"
+    if "active" in lower or "in force" in lower:
+        return "active_or_pending"
+    return None
+
+
+def _structured_legal_events_from_snippet(
+    item: Dict[str, Any],
+    evidence_ref: str,
+    doc_kind: str,
+) -> List[Dict[str, Any]]:
+    events: List[Dict[str, Any]] = []
+    for line in _iter_structured_lines(str(item.get("snippet") or ""), "LEGAL_EVENT"):
+        fields = _parse_pipe_fields(line)
+        event_type = _structured_event_type(fields, doc_kind)
+        if not event_type:
+            continue
+        jurisdiction = _canonical_ip_region(
+            fields.get("jurisdiction")
+            or fields.get("region")
+            or _region_from_evidence_text(item)
+        )
+        status_text = fields.get("status") or line
+        events.append(
+            {
+                "event_type": event_type,
+                "jurisdiction": jurisdiction,
+                "patent_no": _first_patent_number(fields.get("patent") or line),
+                "event_date": _first_date(fields.get("event_date") or fields.get("date") or line),
+                "normalized_status": _normalized_legal_status(status_text),
+                "source_doc_kind": doc_kind,
+                "evidence_refs": [evidence_ref],
+            }
+        )
+    return events
+
+
+def _structured_source_entries_from_snippet(
+    item: Dict[str, Any],
+    evidence_ref: str,
+    doc_kind: str,
+) -> List[Dict[str, Any]]:
+    entries: List[Dict[str, Any]] = []
+    for line in _iter_structured_lines(str(item.get("snippet") or ""), "LEGAL_EVENT"):
+        fields = _parse_pipe_fields(line)
+        event_type = _structured_event_type(fields, doc_kind)
+        if not event_type:
+            continue
+        region = _canonical_ip_region(fields.get("jurisdiction") or fields.get("region") or _region_from_evidence_text(item))
+        event_date = _first_date(fields.get("event_date") or fields.get("date") or line) or ""
+        status = fields.get("status") or ""
+        source_kind = "structured_legal_event"
+        expiry_date = event_date if event_type == "expiry" else ""
+        legal_status = _normalized_legal_status(status or line)
+        if event_type in {"ru_legal_status", "eaeu_pharma_register", "pending", "active_or_pending"}:
+            legal_status = status or legal_status
+        if event_type == "expiry":
+            legal_status = status or "expiry"
+        entries.append(
+            {
+                "region": region,
+                "representative_pub": _first_patent_number(fields.get("patent") or line) or "",
+                "expiry_date": expiry_date,
+                "remaining_time_months": _remaining_months(expiry_date) if expiry_date else None,
+                "legal_status": legal_status,
+                "status_date": event_date if event_type != "expiry" else "",
+                "source_kind": source_kind,
+                "evidence_refs": [evidence_ref],
+            }
+        )
+    return entries
 
 
 def _rights_record_type(text: str, doc_kind: str) -> str:
@@ -670,6 +805,26 @@ def _extract_legal_events(selected_evidence: List[Dict[str, Any]]) -> List[Dict[
         evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
         if not evidence_ref:
             continue
+        structured_events = _structured_legal_events_from_snippet(item, evidence_ref, doc_kind)
+        if structured_events:
+            events.extend(structured_events)
+            continue
+        official_no_hit = _OFFICIAL_PATENT_REGISTER_NO_HIT_RE.search(snippet)
+        if official_no_hit:
+            region_raw, _search_term, as_of = official_no_hit.groups()
+            region = _canonical_ip_region(region_raw or "EAEU")
+            events.append(
+                {
+                    "event_type": "eaeu_pharma_register" if region == "EAEU" else "ru_legal_status",
+                    "jurisdiction": region,
+                    "patent_no": None,
+                    "event_date": str(as_of or "").strip() or None,
+                    "normalized_status": "no_listed_pharma_patents",
+                    "source_doc_kind": doc_kind,
+                    "evidence_refs": [evidence_ref],
+                }
+            )
+            continue
         event_type = _legal_event_type(snippet, doc_kind)
         if not event_type:
             continue
@@ -747,9 +902,12 @@ def _family_legal_events_snapshot(
         observed = set(event_types_by_region.get(region, []))
         snapshot_payload = patent_snapshot.get(region, {}) or {}
         if snapshot_payload.get("window_status") != "missing":
-            observed.add("expiry")
+            if snapshot_payload.get("expiry_dates"):
+                observed.add("expiry")
             if region in {"RU", "EAEU"}:
                 observed.add("ru_legal_status")
+            if region == "EAEU" and snapshot_payload.get("official_no_hit_supported"):
+                observed.add("eaeu_pharma_register")
         missing = sorted(required - observed)
         coverage[region] = {
             "observed_event_types": sorted(observed),
@@ -894,6 +1052,64 @@ def _source_evidence_manifest(
     }
 
 
+def _evidence_ref_id(item: Dict[str, Any]) -> str:
+    return str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+
+
+def _priority_evidence_retention_manifest(
+    base_packet: Dict[str, Any],
+    selected_evidence: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    allowed_doc_kinds = set(normalize_exec_doc_kind_list(base_packet.get("allowed_doc_kinds", [])))
+    expected: List[Dict[str, Any]] = []
+    for item in base_packet.get("evidence_registry", []) or []:
+        if not isinstance(item, dict):
+            continue
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+            continue
+        if not _is_priority_contract_evidence(item, doc_kind):
+            continue
+        ref = _evidence_ref_id(item)
+        if not ref:
+            continue
+        snippet = str(item.get("snippet") or "")
+        if _OFFICIAL_PATENT_REGISTER_NO_HIT_RE.search(snippet):
+            priority_reason = "official_no_hit"
+        elif "LEGAL_EVENT |" in snippet:
+            priority_reason = "structured_legal_event"
+        elif "RIGHTS_RECORD |" in snippet:
+            priority_reason = "structured_rights_record"
+        else:
+            priority_reason = "fips_expiry_record"
+        expected.append(
+            {
+                "evidence_ref": ref,
+                "doc_id": item.get("doc_id"),
+                "doc_kind": doc_kind,
+                "priority_reason": priority_reason,
+            }
+        )
+    selected_refs = {
+        _evidence_ref_id(item)
+        for item in selected_evidence
+        if _evidence_ref_id(item)
+    }
+    expected_refs = [item["evidence_ref"] for item in expected]
+    retained_refs = [ref for ref in expected_refs if ref in selected_refs]
+    missing_refs = [ref for ref in expected_refs if ref not in selected_refs]
+    return {
+        "expected_count": len(expected_refs),
+        "retained_count": len(retained_refs),
+        "missing_count": len(missing_refs),
+        "expected_refs": expected_refs[:20],
+        "retained_refs": retained_refs[:20],
+        "missing_refs": missing_refs[:20],
+        "expected": expected[:20],
+        "status": "ok" if expected_refs and not missing_refs else "not_applicable" if not expected_refs else "missing_priority_evidence",
+    }
+
+
 def _extract_forms_strengths(
     registration: Dict[str, Any],
     product_contexts: List[Dict[str, Any]],
@@ -926,6 +1142,28 @@ def _extract_forms_strengths(
         "dosage_forms": _dedupe_text(dosage_forms),
         "strengths": _dedupe_text(strengths),
     }
+
+
+def _product_context_terms(
+    registration: Dict[str, Any],
+    product_contexts: List[Dict[str, Any]],
+) -> List[str]:
+    terms: List[str] = []
+    for key in ("context_id", "label", "product_name", "brand_name", "trade_name", "route"):
+        terms.append(_normalize_text(registration.get(key)))
+    for context in product_contexts:
+        if not isinstance(context, dict):
+            continue
+        for key in ("context_id", "label", "product_name", "brand_name", "trade_name", "route"):
+            terms.append(_normalize_text(context.get(key)))
+        for key in ("dosage_forms", "strengths"):
+            for item in context.get(key, []) or []:
+                terms.append(_normalize_text(item))
+    return [
+        term
+        for term in _dedupe_text(terms)
+        if len(term) >= 3 and not term.isdigit()
+    ]
 
 
 def _infer_registration_source_class(
@@ -996,6 +1234,7 @@ def _best_identity_match(
     mah: str,
     dosage_forms: List[str],
     strengths: List[str],
+    product_context_terms: Optional[List[str]] = None,
 ) -> str:
     if not searchable_text:
         return "none"
@@ -1006,10 +1245,20 @@ def _best_identity_match(
     mah_token = _normalize_text(mah).lower()
     if mah_token and mah_token in searchable_text:
         return "mah_or_product_context"
-    for token in _dedupe_text(list(dosage_forms) + list(strengths)):
+    for token in _dedupe_text(product_context_terms or []):
         lowered = token.lower()
-        if len(lowered) >= 3 and lowered in searchable_text:
+        if len(lowered) >= 4 and lowered in searchable_text:
             return "mah_or_product_context"
+    form_match = any(
+        len(token.lower()) >= 4 and token.lower() in searchable_text
+        for token in _dedupe_text(dosage_forms)
+    )
+    strength_match = any(
+        len(token.lower()) >= 3 and token.lower() in searchable_text
+        for token in _dedupe_text(strengths)
+    )
+    if form_match and strength_match:
+        return "mah_or_product_context"
     return "inn_level_only"
 
 
@@ -1338,7 +1587,9 @@ class ExecEvidenceAssembler:
                 if _value_text(item)
             )
             mah = _normalize_text(reg.get("mah"))
-            forms_payload = _extract_forms_strengths(reg, product_contexts_by_region.get(region, []))
+            region_product_contexts = product_contexts_by_region.get(region, [])
+            forms_payload = _extract_forms_strengths(reg, region_product_contexts)
+            product_terms = _product_context_terms(reg, region_product_contexts)
             validity_type = str(reg.get("validity_type") or "").strip().lower() or "missing_in_source"
             valid_to_value = _normalize_text(reg.get("valid_to")) or None
             status_text = _normalize_text(reg.get("status") or reg.get("verdict"))
@@ -1352,6 +1603,7 @@ class ExecEvidenceAssembler:
                 "forms_strengths": forms_payload["forms_strengths"][:6],
                 "dosage_forms": forms_payload["dosage_forms"][:6],
                 "strengths": forms_payload["strengths"][:6],
+                "product_context_terms": product_terms[:8],
                 "valid_to": valid_to_value,
                 "validity_type": validity_type,
                 "source_class": source_class,
@@ -1454,8 +1706,30 @@ class ExecEvidenceAssembler:
                 continue
             snippet = str(item.get("snippet") or "")
             source_entries: List[Dict[str, Any]] = []
+            structured_entries = _structured_source_entries_from_snippet(item, evidence_ref, doc_kind)
             if doc_kind == "ru_patent_fips":
                 source_entries = _extract_ru_fips_source_entries(snippet, evidence_ref)
+                existing_entry_keys = {
+                    (
+                        _canonical_ip_region(entry.get("region") or ""),
+                        str(entry.get("representative_pub") or ""),
+                        str(entry.get("expiry_date") or ""),
+                        str(entry.get("legal_status") or ""),
+                    )
+                    for entry in source_entries
+                }
+                for entry in structured_entries:
+                    key = (
+                        _canonical_ip_region(entry.get("region") or ""),
+                        str(entry.get("representative_pub") or ""),
+                        str(entry.get("expiry_date") or ""),
+                        str(entry.get("legal_status") or ""),
+                    )
+                    if key not in existing_entry_keys:
+                        source_entries.append(entry)
+                        existing_entry_keys.add(key)
+            elif structured_entries:
+                source_entries = structured_entries
             else:
                 for match in _EXPIRY_RE.finditer(snippet):
                     raw_region, expiry_date = match.groups()
@@ -1598,7 +1872,7 @@ class ExecEvidenceAssembler:
                 expiry_dates=expiry_dates,
                 has_source_only=bool(source_only_entries),
             )
-            if official_no_hit_supported:
+            if official_no_hit_supported and window_status in {"open", "missing", "unresolved_with_source_evidence"}:
                 conclusion = "NO_LISTED_BLOCKING_PATENT_EVIDENCE"
                 status_basis = "official_no_hit"
             elif window_status == "open":
@@ -1713,6 +1987,11 @@ class ExecEvidenceAssembler:
                 for entry in identity_entries
                 for strength in entry.get("strengths", []) or []
             )
+            product_context_terms = _dedupe_text(
+                term
+                for entry in identity_entries
+                for term in entry.get("product_context_terms", []) or []
+            )
             best_match = "none"
             linkage_refs: List[str] = []
             signal_regions = set()
@@ -1724,6 +2003,7 @@ class ExecEvidenceAssembler:
                     "; ".join(mahs),
                     dosage_forms,
                     strengths,
+                    product_context_terms,
                 )
                 if _identity_match_rank(match_level) > _identity_match_rank(best_match):
                     best_match = match_level
@@ -1746,6 +2026,7 @@ class ExecEvidenceAssembler:
                 "registration_mahs": mahs[:4],
                 "dosage_forms": dosage_forms[:6],
                 "strengths": strengths[:6],
+                "product_context_terms": product_context_terms[:8],
                 "commercial_signal_count": len(relevant_signals),
                 "ru_proxy_signal_count": len(proxy_signals),
                 "signal_regions": sorted(signal_regions),
@@ -1969,6 +2250,8 @@ class ExecEvidenceAssembler:
         contradictions = self._find_contradictions(selected_sections)
         missing = self._missing_evidence_classes(plan, grouped)
         contract_linkage = self._build_contract_linkage(selected_sections, all_evidence, base_packet)
+        priority_retention = _priority_evidence_retention_manifest(base_packet, all_evidence)
+        contract_linkage["priority_evidence_retention"] = priority_retention
         return {
             "question_id": plan.question_id,
             "answer_type": plan.answer_type,
@@ -2022,6 +2305,8 @@ class ExecEvidenceAssembler:
                     "fto_screening_conclusion": (contract_linkage.get("fto_screening_snapshot", {}) or {}).get("conclusion"),
                     "family_legal_events_decision_grade": bool((contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("decision_grade")),
                     "source_manifest_checked_count": (contract_linkage.get("source_evidence_manifest", {}) or {}).get("checked_source_count", 0),
+                    "priority_evidence_retained_count": priority_retention.get("retained_count", 0),
+                    "priority_evidence_missing_count": priority_retention.get("missing_count", 0),
                     "generic_regions_with_potential": sorted(
                         [
                             region

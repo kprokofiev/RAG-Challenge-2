@@ -47,7 +47,10 @@ class _FakeResponsesClient:
 
     def parse(self, **kwargs):
         self.calls.append(kwargs)
-        return self._responses.pop(0)
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 class _FakeOpenAIClient:
@@ -114,4 +117,57 @@ class ExecApiRequestsTests(TestCase):
         self.assertEqual(len(fake_client.responses.calls), 2)
         self.assertEqual(fake_client.responses.calls[0]["max_output_tokens"], 2400)
         self.assertGreater(fake_client.responses.calls[1]["max_output_tokens"], 2400)
+
+    def test_call_exec_reasoning_model_retries_on_truncated_structured_parse_error(self):
+        completed = _FakeResponse(
+            status="completed",
+            output_parsed=_DemoSchema(foo="ok"),
+            output_text='{"foo":"ok"}',
+            usage=_FakeUsage(input_tokens=10, output_tokens=20, total_tokens=30, reasoning_tokens=12),
+        )
+        fake_client = _FakeOpenAIClient([ValueError("Invalid JSON: EOF while parsing object"), completed])
+        routed = SimpleNamespace(
+            model="gpt-5.4-mini",
+            tier="mini",
+            requested_model="gpt-5.4-mini",
+            day_key="2026-04-14",
+            redis_key="router-key",
+            fallback_reason=None,
+            budget_snapshot_before={},
+            reset_at_utc="2026-04-15T00:00:00Z",
+            reservation_id=None,
+            reserved_tokens=0,
+            block_class="critical",
+            thinking_mode_requested="high",
+        )
+
+        with mock.patch("src.api_requests.require_exec_openai_api_key", return_value="test-key"), mock.patch(
+            "src.api_requests.OpenAI", return_value=fake_client
+        ) as openai_mock, mock.patch(
+            "src.api_requests.reserve_routed_model", return_value=routed
+        ), mock.patch(
+            "src.api_requests.release_routed_reservation"
+        ) as release_mock, mock.patch(
+            "src.api_requests.commit_routed_usage", return_value={}
+        ), mock.patch(
+            "src.api_requests.build_budget_trace",
+            return_value={"model_selected": "gpt-5.4-mini", "thinking_mode_requested": "high"},
+        ):
+            result = call_exec_reasoning_model(
+                system_content="Return the object only.",
+                human_content="Return {'foo':'ok'}",
+                response_format=_DemoSchema,
+                requested_model="gpt-5.4-mini",
+                thinking_mode="high",
+                max_output_tokens=2400,
+                metadata={"phase": "answerer"},
+                block_class="critical",
+            )
+
+        self.assertEqual(result.parsed_output.foo, "ok")
+        self.assertEqual(openai_mock.call_args.kwargs["max_retries"], 0)
+        self.assertEqual(len(fake_client.responses.calls), 2)
+        self.assertEqual(fake_client.responses.calls[0]["max_output_tokens"], 2400)
+        self.assertGreater(fake_client.responses.calls[1]["max_output_tokens"], 2400)
+        release_mock.assert_called_once_with(routed)
 

@@ -40,11 +40,11 @@ def _get_llm_timeout_seconds() -> float:
 
 
 def _get_llm_max_retries() -> int:
-    raw = os.getenv("DDKIT_LLM_MAX_RETRIES", "2")
+    raw = os.getenv("DDKIT_LLM_MAX_RETRIES", "0")
     try:
         return max(0, int(raw))
     except (TypeError, ValueError):
-        return 2
+        return 0
 
 
 def _estimate_text_tokens(value: str) -> int:
@@ -144,6 +144,23 @@ def _estimated_exec_completion_tokens(max_output_tokens: Optional[int]) -> int:
         return max(256, int(raw))
     except ValueError:
         return 8000
+
+
+def _is_truncated_structured_output_error(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        marker in text
+        for marker in (
+            "max_output_tokens",
+            "incomplete",
+            "eof while parsing",
+            "json_invalid",
+            "invalid json",
+            "unterminated string",
+            "truncated",
+            "could not parse response",
+        )
+    )
 
 
 @dataclass
@@ -278,6 +295,18 @@ def call_exec_reasoning_model(
             if is_quota_exhausted_error(exc) and routed.tier in {"elite", "mini"}:
                 mark_tier_exhausted(routed, str(exc))
                 minimum_tier_index = next_tier_index(routed.tier)
+                continue
+            if (
+                _is_truncated_structured_output_error(exc)
+                and current_max_output_tokens is not None
+                and attempt < max_attempts
+                and current_max_output_tokens < retry_token_cap
+            ):
+                current_max_output_tokens = min(
+                    retry_token_cap,
+                    current_max_output_tokens + retry_token_increment,
+                )
+                minimum_tier_index = 0
                 continue
             raise
 

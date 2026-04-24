@@ -154,6 +154,13 @@ def _optional_env_int(name: str) -> Optional[int]:
         return None
 
 
+def _bounded_output_tokens(name: str, default: int) -> int:
+    value = _optional_env_int(name)
+    if value is None:
+        return default
+    return max(256, value)
+
+
 def _read_yaml(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
@@ -377,7 +384,7 @@ def build_block_prompt(
         block_spec=block_spec,
         requested_model=requested_model,
         thinking_mode=thinking_mode,
-        max_output_tokens=_optional_env_int("DDKIT_EXEC_BLOCK_MAX_OUTPUT_TOKENS"),
+        max_output_tokens=_bounded_output_tokens("DDKIT_EXEC_BLOCK_MAX_OUTPUT_TOKENS", 3600),
         system_content=system_content,
         human_content=human_content,
         response_model=ExecReasonerOutput,
@@ -411,7 +418,7 @@ def build_planner_prompt(
         block_spec=block_spec,
         requested_model=planner_requested_model(active_profile),
         thinking_mode=planner_thinking_mode(active_profile),
-        max_output_tokens=_optional_env_int("DDKIT_EXEC_PLANNER_MAX_OUTPUT_TOKENS"),
+        max_output_tokens=_bounded_output_tokens("DDKIT_EXEC_PLANNER_MAX_OUTPUT_TOKENS", 2400),
         system_content=system_content,
         human_content=human_content,
         response_model=ExecQuestionPlan,
@@ -445,7 +452,7 @@ def build_answer_prompt(
         block_spec=block_spec,
         requested_model=answerer_requested_model(block_spec, active_profile),
         thinking_mode=answerer_thinking_mode(active_profile),
-        max_output_tokens=_optional_env_int("DDKIT_EXEC_ANSWERER_MAX_OUTPUT_TOKENS"),
+        max_output_tokens=_bounded_output_tokens("DDKIT_EXEC_ANSWERER_MAX_OUTPUT_TOKENS", 5200),
         system_content=system_content,
         human_content=human_content,
         response_model=ExecReasonerOutput,
