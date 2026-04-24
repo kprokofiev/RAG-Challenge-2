@@ -238,6 +238,36 @@ class ExecDecisionEngineTests(unittest.TestCase):
             {item.get("evidence_id") for item in packet["evidence_registry"]},
         )
 
+    def test_packet_builder_preserves_priority_patent_evidence_before_truncation(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["asset_attractiveness"]
+        dossier = _sample_dossier()
+        dossier["evidence_registry"] = [
+            {
+                "evidence_id": f"ev-filler-{idx}",
+                "doc_id": f"doc-filler-{idx}",
+                "page": 1,
+                "snippet": "FDA filler",
+                "doc_kind": "us_fda",
+            }
+            for idx in range(100)
+        ] + [
+            {
+                "evidence_id": "ev-eapo-nohit",
+                "doc_id": "doc-eapo-nohit",
+                "page": 1,
+                "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=апиксабан | patents=0 | as_of=2025-10-30",
+                "doc_kind": "ru_patent_fips",
+            }
+        ]
+
+        packet = engine._build_packet(dossier, "case-1", block_spec)
+
+        self.assertIn(
+            "ev-eapo-nohit",
+            {item.get("evidence_id") for item in packet["evidence_registry"]},
+        )
+
     def test_sufficiency_gate_flags_unknowns(self):
         engine = ExecDecisionEngine()
         output = ExecReasonerOutput(
