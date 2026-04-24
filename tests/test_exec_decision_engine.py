@@ -242,13 +242,21 @@ class ExecDecisionEngineTests(unittest.TestCase):
         engine = ExecDecisionEngine()
         block_spec = engine.block_specs["asset_attractiveness"]
         dossier = _sample_dossier()
+        dossier["registrations"] = [
+            {
+                "region": "RU",
+                "verdict": "confirmed",
+                "status": {"value": "registered", "evidence_refs": [f"ev-linked-{idx}" for idx in range(100)]},
+                "evidence_refs": [f"ev-linked-{idx}" for idx in range(100)],
+            }
+        ]
         dossier["evidence_registry"] = [
             {
-                "evidence_id": f"ev-filler-{idx}",
-                "doc_id": f"doc-filler-{idx}",
+                "evidence_id": f"ev-linked-{idx}",
+                "doc_id": f"doc-linked-{idx}",
                 "page": 1,
-                "snippet": "FDA filler",
-                "doc_kind": "us_fda",
+                "snippet": "Linked registration filler",
+                "doc_kind": "grls",
             }
             for idx in range(100)
         ] + [

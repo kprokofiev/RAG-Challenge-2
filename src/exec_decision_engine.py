@@ -359,7 +359,7 @@ class ExecDecisionEngine:
             if doc_kind in allowed_doc_kinds:
                 allowed_kind_evidence.append(item)
                 seen_evidence.add(evidence_id)
-        filtered_evidence = section_linked_evidence + priority_evidence + allowed_kind_evidence
+        filtered_evidence = priority_evidence + section_linked_evidence + allowed_kind_evidence
         for item in filtered_evidence[:80]:
             evidence_id = str(item.get("evidence_id") or "")
             if evidence_id:
