@@ -676,6 +676,48 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertFalse(repaired.decision_blockers)
         self.assertTrue(any("GRLS" in caveat for caveat in repaired.caveats))
 
+    def test_verifier_repairs_rf_hold_when_product_context_wording_is_only_caveat(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="RU registration is active, but the packet does not conclusively map the GRLS record to the exact dossier product context.",
+            full_answer="Hold only because exact product context linkage for commercial signals is not perfect.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "rf_entry_blocker_1",
+                    "title": "Product context linkage is not exact",
+                    "severity": "DECISION_BLOCKING",
+                    "rationale": "Commercial/access signals remain only INN-level rather than exact product context.",
+                    "evidence_refs": ["ev-com-1"],
+                }
+            ],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["dossier_quality_v2"]["decision_readiness"]["context_integrity"] = "YELLOW"
+        packet["registrations"][0]["status"] = {"value": "active", "evidence_refs": ["ev-reg-ru"]}
+        packet["commercial_signals"][0]["verdict"] = "confirmed"
+        packet["contract_linkage"] = {
+            "market_entry_linkage": {
+                "RU": {
+                    "registration_anchor_present": True,
+                    "commercial_signal_count": 3,
+                    "identity_match": "inn_level_only",
+                    "evidence_refs": ["ev-com-1"],
+                }
+            }
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertFalse(repaired.decision_blockers)
+
     def test_verifier_promotes_eaeu_insufficiency_to_hold_when_reg_anchor_exists(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -995,6 +1037,47 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertIn("screening-grade", " ".join(repaired.caveats).lower())
+
+    def test_verifier_moves_asset_ip_fto_hold_to_dedicated_legal_window_caveat(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Apixaban is commercially present and clinically mature, but I would hold because the patent/exclusivity picture is not cleanly resolved.",
+            full_answer="The IP/FTO legal window is screening-grade and not decision-complete.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "asset_attractiveness_blocker_1",
+                    "title": "Patent/exclusivity is not resolved",
+                    "severity": "DECISION_BLOCKING",
+                    "rationale": "FTO is not decision-grade.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "phase3_results": {
+                "phase3_study_count": 2,
+                "phase3_with_ctgov_results_evidence": 1,
+            },
+            "fto_screening_snapshot": {
+                "conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                "full_fto_verdict_allowed": False,
+                "potential_blocker_regions": ["US", "EU", "RU", "EAEU"],
+            },
+        }
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertFalse(repaired.decision_blockers)
+        self.assertIn("dedicated legal-window block", " ".join(repaired.caveats))
 
     def test_verifier_downgrades_conditional_go_with_blockers_to_hold(self):
         verifier = ExecVerifier()

@@ -418,6 +418,7 @@ class ExecVerifier:
             "identity fields beyond grls",
             "lacks a clear ru instruction",
             "inn-level",
+            "product context",
             "product-context alignment",
             "product_context_match_confirmed",
             "same registered ru product identity",
@@ -514,6 +515,49 @@ class ExecVerifier:
             "eapo",
         )
         return _contains_any_marker(text, patent_markers) and not _has_explicit_negative_evidence(text)
+
+    def _asset_dedicated_ip_fto_overconstraint(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "asset_attractiveness" or block.verdict not in {"HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        text = _block_text(block)
+        if _has_explicit_negative_evidence(text):
+            return False
+        ip_markers = (
+            "exclusivity",
+            "freedom-to-operate",
+            "fto",
+            "ip window",
+            "ip-window",
+            "legal window",
+            "legal status",
+            "patent",
+        )
+        if not _contains_any_marker(text, ip_markers):
+            return False
+        linkage = _contract_linkage(packet)
+        fto = linkage.get("fto_screening_snapshot", {}) or {}
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        has_dedicated_ip_screening = (
+            bool(fto)
+            and str(fto.get("conclusion") or "") in {
+                "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                "INSUFFICIENT_FOR_FTO",
+            }
+        ) or bool(family_events)
+        if not has_dedicated_ip_screening:
+            return False
+        phase3 = linkage.get("phase3_results", {}) or {}
+        has_clinical_or_market_anchor = (
+            int(phase3.get("phase3_study_count") or 0) > 0
+            or int(phase3.get("phase3_with_ctgov_results_evidence") or 0) > 0
+            or any(_positive_commercial_signal_count(packet, region) > 0 for region in ("RU", "EU", "US", "EAEU"))
+        )
+        has_registration_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EU", "US", "EAEU"))
+        return has_registration_anchor and has_clinical_or_market_anchor
 
     def _ip_window_closed_without_decision_grade_legal_status(
         self,
@@ -764,6 +808,15 @@ class ExecVerifier:
                     issue_type="asset_ip_window_overconstraint",
                     severity="WARN",
                     message="Asset verdict is still being held down by RU/EAEU IP-window missingness despite official no-hit/open-window evidence.",
+                )
+            )
+
+        if self._asset_dedicated_ip_fto_overconstraint(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="asset_dedicated_ip_fto_overconstraint",
+                    severity="WARN",
+                    message="Asset attractiveness is being held down by IP/FTO screening gaps that belong in the dedicated legal-window block.",
                 )
             )
 
@@ -1065,6 +1118,33 @@ class ExecVerifier:
             applied_changes.append("lifted_asset_hold_from_ru_eaeu_ip_missingness")
 
         if (
+            any(issue.issue_type == "asset_dedicated_ip_fto_overconstraint" for issue in verification.issues)
+            or self._asset_dedicated_ip_fto_overconstraint(repaired, packet)
+        ):
+            repaired.verdict = "CONDITIONAL_GO"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "CONDITIONAL_GO — asset fundamentals remain supportable, while IP/FTO remains a dedicated legal-window caveat rather than a primary asset-attractiveness HOLD."
+            )
+            repaired.full_answer = (
+                "The packet carries source-backed regulatory, clinical, or market anchors for the asset, but the FTO/IP layer is still screening-grade. "
+                "That uncertainty should continue to drive the dedicated IP/legal-window and next-step blocks instead of collapsing asset attractiveness into HOLD."
+            )
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(f"{blocker.title} {blocker.rationale}", ("patent", "ip", "fto", "exclusivity", "legal status"))
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if not _contains_any_marker(f"{action.action} {action.rationale}", ("patent", "ip", "fto", "exclusivity", "legal status"))
+            ]
+            caveat = "IP/FTO remains screening-grade and is handled in the dedicated legal-window block; it should not be treated as the primary asset-attractiveness blocker."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("moved_asset_ip_fto_hold_to_dedicated_legal_window_caveat")
+
+        if (
             any(issue.issue_type == "ip_window_closed_without_decision_grade_legal_status" for issue in verification.issues)
             or self._ip_window_closed_without_decision_grade_legal_status(repaired, packet)
         ):
@@ -1234,6 +1314,7 @@ class ExecVerifier:
             "rf_identity_underlink",
             "eaeu_same_id_overconstraint",
             "asset_ip_window_overconstraint",
+            "asset_dedicated_ip_fto_overconstraint",
             "ip_window_closed_without_decision_grade_legal_status",
             "market_reimbursement_underresolved",
             "regional_generic_collapse",
@@ -1251,6 +1332,7 @@ class ExecVerifier:
                 self._rf_underlinked_conditional_go(block, packet),
                 self._eaeu_same_id_overconstraint(block, packet),
                 self._asset_ip_window_overconstraint(block, packet),
+                self._asset_dedicated_ip_fto_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._market_reimbursement_underresolved(block, packet),
                 self._regional_generic_collapse(block, packet),
