@@ -1047,7 +1047,7 @@ class ExecVerifierTests(unittest.TestCase):
             confidence="MEDIUM",
             sufficiency="PARTIAL",
             short_answer="Apixaban is commercially present and clinically mature, but I would hold because the patent/exclusivity picture is not cleanly resolved.",
-            full_answer="The IP/FTO legal window is screening-grade and not decision-complete.",
+            full_answer="The IP/FTO legal window is screening-grade and not decision-complete; EU patent legal events include mixed pending/withdrawn signals.",
             why_this_verdict=[],
             decision_blockers=[
                 {

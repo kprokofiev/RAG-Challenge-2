@@ -525,7 +525,19 @@ class ExecVerifier:
             return False
         text = _block_text(block)
         if _has_explicit_negative_evidence(text):
-            return False
+            non_ip_negative_markers = (
+                "clinical failed",
+                "failed clinical",
+                "failed study",
+                "registration withdrawn",
+                "marketing authorization withdrawn",
+                "marketing authorisation withdrawn",
+                "registration suspended",
+                "not approved",
+                "not registered",
+            )
+            if _contains_any_marker(text, non_ip_negative_markers):
+                return False
         ip_markers = (
             "exclusivity",
             "freedom-to-operate",
