@@ -1367,6 +1367,8 @@ def _priority_evidence_retention_manifest(
             priority_reason = "structured_rights_record"
         elif _CLEARANCE_CHECK_SIGNAL_RE.search(snippet):
             priority_reason = "structured_clearance_check"
+        elif _REIMBURSEMENT_CHECK_SIGNAL_RE.search(snippet):
+            priority_reason = "structured_reimbursement_check"
         else:
             priority_reason = "fips_expiry_record"
         expected.append(
