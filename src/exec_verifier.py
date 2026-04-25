@@ -598,6 +598,29 @@ class ExecVerifier:
         )
         return _contains_any_marker(text, uncertainty_markers)
 
+    def _ip_window_underresolved_with_source_native_blockers(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "ip_legal_window" or block.verdict != "UNRESOLVED":
+            return False
+        linkage = _contract_linkage(packet)
+        fto = linkage.get("fto_screening_snapshot", {}) or {}
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        potential_regions = list(fto.get("potential_blocker_regions") or [])
+        country_status = fto.get("country_effect_status_by_region", {}) or {}
+        has_source_native_status = any(
+            str((payload or {}).get("window_status") or "") in {
+                "potentially_blocked",
+                "open",
+                "unresolved_with_source_evidence",
+            }
+            for payload in country_status.values()
+            if isinstance(payload, dict)
+        )
+        return bool(potential_regions or has_source_native_status or family_events.get("evidence_refs"))
+
     def _market_reimbursement_underresolved(
         self,
         block: ExecDecisionBlock,
@@ -838,6 +861,15 @@ class ExecVerifier:
                     issue_type="ip_window_closed_without_decision_grade_legal_status",
                     severity="WARN",
                     message="IP legal window is being closed despite incomplete or conflicted source-native family/legal-status coverage.",
+                )
+            )
+
+        if self._ip_window_underresolved_with_source_native_blockers(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="ip_window_underresolved_with_source_native_blockers",
+                    severity="WARN",
+                    message="IP legal window remains unresolved despite source-native patent/exclusivity/legal-status evidence supporting at least a limited screening posture.",
                 )
             )
 
@@ -1181,6 +1213,46 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("downgraded_overclosed_ip_window_to_screening_status")
 
+        if (
+            any(issue.issue_type == "ip_window_underresolved_with_source_native_blockers" for issue in verification.issues)
+            or self._ip_window_underresolved_with_source_native_blockers(repaired, packet)
+        ):
+            linkage = _contract_linkage(packet)
+            fto = linkage.get("fto_screening_snapshot", {}) or {}
+            family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+            potential_regions = list(fto.get("potential_blocker_regions") or [])
+            refs = list(
+                dict.fromkeys(
+                    list(fto.get("evidence_refs") or [])
+                    + list(family_events.get("evidence_refs") or [])
+                )
+            )
+            repaired.verdict = "LIMITED"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            region_text = ", ".join(potential_regions) if potential_regions else "at least one required jurisdiction"
+            repaired.short_answer = (
+                f"LIMITED — source-native patent/legal-status evidence supports a screening-level blocker posture in {region_text}, "
+                "but family-by-family FTO coverage is not decision-grade enough for OPEN or CLOSED."
+            )
+            repaired.full_answer = (
+                "The packet is no longer a pure unknown: it carries source-native patent expiry, legal-event, no-hit/conflict, or clearance-check evidence. "
+                "That supports a LIMITED screening verdict rather than UNRESOLVED. The remaining gap is decision-grade reconciliation: country-level legal status, "
+                "claim mapping, and term-extension/SPC/PTE/file-wrapper effects still need attorney-grade review before the window can be called OPEN or CLOSED."
+            )
+            if refs:
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Source-native patent/legal-event evidence supports a limited IP-window screening posture, while full FTO remains incomplete.",
+                        claim_type="hard_evidence_backed",
+                        evidence_refs=refs[:6],
+                    )
+                )
+            caveat = "IP-window status is LIMITED at screening level; it is not a full freedom-to-operate opinion or a clean OPEN/CLOSED legal conclusion."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_underresolved_ip_window_to_limited_screening_status")
+
         if any(issue.issue_type == "market_reimbursement_underresolved" for issue in verification.issues) or self._market_reimbursement_underresolved(repaired, packet):
             snapshot = _market_reimbursement_snapshot(packet)
             regions = snapshot.get("regions", {}) or {}
@@ -1328,6 +1400,7 @@ class ExecVerifier:
             "asset_ip_window_overconstraint",
             "asset_dedicated_ip_fto_overconstraint",
             "ip_window_closed_without_decision_grade_legal_status",
+            "ip_window_underresolved_with_source_native_blockers",
             "market_reimbursement_underresolved",
             "regional_generic_collapse",
             "regional_licensing_collapse",

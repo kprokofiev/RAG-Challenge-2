@@ -1079,6 +1079,47 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertFalse(repaired.decision_blockers)
         self.assertIn("dedicated legal-window block", " ".join(repaired.caveats))
 
+    def test_verifier_lifts_underresolved_ip_window_to_limited_when_source_native_blockers_exist(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="ip_legal_window",
+            title="IP legal window",
+            verdict="UNRESOLVED",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Patent activity exists, but the window is unresolved.",
+            full_answer="US and EU patent activity is visible, while RU/EAEU reconciliation is incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-ip"],
+            "contract_linkage": {
+                "fto_screening_snapshot": {
+                    "conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "full_fto_verdict_allowed": False,
+                    "potential_blocker_regions": ["US", "EU"],
+                    "evidence_refs": ["ev-ip"],
+                    "country_effect_status_by_region": {
+                        "US": {"window_status": "potentially_blocked"},
+                        "EU": {"window_status": "potentially_blocked"},
+                    },
+                },
+                "family_legal_events_snapshot": {
+                    "decision_grade": False,
+                    "evidence_refs": ["ev-ip"],
+                },
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LIMITED")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("screening", " ".join(repaired.caveats).lower())
+
     def test_verifier_downgrades_conditional_go_with_blockers_to_hold(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
