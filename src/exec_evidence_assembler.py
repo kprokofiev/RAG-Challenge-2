@@ -164,7 +164,7 @@ _RIGHTS_SIGNAL_RE = re.compile(
 _LEGAL_EVENT_SIGNAL_RE = re.compile(
     r"\b(PTE|SPC|supplementary\s+protection\s+certificate|terminal\s+disclaimer|opposition|"
     r"revocation|revoked|lapse|lapsed|expired|withdrawn|maintenance|grant(?:ed)?|"
-    r"patent\s+term\s+extension)\b|"
+    r"patent\s+term\s+extension|regulatory\s+exclusivity|exclusivity)\b|"
     r"(прекращен|аннулирован|истек|пошлин|продлен|выдан)",
     re.IGNORECASE,
 )
@@ -606,6 +606,8 @@ def _structured_event_type(fields: Dict[str, str], doc_kind: str) -> Optional[st
         return "expiry"
     if lower_event in {"ru_legal_status", "eaeu_pharma_register"}:
         return lower_event
+    if lower_event in {"regulatory_exclusivity", "exclusivity"}:
+        return "regulatory_exclusivity"
     if lower_event == "spc":
         return "SPC"
     if lower_event == "pte":
@@ -815,6 +817,8 @@ def _legal_event_type(text: str, doc_kind: str) -> Optional[str]:
         return "terminal_disclaimer"
     if "patent term extension" in lower or re.search(r"\bPTE\b", text):
         return "PTE"
+    if "regulatory exclusivity" in lower or re.search(r"\bexclusivity\b", text):
+        return "regulatory_exclusivity"
     if "supplementary protection certificate" in lower or re.search(r"\bSPC\b", text):
         return "SPC"
     if "opposition" in lower:
@@ -1105,7 +1109,7 @@ def _family_legal_events_snapshot(
     clearance_checks: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     required_by_region = {
-        "US": {"PTE", "terminal_disclaimer", "expiry"},
+        "US": {"PTE", "terminal_disclaimer", "expiry", "regulatory_exclusivity"},
         "EU": {"SPC", "opposition", "revocation", "lapse"},
         "RU": {"ru_legal_status", "expiry"},
         "EAEU": {"eaeu_pharma_register", "ru_legal_status", "expiry"},

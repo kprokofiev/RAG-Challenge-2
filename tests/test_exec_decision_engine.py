@@ -1585,7 +1585,12 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
                     "evidence_id": "ev-ob",
                     "doc_id": "doc-ob",
                     "doc_kind": "patent_expiry_us",
-                    "snippet": "LEGAL_EVENT | source=fda_orange_book | jurisdiction=US | patent=US11896586 | event_type=expiry | event_date=2040-11-22 | status=Orange Book listed",
+                    "snippet": "\n".join(
+                        [
+                            "LEGAL_EVENT | source=fda_orange_book | jurisdiction=US | patent=US11896586 | event_type=expiry | event_date=2040-11-22 | status=Orange Book listed",
+                            "LEGAL_EVENT | source=fda_orange_book_data_files | jurisdiction=US | event_type=regulatory_exclusivity | event_date=2028-10-17 | status=active_or_future Orange Book exclusivity | application=N202155 | product_no=001 | exclusivity_code=PED",
+                        ]
+                    ),
                 },
                 {
                     "evidence_id": "ev-epo",
@@ -1633,6 +1638,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
 
         family_events = linkage["family_legal_events_snapshot"]
         self.assertIn("expiry", family_events["event_types_by_region"]["US"])
+        self.assertIn("regulatory_exclusivity", family_events["event_types_by_region"]["US"])
         self.assertIn("maintenance_fee", family_events["event_types_by_region"]["EU"])
         self.assertIn("ru_legal_status", family_events["event_types_by_region"]["RU"])
         self.assertIn("eaeu_pharma_register", family_events["event_types_by_region"]["EAEU"])
