@@ -173,6 +173,20 @@ _CLEARANCE_CHECK_SIGNAL_RE = re.compile(
     r"\b(?:CLEARANCE_CHECK|RIGHTS_CLEARANCE_CHECK)\s*\|",
     re.IGNORECASE,
 )
+_REIMBURSEMENT_CHECK_DOC_KINDS = {
+    "formulary",
+    "pricing",
+    "payer_policy",
+    "ru_commercial_summary",
+    "ru_formulary_summary",
+    "ru_policy_act",
+    "ru_official_act",
+    "ru_esklp_snapshot",
+}
+_REIMBURSEMENT_CHECK_SIGNAL_RE = re.compile(
+    r"\bREIMBURSEMENT_CHECK\s*\|",
+    re.IGNORECASE,
+)
 _POSITIVE_STATUS_MARKERS = {
     "active",
     "approved",
@@ -242,6 +256,8 @@ def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
     if doc_kind in _RIGHTS_DOC_KINDS and "RIGHTS_RECORD |" in snippet:
         return True
     if doc_kind in _CLEARANCE_CHECK_DOC_KINDS and _CLEARANCE_CHECK_SIGNAL_RE.search(snippet):
+        return True
+    if doc_kind in _REIMBURSEMENT_CHECK_DOC_KINDS and _REIMBURSEMENT_CHECK_SIGNAL_RE.search(snippet):
         return True
     if doc_kind != "ru_patent_fips":
         return False
@@ -900,6 +916,137 @@ def _extract_clearance_checks(selected_evidence: List[Dict[str, Any]]) -> List[D
             continue
         checks.extend(_structured_clearance_checks_from_snippet(item, evidence_ref, doc_kind))
     return checks
+
+
+def _structured_reimbursement_checks_from_snippet(
+    item: Dict[str, Any],
+    evidence_ref: str,
+    doc_kind: str,
+) -> List[Dict[str, Any]]:
+    checks: List[Dict[str, Any]] = []
+    for line in _iter_structured_lines(str(item.get("snippet") or ""), "REIMBURSEMENT_CHECK"):
+        fields = _parse_pipe_fields(line)
+        check_class = str(fields.get("check_class") or fields.get("class") or "").strip()
+        jurisdiction = str(
+            fields.get("jurisdiction")
+            or fields.get("region")
+            or _region_from_evidence_text(item)
+        ).strip().upper() or "GLOBAL"
+        checks.append(
+            {
+                "source": str(fields.get("source") or "").strip(),
+                "check_class": check_class,
+                "jurisdiction": jurisdiction,
+                "status": str(fields.get("status") or "").strip() or "checked",
+                "conclusion": str(fields.get("conclusion") or "").strip(),
+                "limitation": str(fields.get("limitation") or "").strip(),
+                "inn": str(fields.get("inn") or "").strip(),
+                "trade_name": str(fields.get("trade_name") or "").strip(),
+                "registry_entry": str(fields.get("registry_entry") or "").strip(),
+                "registration_id": str(fields.get("registration_id") or "").strip(),
+                "effective_date": _first_date(fields.get("effective_date") or line),
+                "price_registration_date": _first_date(fields.get("price_registration_date") or line),
+                "source_doc_kind": doc_kind,
+                "source_url": str(fields.get("source_url") or item.get("source_url") or "").strip(),
+                "evidence_refs": [evidence_ref],
+            }
+        )
+    return checks
+
+
+def _extract_reimbursement_checks(selected_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    checks: List[Dict[str, Any]] = []
+    for item in selected_evidence:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        snippet = str(item.get("snippet") or "")
+        if doc_kind not in _REIMBURSEMENT_CHECK_DOC_KINDS or not _REIMBURSEMENT_CHECK_SIGNAL_RE.search(snippet):
+            continue
+        evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if not evidence_ref:
+            continue
+        checks.extend(_structured_reimbursement_checks_from_snippet(item, evidence_ref, doc_kind))
+    return checks
+
+
+def _market_reimbursement_snapshot(
+    reimbursement_checks: List[Dict[str, Any]],
+    market_entry_linkage: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    by_region: Dict[str, Dict[str, Any]] = {}
+    refs: List[str] = []
+    for check in reimbursement_checks:
+        region = str(check.get("jurisdiction") or "GLOBAL").strip().upper() or "GLOBAL"
+        payload = by_region.setdefault(
+            region,
+            {
+                "checks": [],
+                "listed_active_count": 0,
+                "source_native_row_count": 0,
+                "member_state_scope": False,
+                "current_effective_dates": [],
+                "registration_ids": [],
+                "evidence_refs": [],
+            },
+        )
+        status = str(check.get("status") or "").strip().lower()
+        check_class = str(check.get("check_class") or "").strip().lower()
+        payload["checks"].append(check)
+        if status in {"listed_active", "source_native_rows_found"}:
+            payload["source_native_row_count"] += 1
+        if status == "listed_active":
+            payload["listed_active_count"] += 1
+        if status == "member_state_scope" or check_class == "eaeu_union_reimbursement_scope":
+            payload["member_state_scope"] = True
+        if check.get("effective_date"):
+            payload["current_effective_dates"].append(check.get("effective_date"))
+        if check.get("registration_id"):
+            payload["registration_ids"].append(check.get("registration_id"))
+        payload["evidence_refs"].extend(check.get("evidence_refs") or [])
+        refs.extend(check.get("evidence_refs") or [])
+
+    for region, payload in by_region.items():
+        payload["checks"] = payload["checks"][:12]
+        payload["current_effective_dates"] = sorted(set(payload["current_effective_dates"]))
+        payload["registration_ids"] = sorted(set(payload["registration_ids"]))[:8]
+        payload["evidence_refs"] = list(dict.fromkeys(payload["evidence_refs"]))[:10]
+        linkage = market_entry_linkage.get(region, {}) or {}
+        if payload["listed_active_count"] > 0:
+            conclusion = "SOURCE_NATIVE_REIMBURSEMENT_OR_PRICE_ACCESS_SIGNAL_PRESENT"
+        elif payload["member_state_scope"]:
+            conclusion = "UNION_LEVEL_REIMBURSEMENT_NOT_APPLICABLE_MEMBER_STATE_SCOPE"
+        elif int(linkage.get("commercial_signal_count") or 0) > 0:
+            conclusion = "COMMERCIAL_ACCESS_SIGNALS_PRESENT_SOURCE_NATIVE_PAYER_STATUS_MISSING"
+        else:
+            conclusion = "REIMBURSEMENT_STATUS_UNRESOLVED"
+        payload["conclusion"] = conclusion
+
+    ru_payload = by_region.get("RU", {}) or {}
+    eaeu_payload = by_region.get("EAEU", {}) or {}
+    if int(ru_payload.get("listed_active_count") or 0) > 0 and bool(eaeu_payload.get("member_state_scope")):
+        overall = "RU_SOURCE_NATIVE_ACCESS_EVIDENCED_EAEU_MEMBER_STATE_SCOPE"
+        verdict_hint = "LIMITED"
+    elif int(ru_payload.get("listed_active_count") or 0) > 0:
+        overall = "RU_SOURCE_NATIVE_ACCESS_EVIDENCED"
+        verdict_hint = "LIMITED"
+    elif reimbursement_checks:
+        overall = "PARTIAL_REIMBURSEMENT_SCOPE_EVIDENCE"
+        verdict_hint = "LIMITED"
+    else:
+        overall = "REIMBURSEMENT_STATUS_UNRESOLVED"
+        verdict_hint = "UNRESOLVED"
+
+    return {
+        "jurisdictions": ["RU", "EAEU"],
+        "conclusion": overall,
+        "verdict_hint": verdict_hint,
+        "regions": by_region,
+        "check_count": len(reimbursement_checks),
+        "limitations": [
+            "RU price-limit/JNVLP rows support regulated access/pricing presence, not a complete payer-coverage or restriction analysis.",
+            "EAEU reimbursement and payer coverage must be assessed at member-state level unless a source-native union mechanism is provided.",
+        ],
+        "evidence_refs": list(dict.fromkeys(refs))[:12],
+    }
 
 
 def _rights_transferability_snapshot(
@@ -2182,6 +2329,9 @@ class ExecEvidenceAssembler:
                 "evidence_refs": list(dict.fromkeys(linkage_refs or all_signal_refs))[:10],
             }
 
+        reimbursement_checks = _extract_reimbursement_checks(selected_evidence)
+        market_reimbursement = _market_reimbursement_snapshot(reimbursement_checks, market_entry_linkage)
+
         ru_eaeu_sources = []
         ru_eaeu_evidence_refs: List[str] = []
         ru_eaeu_as_of_dates = []
@@ -2334,6 +2484,8 @@ class ExecEvidenceAssembler:
             "registration_identity_map": registration_identity_map[:12],
             "registration_context_relationships": registration_context_relationships,
             "market_entry_linkage": market_entry_linkage,
+            "market_reimbursement_snapshot": market_reimbursement,
+            "reimbursement_checks": reimbursement_checks[:24],
             "clearance_checks": clearance_checks[:24],
             "rights_transferability_snapshot": _rights_transferability_snapshot(rights_records, clearance_checks),
             "family_legal_events_snapshot": family_legal_events,
@@ -2439,6 +2591,8 @@ class ExecEvidenceAssembler:
                     "ru_eaeu_ip_conclusion": (contract_linkage.get("ru_eaeu_ip_window_snapshot", {}) or {}).get("conclusion"),
                     "ru_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("identity_match"),
                     "eaeu_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("identity_match"),
+                    "market_reimbursement_conclusion": (contract_linkage.get("market_reimbursement_snapshot", {}) or {}).get("conclusion"),
+                    "market_reimbursement_verdict_hint": (contract_linkage.get("market_reimbursement_snapshot", {}) or {}).get("verdict_hint"),
                     "eaeu_has_valid_to": contract_linkage.get("eaeu_registration", {}).get("has_valid_to", False),
                     "eaeu_has_validity_state": contract_linkage.get("eaeu_registration", {}).get("has_validity_state", False),
                     "eaeu_validity_types": list((contract_linkage.get("eaeu_registration", {}) or {}).get("validity_types", [])),

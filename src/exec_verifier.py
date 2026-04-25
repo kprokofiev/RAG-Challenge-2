@@ -14,6 +14,7 @@ try:
         ExecConfidenceEnum,
         ExecDecisionBlock,
         ExecNextAction,
+        ExecWhyClaim,
         ExecVerificationIssue,
         ExecVerificationReport,
     )
@@ -23,6 +24,7 @@ except ImportError:  # pragma: no cover
         ExecConfidenceEnum,
         ExecDecisionBlock,
         ExecNextAction,
+        ExecWhyClaim,
         ExecVerificationIssue,
         ExecVerificationReport,
     )
@@ -266,6 +268,10 @@ def _identity_entry(packet: Dict[str, Any], region: str) -> Dict[str, Any]:
 def _market_entry_linkage(packet: Dict[str, Any], region: str) -> Dict[str, Any]:
     region = str(region or "").strip().upper()
     return ((_contract_linkage(packet).get("market_entry_linkage", {}) or {}).get(region, {}) or {})
+
+
+def _market_reimbursement_snapshot(packet: Dict[str, Any]) -> Dict[str, Any]:
+    return (_contract_linkage(packet).get("market_reimbursement_snapshot", {}) or {})
 
 
 def _ru_eaeu_ip_snapshot(packet: Dict[str, Any]) -> Dict[str, Any]:
@@ -536,6 +542,23 @@ class ExecVerifier:
         )
         return _contains_any_marker(text, uncertainty_markers)
 
+    def _market_reimbursement_underresolved(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "market_reimbursement_window" or block.verdict != "UNRESOLVED":
+            return False
+        snapshot = _market_reimbursement_snapshot(packet)
+        if str(snapshot.get("verdict_hint") or "").strip().upper() != "LIMITED":
+            return False
+        regions = snapshot.get("regions", {}) or {}
+        ru_payload = regions.get("RU", {}) or {}
+        eaeu_payload = regions.get("EAEU", {}) or {}
+        has_ru_source_native = int(ru_payload.get("listed_active_count") or 0) > 0
+        eaeu_scoped = bool(eaeu_payload.get("member_state_scope"))
+        return has_ru_source_native or eaeu_scoped
+
     def _regional_generic_collapse(
         self,
         block: ExecDecisionBlock,
@@ -607,7 +630,9 @@ class ExecVerifier:
         packet: Dict[str, Any],
         block_spec: Any,
     ) -> ExecVerificationReport:
-        evidence_ids = set(packet.get("evidence_ids", []))
+        evidence_ids = set(packet.get("evidence_ids", [])) or set(packet.get("selected_evidence_ids", [])) or {
+            candidate["ref"] for candidate in _candidate_evidence(packet)
+        }
         critical_unknowns = self._relevant_critical_unknowns(block, packet)
         issues: List[ExecVerificationIssue] = []
 
@@ -748,6 +773,15 @@ class ExecVerifier:
                     issue_type="ip_window_closed_without_decision_grade_legal_status",
                     severity="WARN",
                     message="IP legal window is being closed despite incomplete or conflicted source-native family/legal-status coverage.",
+                )
+            )
+
+        if self._market_reimbursement_underresolved(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="market_reimbursement_underresolved",
+                    severity="WARN",
+                    message="Market reimbursement window remains unresolved despite RU source-native price/access evidence or EAEU member-state-scope evidence.",
                 )
             )
 
@@ -1055,6 +1089,58 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("downgraded_overclosed_ip_window_to_screening_status")
 
+        if any(issue.issue_type == "market_reimbursement_underresolved" for issue in verification.issues) or self._market_reimbursement_underresolved(repaired, packet):
+            snapshot = _market_reimbursement_snapshot(packet)
+            regions = snapshot.get("regions", {}) or {}
+            ru_payload = regions.get("RU", {}) or {}
+            eaeu_payload = regions.get("EAEU", {}) or {}
+            dates = list(ru_payload.get("current_effective_dates") or [])
+            effective_text = f" effective {dates[-1]}" if dates else ""
+            repaired.verdict = "LIMITED"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "LIMITED — RU source-native price/access evidence is present"
+                f"{effective_text}, while EAEU reimbursement remains member-state scoped rather than supported by a single union payer list."
+            )
+            repaired.full_answer = (
+                "The packet now carries structured reimbursement checks. RU Minzdrav price-limit/JNVLP evidence supports a current regulated access/pricing signal, "
+                "but that is not the same as complete payer-coverage clearance or restriction analysis. "
+                "For EAEU, the defensible reading is member-state scope: non-RU member-state payer/formulary checks remain follow-up items, not a reason to leave the RU window unresolved."
+            )
+            refs = list(dict.fromkeys(list(snapshot.get("evidence_refs") or [])))
+            if refs:
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Structured reimbursement checks support RU source-native price/access evidence and EAEU member-state scope.",
+                        claim_type="hard_evidence_backed",
+                        evidence_refs=refs[:6],
+                    )
+                )
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(
+                    f"{blocker.title} {blocker.rationale}",
+                    ("no current source-native ru", "no source-native ru", "single eaeu", "union reimbursement"),
+                )
+            ]
+            caveat = (
+                "RU price-limit/JNVLP evidence is a regulated access/pricing signal; payer restrictions and non-RU EAEU member-state coverage still require targeted checks."
+            )
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            if bool(eaeu_payload.get("member_state_scope")):
+                repaired.next_actions.append(
+                    ExecNextAction(
+                        action_id="market_reimbursement_member_state_followup",
+                        action="Collect member-state payer/formulary sources for BY/KZ/AM/KG if the EAEU commercial window is needed beyond RU.",
+                        priority="NEXT",
+                        rationale="The current packet closes the false union-level requirement but does not assess non-RU national reimbursement rules.",
+                        evidence_refs=list(eaeu_payload.get("evidence_refs") or [])[:4],
+                    )
+                )
+            applied_changes.append("lifted_market_reimbursement_from_unresolved_to_limited")
+
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
             positive_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"]
@@ -1149,6 +1235,7 @@ class ExecVerifier:
             "eaeu_same_id_overconstraint",
             "asset_ip_window_overconstraint",
             "ip_window_closed_without_decision_grade_legal_status",
+            "market_reimbursement_underresolved",
             "regional_generic_collapse",
             "regional_licensing_collapse",
             "synthesis_secondary_scope",
@@ -1165,6 +1252,7 @@ class ExecVerifier:
                 self._eaeu_same_id_overconstraint(block, packet),
                 self._asset_ip_window_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
+                self._market_reimbursement_underresolved(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),

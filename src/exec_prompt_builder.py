@@ -297,6 +297,8 @@ def _block_specific_policy_notes(block_spec: BlockSpec) -> List[str]:
         notes.append("Different RU and EAEU registration identifiers may represent separate product contexts; GRLS same-id corroboration is optional when EAEU-native identity, status, and validity are already confirmed.")
     if block_spec.block_id in {"generic_opportunity", "licensing_opportunity"}:
         notes.append("Reason region-by-region; do not collapse RU/EAEU opportunity with EU/US unresolved or blocked positions into one global unsupported verdict.")
+    if block_spec.block_id == "market_reimbursement_window":
+        notes.append("Do not require a single EAEU-union reimbursement list when source evidence establishes reimbursement/payer coverage is member-state scoped; decide RU on RU source-native evidence and carry non-RU EAEU member-state gaps as caveats/actions.")
     if block_spec.block_id in {"asset_attractiveness", "rf_entry", "eaeu_entry", "generic_opportunity", "licensing_opportunity", "portfolio_opportunity"}:
         notes.append("Treat synthesis/manufacturing evidence as technical screening unless the question is explicitly CMC/manufacturing.")
     return notes

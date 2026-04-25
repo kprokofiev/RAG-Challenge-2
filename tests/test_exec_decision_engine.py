@@ -1662,6 +1662,106 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertIn("ev-pte-check", retention["retained_refs"])
         self.assertIn("ev-rights-check", retention["retained_refs"])
 
+    def test_evidence_assembler_retains_reimbursement_checks_for_market_window(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "market_reimbursement_window",
+            "inn": "apixaban",
+            "allowed_doc_kinds": ["pricing", "payer_policy"],
+            "required_sections": ["registrations", "commercial_signals", "product_contexts"],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-ru-price",
+                    "doc_id": "doc-ru-price",
+                    "doc_kind": "pricing",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU | "
+                        "check_class=jnvlp_price_limit_row | status=listed_active | inn=Апиксабан | "
+                        "registry_entry=1000170708 | registration_id=ЛП-№(012345)-(РГ-RU) | effective_date=2026-02-17"
+                    ),
+                },
+                {
+                    "evidence_id": "ev-eaeu-scope",
+                    "doc_id": "doc-eaeu-scope",
+                    "doc_kind": "payer_policy",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=eec_market_access_scope | jurisdiction=EAEU | "
+                        "check_class=eaeu_union_reimbursement_scope | status=member_state_scope | "
+                        "conclusion=NO_SINGLE_EAEU_UNION_REIMBURSEMENT_LIST_IDENTIFIED"
+                    ),
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="market_reimbursement_window",
+            answer_type="window",
+            needed_dossier_sections=["registrations", "commercial_signals", "product_contexts"],
+            retrieval_plan=ExecRetrievalPlan(doc_kinds=["pricing", "payer_policy"], queries=["apixaban reimbursement"]),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+
+        self.assertEqual(linkage["market_reimbursement_snapshot"]["verdict_hint"], "LIMITED")
+        self.assertEqual(linkage["market_reimbursement_snapshot"]["regions"]["RU"]["listed_active_count"], 1)
+        self.assertTrue(linkage["market_reimbursement_snapshot"]["regions"]["EAEU"]["member_state_scope"])
+        self.assertIn("ev-ru-price", linkage["priority_evidence_retention"]["retained_refs"])
+
+    def test_verifier_lifts_market_reimbursement_from_unresolved_to_limited(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="market_reimbursement_window",
+            title="Market / reimbursement window",
+            verdict="UNRESOLVED",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="No source-native payer evidence.",
+            full_answer="The window is unresolved because no EAEU union reimbursement list is present.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-ru-price",
+                    "doc_id": "doc-ru-price",
+                    "doc_kind": "pricing",
+                    "snippet": "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU | status=listed_active",
+                },
+                {
+                    "evidence_id": "ev-eaeu-scope",
+                    "doc_id": "doc-eaeu-scope",
+                    "doc_kind": "payer_policy",
+                    "snippet": "REIMBURSEMENT_CHECK | source=eec_market_access_scope | jurisdiction=EAEU | status=member_state_scope",
+                },
+            ],
+            "contract_linkage": {
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED",
+                    "evidence_refs": ["ev-ru-price", "ev-eaeu-scope"],
+                    "regions": {
+                        "RU": {
+                            "listed_active_count": 1,
+                            "current_effective_dates": ["2026-02-17"],
+                            "evidence_refs": ["ev-ru-price"],
+                        },
+                        "EAEU": {
+                            "member_state_scope": True,
+                            "evidence_refs": ["ev-eaeu-scope"],
+                        },
+                    },
+                }
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LIMITED")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("RU source-native", repaired.short_answer)
+
     def test_market_entry_linkage_uses_product_context_form_and_strength_bridge(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {
