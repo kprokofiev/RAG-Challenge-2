@@ -200,6 +200,14 @@ _PRODUCT_IDENTITY_BRIDGE_SIGNAL_RE = re.compile(
     r"\b(?:PRODUCT_IDENTITY_BRIDGE|COMMERCIAL_SIGNAL_LINKAGE)\s*\|",
     re.IGNORECASE,
 )
+_SOURCE_NATIVE_REGISTRATION_ID_SIGNAL_RE = re.compile(
+    r"\b(?:GRLS|EAEU)\s+reg_no\s*:",
+    re.IGNORECASE,
+)
+_SOURCE_NATIVE_REGISTRATION_ID_RE = re.compile(
+    r"\b(?P<source>GRLS|EAEU)\s+reg_no\s*:\s*(?P<identifier>[^\n\r|]+)",
+    re.IGNORECASE,
+)
 _POSITIVE_STATUS_MARKERS = {
     "active",
     "approved",
@@ -1481,7 +1489,7 @@ def _contract_linkage_evidence_items(
 
     def _append(item: Dict[str, Any], *, priority_only: bool = False) -> None:
         doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
-        if priority_only and not _is_priority_contract_evidence(item, doc_kind):
+        if priority_only and not _is_contract_linkage_registry_evidence(item, doc_kind):
             return
         key = (
             str(item.get("evidence_id") or ""),
@@ -1511,6 +1519,45 @@ def _contract_linkage_evidence_items(
         if isinstance(item, dict):
             _append(item, priority_only=True)
     return items
+
+
+def _is_contract_linkage_registry_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
+    if _is_priority_contract_evidence(item, doc_kind):
+        return True
+    snippet = str(item.get("snippet") or "")
+    return (
+        doc_kind in {"grls", "grls_card", "ru_registration_export", "eaeu_document", "eaeu_registration"}
+        and bool(_SOURCE_NATIVE_REGISTRATION_ID_SIGNAL_RE.search(snippet))
+    )
+
+
+def _source_native_registration_records(
+    evidence_items: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for item in evidence_items:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        snippet = str(item.get("snippet") or "")
+        if not _SOURCE_NATIVE_REGISTRATION_ID_SIGNAL_RE.search(snippet):
+            continue
+        evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if not evidence_ref:
+            continue
+        for match in _SOURCE_NATIVE_REGISTRATION_ID_RE.finditer(snippet):
+            source = str(match.group("source") or "").strip().upper()
+            identifier = str(match.group("identifier") or "").strip(" \t.;,")
+            if not identifier:
+                continue
+            records.append(
+                {
+                    "context": "RU" if source == "GRLS" else "EAEU",
+                    "source": source,
+                    "identifier": identifier,
+                    "source_doc_kind": doc_kind,
+                    "evidence_refs": [evidence_ref],
+                }
+            )
+    return records
 
 
 def _priority_evidence_retention_manifest(
@@ -2424,6 +2471,7 @@ class ExecEvidenceAssembler:
         commercial_signals = [item for item in selected_sections.get("commercial_signals", []) or [] if isinstance(item, dict)]
         reimbursement_checks = _extract_reimbursement_checks(contract_evidence)
         product_identity_bridges = _extract_product_identity_bridges(contract_evidence)
+        source_native_registration_records = _source_native_registration_records(contract_evidence)
         market_entry_linkage: Dict[str, Dict[str, Any]] = {}
         for target_region in ("RU", "EAEU"):
             identity_entries = registrations_by_region.get(target_region, [])
@@ -2441,6 +2489,12 @@ class ExecEvidenceAssembler:
                 for entry in identity_entries
                 for identifier in entry.get("identifiers", []) or []
             )
+            source_native_registration_identifiers = _dedupe_text(
+                record.get("identifier")
+                for record in source_native_registration_records
+                if str(record.get("context") or "").strip().upper() == target_region
+            )
+            identifier_candidates = _dedupe_text(list(identifiers) + list(source_native_registration_identifiers))
             mahs = _dedupe_text(entry.get("mah") for entry in identity_entries if entry.get("mah"))
             dosage_forms = _dedupe_text(
                 form
@@ -2466,7 +2520,7 @@ class ExecEvidenceAssembler:
                 searchable_text = _signal_searchable_text(signal, evidence_by_ref)
                 match_level = _best_identity_match(
                     searchable_text,
-                    identifiers,
+                    identifier_candidates,
                     "; ".join(mahs),
                     dosage_forms,
                     strengths,
@@ -2502,7 +2556,7 @@ class ExecEvidenceAssembler:
                 )
                 match_level = _structured_identity_match(
                     bridge_text,
-                    identifiers,
+                    identifier_candidates,
                     mahs,
                     dosage_forms,
                     strengths,
@@ -2535,7 +2589,7 @@ class ExecEvidenceAssembler:
                 )
                 match_level = _structured_identity_match(
                     check_text,
-                    identifiers,
+                    identifier_candidates,
                     mahs,
                     dosage_forms,
                     strengths,
@@ -2555,9 +2609,32 @@ class ExecEvidenceAssembler:
             ]
             total_commercial_signal_count = len(relevant_signals) + structured_bridge_count + reimbursement_signal_count
             access_registration_ids = _dedupe_text(source_native_access_registration_ids)[:12]
-            access_registration_id_overlap = any(
+            selected_registration_id_overlap = any(
                 _identity_token_present(" ".join(access_registration_ids), identifier)
                 for identifier in identifiers
+            )
+            source_native_registration_id_overlap = any(
+                _identity_token_present(" ".join(access_registration_ids), identifier)
+                for identifier in source_native_registration_identifiers
+            )
+            access_registration_id_overlap = selected_registration_id_overlap or source_native_registration_id_overlap
+            matched_registration_identifiers = _dedupe_text(
+                identifier
+                for identifier in identifier_candidates
+                if _identity_token_present(" ".join(access_registration_ids), identifier)
+            )[:8]
+            if source_native_registration_id_overlap and not selected_registration_id_overlap:
+                match_basis.append("source_native_registration_registry_overlap")
+            if source_native_registration_id_overlap and _identity_match_rank(best_match) < _identity_match_rank("same_identifier"):
+                best_match = "same_identifier"
+            identity_match_scope = (
+                "selected_registration_anchor"
+                if selected_registration_id_overlap
+                else "source_native_registered_product_context"
+                if source_native_registration_id_overlap
+                else "mah_or_product_context"
+                if _identity_match_rank(best_match) == 2
+                else "inn_or_unmatched"
             )
             market_entry_linkage[target_region] = {
                 "registration_anchor_present": any(entry.get("status_positive") for entry in identity_entries),
@@ -2567,6 +2644,7 @@ class ExecEvidenceAssembler:
                     key=lambda value: {"LOW": 1, "MEDIUM": 2, "HIGH": 3}.get(value, 0),
                 ),
                 "registration_identifiers": identifiers[:6],
+                "source_native_registration_identifiers": source_native_registration_identifiers[:12],
                 "registration_mahs": mahs[:4],
                 "dosage_forms": dosage_forms[:6],
                 "strengths": strengths[:6],
@@ -2577,9 +2655,13 @@ class ExecEvidenceAssembler:
                 "source_native_reimbursement_signal_count": reimbursement_signal_count,
                 "source_native_access_registration_ids": access_registration_ids,
                 "access_registration_id_overlap": access_registration_id_overlap,
+                "selected_registration_id_overlap": selected_registration_id_overlap,
+                "source_native_registration_id_overlap": source_native_registration_id_overlap,
+                "matched_registration_identifiers": matched_registration_identifiers,
                 "ru_proxy_signal_count": len(proxy_signals),
                 "signal_regions": sorted(signal_regions),
                 "identity_match": best_match if total_commercial_signal_count > 0 or linkage_refs else "none",
+                "identity_match_scope": identity_match_scope,
                 "identity_match_basis": sorted(set(match_basis)),
                 "linkage_confidence": _commercial_linkage_confidence(best_match, total_commercial_signal_count),
                 "validity_confirmed": any(
@@ -2852,10 +2934,14 @@ class ExecEvidenceAssembler:
                     "ru_eaeu_ip_conclusion": (contract_linkage.get("ru_eaeu_ip_window_snapshot", {}) or {}).get("conclusion"),
                     "ru_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("identity_match"),
                     "eaeu_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("identity_match"),
+                    "ru_identity_match_scope": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("identity_match_scope"),
+                    "eaeu_identity_match_scope": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("identity_match_scope"),
                     "ru_source_native_access_signal_count": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("source_native_reimbursement_signal_count", 0),
                     "eaeu_structured_bridge_signal_count": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("structured_bridge_signal_count", 0),
                     "ru_access_registration_id_overlap": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("access_registration_id_overlap", False),
                     "eaeu_access_registration_id_overlap": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("access_registration_id_overlap", False),
+                    "ru_selected_registration_id_overlap": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("selected_registration_id_overlap", False),
+                    "ru_source_native_registration_id_overlap": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("source_native_registration_id_overlap", False),
                     "market_reimbursement_conclusion": (contract_linkage.get("market_reimbursement_snapshot", {}) or {}).get("conclusion"),
                     "market_reimbursement_verdict_hint": (contract_linkage.get("market_reimbursement_snapshot", {}) or {}).get("verdict_hint"),
                     "eaeu_has_valid_to": contract_linkage.get("eaeu_registration", {}).get("has_valid_to", False),

@@ -2114,6 +2114,77 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "GO")
         self.assertIn("promoted_eaeu_conditional_go_to_go_on_identity_linkage", verification.repair_reason)
 
+    def test_ru_market_linkage_can_match_source_native_portfolio_registration(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "rf_entry",
+            "inn": "apixaban",
+            "allowed_doc_kinds": ["ru_registration_export"],
+            "required_sections": ["registrations", "product_contexts"],
+            "registrations": [
+                {
+                    "region": "RU",
+                    "status": {"value": "active", "evidence_refs": ["ev-ru-reg-selected"]},
+                    "mah": {"value": "Selected Holder", "evidence_refs": ["ev-ru-reg-selected"]},
+                    "identifiers": [{"value": "LP-003276", "evidence_refs": ["ev-ru-reg-selected"]}],
+                    "evidence_refs": ["ev-ru-reg-selected"],
+                }
+            ],
+            "product_contexts": [
+                {
+                    "region": "RU",
+                    "label": "Selected RU context",
+                    "evidence_refs": ["ev-ru-reg-selected"],
+                }
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-ru-reg-selected",
+                    "doc_id": "doc-ru-reg-selected",
+                    "doc_kind": "ru_registration_export",
+                    "snippet": "LP-003276 active Selected Holder",
+                },
+                {
+                    "evidence_id": "ev-grls-alt",
+                    "doc_id": "doc-grls-alt",
+                    "doc_kind": "grls",
+                    "snippet": "GRLS reg_no: LP-007734",
+                },
+                {
+                    "evidence_id": "ev-ru-price-alt",
+                    "doc_id": "doc-ru-price-alt",
+                    "doc_kind": "pricing",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU | "
+                        "status=listed_active | registration_id=LP-007734 | inn=Apixaban | effective_date=2026-02-17"
+                    ),
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="rf_entry",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations", "product_contexts"],
+            retrieval_plan=ExecRetrievalPlan(doc_kinds=["ru_registration_export"], queries=["apixaban ru entry"]),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        ru_linkage = evidence_packet["contract_linkage"]["market_entry_linkage"]["RU"]
+        summary = evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]
+
+        self.assertEqual(ru_linkage["registration_identifiers"], ["LP-003276"])
+        self.assertIn("LP-007734", ru_linkage["source_native_registration_identifiers"])
+        self.assertEqual(ru_linkage["identity_match"], "same_identifier")
+        self.assertEqual(ru_linkage["identity_match_scope"], "source_native_registered_product_context")
+        self.assertFalse(ru_linkage["selected_registration_id_overlap"])
+        self.assertTrue(ru_linkage["source_native_registration_id_overlap"])
+        self.assertEqual(ru_linkage["matched_registration_identifiers"], ["LP-007734"])
+        self.assertIn("source_native_registration_registry_overlap", ru_linkage["identity_match_basis"])
+        self.assertEqual(summary["ru_identity_match"], "same_identifier")
+        self.assertEqual(summary["ru_identity_match_scope"], "source_native_registered_product_context")
+        self.assertFalse(summary["ru_selected_registration_id_overlap"])
+        self.assertTrue(summary["ru_source_native_registration_id_overlap"])
+
 
 class ExecLlmEnvTests(unittest.TestCase):
     def test_require_exec_openai_api_key_loads_explicit_env_file(self):
