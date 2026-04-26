@@ -490,6 +490,36 @@ class ExecVerifier:
             and not _has_explicit_negative_evidence(text)
         )
 
+    def _eaeu_underlinked_conditional_go(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "eaeu_entry" or block.verdict not in {"CONDITIONAL_GO", "HOLD", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        if not _eaeu_native_entry_decision_supported(packet):
+            return False
+        linkage = _market_entry_linkage(packet, "EAEU")
+        if int(linkage.get("commercial_signal_count") or 0) <= 0:
+            return False
+        if _identity_match_rank(str(linkage.get("identity_match") or "")) < 2:
+            return False
+        text = _block_text(block)
+        linkage_markers = (
+            "commercial",
+            "access",
+            "identity",
+            "linkage",
+            "product context",
+            "same identifier",
+            "inn-level",
+            "source-native",
+        )
+        return (
+            (block.verdict == "CONDITIONAL_GO" or _contains_any_marker(text, linkage_markers))
+            and not _has_explicit_negative_evidence(text)
+        )
+
     def _asset_ip_window_overconstraint(
         self,
         block: ExecDecisionBlock,
@@ -837,6 +867,15 @@ class ExecVerifier:
                 )
             )
 
+        if self._eaeu_underlinked_conditional_go(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="eaeu_identity_underlink",
+                    severity="WARN",
+                    message="EAEU entry still sits below GO even though EAEU-native registration and source-native linkage align at product-context level.",
+                )
+            )
+
         if self._asset_ip_window_overconstraint(block, packet):
             issues.append(
                 ExecVerificationIssue(
@@ -1080,6 +1119,55 @@ class ExecVerifier:
             repaired.decision_blockers = []
             repaired.next_actions = []
             applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
+
+        if any(issue.issue_type == "eaeu_identity_underlink" for issue in verification.issues) or self._eaeu_underlinked_conditional_go(repaired, packet):
+            identity_entry = _identity_entry(packet, "EAEU")
+            linkage = _market_entry_linkage(packet, "EAEU")
+            match_level = str(linkage.get("identity_match") or "")
+            linkage_phrase = (
+                "the same EAEU registration identifier"
+                if match_level == "same_identifier"
+                else "the same EAEU MAH / product context"
+            )
+            identifier = ", ".join((identity_entry.get("identifiers") or [])[:1])
+            validity_value = str(identity_entry.get("valid_to") or "").strip() or str(identity_entry.get("validity_type") or "").strip()
+            repaired.verdict = "GO"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                f"GO — EAEU-native registration is confirmed and source-native access/commercial linkage maps to {linkage_phrase}."
+            )
+            repaired.full_answer = (
+                "The packet carries an EAEU-native registration anchor with identifier, status, and validity evidence. "
+                f"Identifier {identifier or 'for the EAEU product context'} remains authorised with validity {validity_value or 'confirmed in-source'}, "
+                f"and the market-entry linkage now maps source-native access/commercial evidence to {linkage_phrase}. "
+                "Dossier-wide IP/FTO and rights gaps remain in their dedicated blocks, but they should not keep the regulatory entry block at CONDITIONAL_GO."
+            )
+            repaired.top_evidence_refs = list(
+                dict.fromkeys(
+                    list(linkage.get("evidence_refs") or [])
+                    + list(identity_entry.get("evidence_refs") or [])
+                    + list(repaired.top_evidence_refs)
+                )
+            )[:8]
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(
+                    f"{blocker.title} {blocker.rationale}",
+                    ("inn-level", "identity", "linkage", "commercial", "access", "product context"),
+                )
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if not _contains_any_marker(
+                    f"{action.action} {action.rationale}",
+                    ("inn-level", "identity", "linkage", "commercial", "access", "product context"),
+                )
+            ]
+            caveat = "Dossier-wide IP/FTO and rights gaps remain in their dedicated blocks; they do not override the EAEU registration-entry conclusion when EAEU-native identity, status, validity, and market-entry linkage are source-backed."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("promoted_eaeu_conditional_go_to_go_on_identity_linkage")
 
         if any(issue.issue_type == "eaeu_same_id_overconstraint" for issue in verification.issues) or self._eaeu_same_id_overconstraint(repaired, packet):
             identity_entry = _identity_entry(packet, "EAEU")
@@ -1397,6 +1485,7 @@ class ExecVerifier:
             "eaeu_holdable_position",
             "rf_identity_underlink",
             "eaeu_same_id_overconstraint",
+            "eaeu_identity_underlink",
             "asset_ip_window_overconstraint",
             "asset_dedicated_ip_fto_overconstraint",
             "ip_window_closed_without_decision_grade_legal_status",
@@ -1416,6 +1505,7 @@ class ExecVerifier:
                 self._eaeu_holdable_regulatory_position(block, packet),
                 self._rf_underlinked_conditional_go(block, packet),
                 self._eaeu_same_id_overconstraint(block, packet),
+                self._eaeu_underlinked_conditional_go(block, packet),
                 self._asset_ip_window_overconstraint(block, packet),
                 self._asset_dedicated_ip_fto_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),

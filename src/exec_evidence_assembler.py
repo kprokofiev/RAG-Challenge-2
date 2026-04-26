@@ -57,6 +57,7 @@ _DOC_KIND_LABELS = {
     "formulary": "Formulary source",
     "pricing": "Pricing source",
     "payer_policy": "Payer policy",
+    "product_identity_bridge": "Product identity bridge",
 }
 
 _DOC_KIND_ALIASES = {
@@ -187,6 +188,18 @@ _REIMBURSEMENT_CHECK_SIGNAL_RE = re.compile(
     r"\bREIMBURSEMENT_CHECK\s*\|",
     re.IGNORECASE,
 )
+_PRODUCT_IDENTITY_BRIDGE_DOC_KINDS = {
+    "product_identity_bridge",
+    "eaeu_document",
+    "ru_registration_export",
+    "ru_commercial_summary",
+    "pricing",
+    "payer_policy",
+}
+_PRODUCT_IDENTITY_BRIDGE_SIGNAL_RE = re.compile(
+    r"\b(?:PRODUCT_IDENTITY_BRIDGE|COMMERCIAL_SIGNAL_LINKAGE)\s*\|",
+    re.IGNORECASE,
+)
 _POSITIVE_STATUS_MARKERS = {
     "active",
     "approved",
@@ -258,6 +271,8 @@ def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
     if doc_kind in _CLEARANCE_CHECK_DOC_KINDS and _CLEARANCE_CHECK_SIGNAL_RE.search(snippet):
         return True
     if doc_kind in _REIMBURSEMENT_CHECK_DOC_KINDS and _REIMBURSEMENT_CHECK_SIGNAL_RE.search(snippet):
+        return True
+    if doc_kind in _PRODUCT_IDENTITY_BRIDGE_DOC_KINDS and _PRODUCT_IDENTITY_BRIDGE_SIGNAL_RE.search(snippet):
         return True
     if doc_kind != "ru_patent_fips":
         return False
@@ -972,6 +987,104 @@ def _extract_reimbursement_checks(selected_evidence: List[Dict[str, Any]]) -> Li
     return checks
 
 
+def _structured_product_identity_bridge_records_from_snippet(
+    item: Dict[str, Any],
+    evidence_ref: str,
+    doc_kind: str,
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for prefix in ("PRODUCT_IDENTITY_BRIDGE", "COMMERCIAL_SIGNAL_LINKAGE"):
+        for line in _iter_structured_lines(str(item.get("snippet") or ""), prefix):
+            fields = _parse_pipe_fields(line)
+            jurisdiction = str(
+                fields.get("jurisdiction")
+                or fields.get("region")
+                or fields.get("signal_region")
+                or _region_from_evidence_text(item)
+            ).strip().upper() or "GLOBAL"
+            signal_region = str(fields.get("signal_region") or jurisdiction).strip().upper() or jurisdiction
+            records.append(
+                {
+                    "record_type": prefix.lower(),
+                    "source": str(fields.get("source") or "").strip(),
+                    "jurisdiction": jurisdiction,
+                    "signal_region": signal_region,
+                    "registration_id": str(fields.get("registration_id") or "").strip(),
+                    "linked_signal": str(fields.get("linked_signal") or "").strip(),
+                    "match_level": str(fields.get("match_level") or "").strip().lower(),
+                    "trade_name": str(fields.get("trade_name") or "").strip(),
+                    "inn": str(fields.get("inn") or "").strip(),
+                    "mah": str(fields.get("mah") or "").strip(),
+                    "form": str(fields.get("form") or "").strip(),
+                    "strength": str(fields.get("strength") or "").strip(),
+                    "status": str(fields.get("status") or "").strip(),
+                    "valid_to": _first_date(fields.get("valid_to") or line),
+                    "limitation": str(fields.get("limitation") or "").strip(),
+                    "source_doc_kind": doc_kind,
+                    "evidence_refs": [evidence_ref],
+                }
+            )
+    return records
+
+
+def _extract_product_identity_bridges(selected_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for item in selected_evidence:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        snippet = str(item.get("snippet") or "")
+        if doc_kind not in _PRODUCT_IDENTITY_BRIDGE_DOC_KINDS or not _PRODUCT_IDENTITY_BRIDGE_SIGNAL_RE.search(snippet):
+            continue
+        evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+        if not evidence_ref:
+            continue
+        records.extend(_structured_product_identity_bridge_records_from_snippet(item, evidence_ref, doc_kind))
+    return records
+
+
+def _compact_identity_token(value: Any) -> str:
+    return re.sub(r"[\s\-_]+", "", _normalize_text(value).lower())
+
+
+def _identity_token_present(haystack: Any, needle: Any) -> bool:
+    token = _normalize_text(needle).lower()
+    if len(token) < 4:
+        return False
+    text = _normalize_text(haystack).lower()
+    if token in text:
+        return True
+    compact_token = _compact_identity_token(token)
+    return len(compact_token) >= 4 and compact_token in _compact_identity_token(text)
+
+
+def _structured_identity_match(
+    text: str,
+    identifiers: List[str],
+    mahs: List[str],
+    dosage_forms: List[str],
+    strengths: List[str],
+    product_context_terms: List[str],
+    declared_match_level: str = "",
+) -> str:
+    match_level = str(declared_match_level or "").strip().lower()
+    if match_level in {"weak", "inn", "inn_only", "inn-level", "inn_level_only"}:
+        return "inn_level_only"
+    if any(_identity_token_present(text, identifier) for identifier in identifiers):
+        return "same_identifier"
+    inferred = _best_identity_match(
+        _normalize_text(text).lower(),
+        identifiers,
+        "; ".join(mahs),
+        dosage_forms,
+        strengths,
+        product_context_terms,
+    )
+    if match_level == "exact" and _identity_match_rank(inferred) >= 2:
+        return inferred
+    if match_level in {"strong", "product_context", "product-context"} and _identity_match_rank(inferred) >= 2:
+        return "mah_or_product_context"
+    return inferred
+
+
 def _market_reimbursement_snapshot(
     reimbursement_checks: List[Dict[str, Any]],
     market_entry_linkage: Dict[str, Dict[str, Any]],
@@ -1163,11 +1276,25 @@ def _family_legal_events_snapshot(
             "status_basis": snapshot_payload.get("status_basis"),
         }
         refs.extend(list(snapshot_payload.get("evidence_refs") or []))
+    decision_grade = all(not payload["missing_event_classes"] for payload in coverage.values())
+    regions_with_source = sorted(
+        region
+        for region, payload in coverage.items()
+        if payload.get("has_country_or_family_status")
+        or payload.get("checked_missing_event_classes")
+        or payload.get("limited_event_checks")
+    )
     return {
         "events": legal_events[:20],
         "event_types_by_region": {region: sorted(types) for region, types in event_types_by_region.items()},
         "coverage_by_region": coverage,
-        "decision_grade": all(not payload["missing_event_classes"] for payload in coverage.values()),
+        "decision_grade": decision_grade,
+        "coverage_status": "DECISION_GRADE" if decision_grade else "PARTIAL" if regions_with_source else "MISSING",
+        "regions_with_source": regions_with_source,
+        "decision_grade_by_region": {
+            region: not payload["missing_event_classes"]
+            for region, payload in coverage.items()
+        },
         "evidence_refs": list(dict.fromkeys(refs))[:16],
     }
 
@@ -1343,6 +1470,47 @@ def _source_evidence_manifest(
 
 def _evidence_ref_id(item: Dict[str, Any]) -> str:
     return str(item.get("evidence_id") or item.get("doc_id") or "").strip()
+
+
+def _contract_linkage_evidence_items(
+    selected_evidence: List[Dict[str, Any]],
+    base_packet: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    seen = set()
+
+    def _append(item: Dict[str, Any], *, priority_only: bool = False) -> None:
+        doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+        if priority_only and not _is_priority_contract_evidence(item, doc_kind):
+            return
+        key = (
+            str(item.get("evidence_id") or ""),
+            str(item.get("doc_id") or ""),
+            doc_kind,
+            str(item.get("snippet") or "")[:200],
+        )
+        if key in seen:
+            return
+        seen.add(key)
+        items.append(
+            {
+                "evidence_id": item.get("evidence_id"),
+                "doc_id": item.get("doc_id"),
+                "doc_kind": doc_kind,
+                "source_label": item.get("source_label") or _source_label(item),
+                "source_url": item.get("source_url"),
+                "page": item.get("page"),
+                "snippet": item.get("snippet", ""),
+            }
+        )
+
+    for item in selected_evidence or []:
+        if isinstance(item, dict):
+            _append(item)
+    for item in ((base_packet or {}).get("evidence_registry", []) or []):
+        if isinstance(item, dict):
+            _append(item, priority_only=True)
+    return items
 
 
 def _priority_evidence_retention_manifest(
@@ -1857,6 +2025,7 @@ class ExecEvidenceAssembler:
                 ref = str(item.get(ref_key) or "").strip()
                 if ref and ref not in evidence_by_ref:
                     evidence_by_ref[ref] = item
+        contract_evidence = _contract_linkage_evidence_items(selected_evidence, base_packet)
 
         def _doc_kind(ref: str) -> str:
             return normalize_exec_doc_kind((evidence_by_ref.get(ref) or {}).get("doc_kind"))
@@ -1992,7 +2161,7 @@ class ExecEvidenceAssembler:
                 region_snapshot["expiry_dates"].append(expiry_date)
                 region_snapshot["evidence_refs"].extend(refs[:5])
 
-        for item in selected_evidence:
+        for item in contract_evidence:
             doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
             evidence_ref = str(item.get("evidence_id") or item.get("doc_id") or "").strip()
             if not evidence_ref:
@@ -2078,7 +2247,7 @@ class ExecEvidenceAssembler:
 
         eaeu_regs: List[Dict[str, Any]] = []
         eaeu_evidence_snippets = [
-            item for item in selected_evidence
+            item for item in contract_evidence
             if normalize_exec_doc_kind(item.get("doc_kind")) == "eaeu_document"
         ]
         for reg in selected_sections.get("registrations", []) or []:
@@ -2218,12 +2387,12 @@ class ExecEvidenceAssembler:
             region for region, payload in patent_snapshot.items()
             if payload.get("window_status") != "missing"
         }
-        clearance_checks = _extract_clearance_checks(selected_evidence)
-        rights_records = _extract_rights_records(selected_evidence)
-        legal_events = _extract_legal_events(selected_evidence)
+        clearance_checks = _extract_clearance_checks(contract_evidence)
+        rights_records = _extract_rights_records(contract_evidence)
+        legal_events = _extract_legal_events(contract_evidence)
         family_legal_events = _family_legal_events_snapshot(legal_events, patent_snapshot, clearance_checks)
         fto_screening = _fto_screening_snapshot(selected_sections, patent_snapshot, family_legal_events)
-        source_manifest = _source_evidence_manifest(selected_evidence, rights_records, legal_events, clearance_checks)
+        source_manifest = _source_evidence_manifest(contract_evidence, rights_records, legal_events, clearance_checks)
         registration_context_relationships: List[Dict[str, Any]] = []
         ru_entries = registrations_by_region.get("RU", [])
         eaeu_entries = registrations_by_region.get("EAEU", [])
@@ -2253,6 +2422,8 @@ class ExecEvidenceAssembler:
                 )
 
         commercial_signals = [item for item in selected_sections.get("commercial_signals", []) or [] if isinstance(item, dict)]
+        reimbursement_checks = _extract_reimbursement_checks(contract_evidence)
+        product_identity_bridges = _extract_product_identity_bridges(contract_evidence)
         market_entry_linkage: Dict[str, Dict[str, Any]] = {}
         for target_region in ("RU", "EAEU"):
             identity_entries = registrations_by_region.get(target_region, [])
@@ -2288,7 +2459,9 @@ class ExecEvidenceAssembler:
             )
             best_match = "none"
             linkage_refs: List[str] = []
+            match_basis: List[str] = []
             signal_regions = set()
+            source_native_access_registration_ids: List[str] = []
             for signal in relevant_signals:
                 searchable_text = _signal_searchable_text(signal, evidence_by_ref)
                 match_level = _best_identity_match(
@@ -2304,11 +2477,88 @@ class ExecEvidenceAssembler:
                 signal_regions.add(_region_from_record(signal))
                 if _identity_match_rank(match_level) >= 2:
                     linkage_refs.extend(_compact_refs(signal))
+                    match_basis.append("selected_commercial_signal")
+            structured_bridge_count = 0
+            for bridge in product_identity_bridges:
+                jurisdiction = str(bridge.get("jurisdiction") or "").strip().upper()
+                signal_region = str(bridge.get("signal_region") or "").strip().upper()
+                if target_region not in {jurisdiction, signal_region}:
+                    continue
+                if bridge.get("registration_id"):
+                    source_native_access_registration_ids.append(str(bridge.get("registration_id")))
+                if bridge.get("linked_signal"):
+                    source_native_access_registration_ids.append(str(bridge.get("linked_signal")))
+                bridge_text = " ".join(
+                    str(bridge.get(key) or "")
+                    for key in (
+                        "registration_id",
+                        "linked_signal",
+                        "trade_name",
+                        "mah",
+                        "form",
+                        "strength",
+                        "status",
+                    )
+                )
+                match_level = _structured_identity_match(
+                    bridge_text,
+                    identifiers,
+                    mahs,
+                    dosage_forms,
+                    strengths,
+                    product_context_terms,
+                    str(bridge.get("match_level") or ""),
+                )
+                if _identity_match_rank(match_level) > _identity_match_rank(best_match):
+                    best_match = match_level
+                if bridge.get("record_type") == "commercial_signal_linkage":
+                    structured_bridge_count += 1
+                if signal_region:
+                    signal_regions.add(signal_region)
+                if _identity_match_rank(match_level) >= 2:
+                    linkage_refs.extend(list(bridge.get("evidence_refs") or []))
+                    match_basis.append("structured_product_identity_bridge")
+            reimbursement_signal_count = 0
+            for check in reimbursement_checks:
+                check_region = str(check.get("jurisdiction") or "").strip().upper()
+                if check_region != target_region:
+                    continue
+                status = str(check.get("status") or "").strip().lower()
+                if status not in {"listed_active", "source_native_rows_found"}:
+                    continue
+                reimbursement_signal_count += 1
+                if check.get("registration_id"):
+                    source_native_access_registration_ids.append(str(check.get("registration_id")))
+                check_text = " ".join(
+                    str(check.get(key) or "")
+                    for key in ("registration_id", "trade_name", "registry_entry", "inn", "conclusion")
+                )
+                match_level = _structured_identity_match(
+                    check_text,
+                    identifiers,
+                    mahs,
+                    dosage_forms,
+                    strengths,
+                    product_context_terms,
+                    "exact" if check.get("registration_id") else "",
+                )
+                if _identity_match_rank(match_level) > _identity_match_rank(best_match):
+                    best_match = match_level
+                signal_regions.add(check_region)
+                if _identity_match_rank(match_level) >= 2:
+                    linkage_refs.extend(list(check.get("evidence_refs") or []))
+                    match_basis.append("source_native_reimbursement_row")
             all_signal_refs = [
                 ref
                 for item in relevant_signals
                 for ref in _compact_refs(item)
             ]
+            total_commercial_signal_count = len(relevant_signals) + structured_bridge_count + reimbursement_signal_count
+            access_registration_ids = _dedupe_text(source_native_access_registration_ids)[:12]
+            access_registration_id_overlap = any(
+                _identity_token_present(" ".join(access_registration_ids), identifier)
+                for identifier in identifiers
+            )
             market_entry_linkage[target_region] = {
                 "registration_anchor_present": any(entry.get("status_positive") for entry in identity_entries),
                 "identity_confidence": max(
@@ -2321,11 +2571,17 @@ class ExecEvidenceAssembler:
                 "dosage_forms": dosage_forms[:6],
                 "strengths": strengths[:6],
                 "product_context_terms": product_context_terms[:8],
-                "commercial_signal_count": len(relevant_signals),
+                "commercial_signal_count": total_commercial_signal_count,
+                "selected_commercial_signal_count": len(relevant_signals),
+                "structured_bridge_signal_count": structured_bridge_count,
+                "source_native_reimbursement_signal_count": reimbursement_signal_count,
+                "source_native_access_registration_ids": access_registration_ids,
+                "access_registration_id_overlap": access_registration_id_overlap,
                 "ru_proxy_signal_count": len(proxy_signals),
                 "signal_regions": sorted(signal_regions),
-                "identity_match": best_match if relevant_signals else "none",
-                "linkage_confidence": _commercial_linkage_confidence(best_match, len(relevant_signals)),
+                "identity_match": best_match if total_commercial_signal_count > 0 or linkage_refs else "none",
+                "identity_match_basis": sorted(set(match_basis)),
+                "linkage_confidence": _commercial_linkage_confidence(best_match, total_commercial_signal_count),
                 "validity_confirmed": any(
                     str(entry.get("validity_type") or "").strip().lower() in {"date_present", "indefinite"}
                     for entry in identity_entries
@@ -2335,7 +2591,6 @@ class ExecEvidenceAssembler:
                 "evidence_refs": list(dict.fromkeys(linkage_refs or all_signal_refs))[:10],
             }
 
-        reimbursement_checks = _extract_reimbursement_checks(selected_evidence)
         market_reimbursement = _market_reimbursement_snapshot(reimbursement_checks, market_entry_linkage)
 
         ru_eaeu_sources = []
@@ -2597,6 +2852,10 @@ class ExecEvidenceAssembler:
                     "ru_eaeu_ip_conclusion": (contract_linkage.get("ru_eaeu_ip_window_snapshot", {}) or {}).get("conclusion"),
                     "ru_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("identity_match"),
                     "eaeu_identity_match": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("identity_match"),
+                    "ru_source_native_access_signal_count": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("source_native_reimbursement_signal_count", 0),
+                    "eaeu_structured_bridge_signal_count": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("structured_bridge_signal_count", 0),
+                    "ru_access_registration_id_overlap": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("RU", {}) or {}).get("access_registration_id_overlap", False),
+                    "eaeu_access_registration_id_overlap": ((contract_linkage.get("market_entry_linkage", {}) or {}).get("EAEU", {}) or {}).get("access_registration_id_overlap", False),
                     "market_reimbursement_conclusion": (contract_linkage.get("market_reimbursement_snapshot", {}) or {}).get("conclusion"),
                     "market_reimbursement_verdict_hint": (contract_linkage.get("market_reimbursement_snapshot", {}) or {}).get("verdict_hint"),
                     "eaeu_has_valid_to": contract_linkage.get("eaeu_registration", {}).get("has_valid_to", False),
@@ -2606,6 +2865,8 @@ class ExecEvidenceAssembler:
                     "rights_conclusion": (contract_linkage.get("rights_transferability_snapshot", {}) or {}).get("conclusion"),
                     "fto_screening_conclusion": (contract_linkage.get("fto_screening_snapshot", {}) or {}).get("conclusion"),
                     "family_legal_events_decision_grade": bool((contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("decision_grade")),
+                    "family_legal_events_coverage_status": (contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("coverage_status"),
+                    "family_legal_events_regions_with_source": list((contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("regions_with_source", [])),
                     "source_manifest_checked_count": (contract_linkage.get("source_evidence_manifest", {}) or {}).get("checked_source_count", 0),
                     "priority_evidence_retained_count": priority_retention.get("retained_count", 0),
                     "priority_evidence_missing_count": priority_retention.get("missing_count", 0),

@@ -1946,6 +1946,174 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(ru_linkage["identity_match"], "mah_or_product_context")
         self.assertTrue(ru_linkage["product_context_match_confirmed"])
 
+    def test_contract_linkage_uses_structured_registry_bridges_for_trace_sync(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        registration_id = "ЛП-№(007734)-(РГ-RU)"
+        base_packet = {
+            "block_id": "eaeu_entry",
+            "inn": "apixaban",
+            "allowed_doc_kinds": ["eaeu_document"],
+            "required_sections": ["registrations", "product_contexts"],
+            "registrations": [
+                {
+                    "region": "RU",
+                    "status": {"value": "registered", "evidence_refs": ["ev-ru-reg"]},
+                    "mah": {"value": "СООО \"Лекфарм\"", "evidence_refs": ["ev-ru-reg"]},
+                    "identifiers": [{"value": registration_id, "evidence_refs": ["ev-ru-reg"]}],
+                    "forms_strengths": [{"value": "tablet", "evidence_refs": ["ev-ru-reg"]}],
+                    "evidence_refs": ["ev-ru-reg"],
+                },
+                {
+                    "region": "EAEU",
+                    "status": {"value": "Authorised", "evidence_refs": ["ev-eaeu-reg"]},
+                    "mah": {"value": "СООО \"Лекфарм\"", "evidence_refs": ["ev-eaeu-reg"]},
+                    "identifiers": [{"value": registration_id, "evidence_refs": ["ev-eaeu-reg"]}],
+                    "forms_strengths": [{"value": "tablet", "evidence_refs": ["ev-eaeu-reg"]}],
+                    "valid_to": {"value": "2029-11-19", "evidence_refs": ["ev-eaeu-reg"]},
+                    "validity_type": "date_present",
+                    "evidence_refs": ["ev-eaeu-reg"],
+                },
+            ],
+            "product_contexts": [
+                {
+                    "region": "EAEU",
+                    "label": "Apixaban tablet СООО \"Лекфарм\"",
+                    "dosage_forms": ["tablet"],
+                    "strengths": [],
+                    "evidence_refs": ["ev-eaeu-reg"],
+                }
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-ru-reg",
+                    "doc_id": "doc-ru-reg",
+                    "doc_kind": "ru_registration_export",
+                    "snippet": f"{registration_id} registered СООО \"Лекфарм\" tablet",
+                },
+                {
+                    "evidence_id": "ev-eaeu-reg",
+                    "doc_id": "doc-eaeu-reg",
+                    "doc_kind": "eaeu_document",
+                    "snippet": f"{registration_id} Authorised СООО \"Лекфарм\" Valid To: 2029-11-19 tablet",
+                },
+                {
+                    "evidence_id": "ev-bridge",
+                    "doc_id": "doc-bridge",
+                    "doc_kind": "product_identity_bridge",
+                    "snippet": (
+                        f"PRODUCT_IDENTITY_BRIDGE | source=eaeu_product_identity_bridge | jurisdiction=EAEU | "
+                        f"registration_id={registration_id} | trade_name=EAEU - tablet - СООО \"Лекфарм\" | "
+                        "inn=apixaban | mah=СООО \"Лекфарм\" | form=tablet | status=Authorised | "
+                        f"valid_to=2029-11-19 | linked_signal={registration_id} | match_level=exact\n"
+                        f"COMMERCIAL_SIGNAL_LINKAGE | source=eaeu_product_identity_bridge | jurisdiction=EAEU | "
+                        f"registration_id={registration_id} | linked_signal={registration_id} | "
+                        "match_level=exact | signal_region=EAEU"
+                    ),
+                },
+                {
+                    "evidence_id": "ev-ru-price",
+                    "doc_id": "doc-ru-price",
+                    "doc_kind": "pricing",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU | "
+                        f"status=listed_active | registration_id={registration_id} | inn=Апиксабан | "
+                        "effective_date=2026-02-17"
+                    ),
+                },
+                {
+                    "evidence_id": "ev-us-legal",
+                    "doc_id": "doc-us-legal",
+                    "doc_kind": "patent_legal_events",
+                    "snippet": "LEGAL_EVENT | jurisdiction=US | event_type=PTE | patent_no=US1234567 | event_date=2026-01-01",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="eaeu_entry",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations", "product_contexts"],
+            retrieval_plan=ExecRetrievalPlan(doc_kinds=["eaeu_document"], queries=["apixaban eaeu registration"]),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        linkage = evidence_packet["contract_linkage"]
+        summary = evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]
+
+        self.assertEqual(linkage["market_entry_linkage"]["RU"]["identity_match"], "same_identifier")
+        self.assertEqual(linkage["market_entry_linkage"]["EAEU"]["identity_match"], "same_identifier")
+        self.assertEqual(linkage["market_entry_linkage"]["EAEU"]["commercial_signal_count"], 1)
+        self.assertTrue(linkage["market_entry_linkage"]["RU"]["access_registration_id_overlap"])
+        self.assertTrue(linkage["market_entry_linkage"]["EAEU"]["access_registration_id_overlap"])
+        self.assertIn("structured_product_identity_bridge", linkage["market_entry_linkage"]["EAEU"]["identity_match_basis"])
+        self.assertEqual(linkage["market_reimbursement_snapshot"]["verdict_hint"], "LIMITED")
+        self.assertEqual(summary["ru_identity_match"], "same_identifier")
+        self.assertEqual(summary["eaeu_identity_match"], "same_identifier")
+        self.assertTrue(summary["ru_access_registration_id_overlap"])
+        self.assertTrue(summary["eaeu_access_registration_id_overlap"])
+        self.assertEqual(summary["market_reimbursement_verdict_hint"], "LIMITED")
+        self.assertFalse(summary["family_legal_events_decision_grade"])
+        self.assertEqual(summary["family_legal_events_coverage_status"], "PARTIAL")
+
+    def test_verifier_lifts_eaeu_conditional_go_when_source_native_linkage_is_synced(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="EAEU registration is present, but commercial identity linkage has caveats.",
+            full_answer="EAEU entry is conditional because access signals are only linked at INN level.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "contract_linkage": {
+                "registration_identity_map": [
+                    {
+                        "context": "EAEU",
+                        "source_class": "EAEU-native",
+                        "identity_confidence": "HIGH",
+                        "status_positive": True,
+                        "identifiers": ["ЛП-№(007734)-(РГ-RU)"],
+                        "valid_to": "2029-11-19",
+                        "validity_type": "date_present",
+                        "evidence_refs": ["ev-eaeu-reg"],
+                    }
+                ],
+                "market_entry_linkage": {
+                    "EAEU": {
+                        "registration_anchor_present": True,
+                        "commercial_signal_count": 1,
+                        "identity_match": "same_identifier",
+                        "evidence_refs": ["ev-bridge"],
+                    }
+                },
+            },
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-eaeu-reg",
+                    "doc_id": "doc-eaeu-reg",
+                    "doc_kind": "eaeu_document",
+                    "snippet": "ЛП-№(007734)-(РГ-RU) Authorised Valid To: 2029-11-19",
+                },
+                {
+                    "evidence_id": "ev-bridge",
+                    "doc_id": "doc-bridge",
+                    "doc_kind": "product_identity_bridge",
+                    "snippet": "COMMERCIAL_SIGNAL_LINKAGE | jurisdiction=EAEU | registration_id=ЛП-№(007734)-(РГ-RU) | match_level=exact",
+                },
+            ],
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertIn("promoted_eaeu_conditional_go_to_go_on_identity_linkage", verification.repair_reason)
+
 
 class ExecLlmEnvTests(unittest.TestCase):
     def test_require_exec_openai_api_key_loads_explicit_env_file(self):
