@@ -1107,6 +1107,8 @@ def _market_reimbursement_snapshot(
                 "checks": [],
                 "listed_active_count": 0,
                 "source_native_row_count": 0,
+                "benefit_signal_count": 0,
+                "pathway_source_count": 0,
                 "member_state_scope": False,
                 "current_effective_dates": [],
                 "registration_ids": [],
@@ -1120,6 +1122,10 @@ def _market_reimbursement_snapshot(
             payload["source_native_row_count"] += 1
         if status == "listed_active":
             payload["listed_active_count"] += 1
+        if status == "payer_benefit_list_signal":
+            payload["benefit_signal_count"] += 1
+        if status == "payer_pathway_source_checked":
+            payload["pathway_source_count"] += 1
         if status == "member_state_scope" or check_class == "eaeu_union_reimbursement_scope":
             payload["member_state_scope"] = True
         if check.get("effective_date"):
@@ -1135,8 +1141,12 @@ def _market_reimbursement_snapshot(
         payload["registration_ids"] = sorted(set(payload["registration_ids"]))[:8]
         payload["evidence_refs"] = list(dict.fromkeys(payload["evidence_refs"]))[:10]
         linkage = market_entry_linkage.get(region, {}) or {}
-        if payload["listed_active_count"] > 0:
+        if payload["listed_active_count"] > 0 and (payload["benefit_signal_count"] > 0 or payload["pathway_source_count"] > 0):
+            conclusion = "SOURCE_NATIVE_PRICE_ACCESS_AND_POLICY_BREADTH_SIGNALS_PRESENT"
+        elif payload["listed_active_count"] > 0:
             conclusion = "SOURCE_NATIVE_REIMBURSEMENT_OR_PRICE_ACCESS_SIGNAL_PRESENT"
+        elif payload["benefit_signal_count"] > 0 or payload["pathway_source_count"] > 0:
+            conclusion = "POLICY_BREADTH_OR_PATHWAY_SIGNAL_PRESENT"
         elif payload["member_state_scope"]:
             conclusion = "UNION_LEVEL_REIMBURSEMENT_NOT_APPLICABLE_MEMBER_STATE_SCOPE"
         elif int(linkage.get("commercial_signal_count") or 0) > 0:
@@ -1169,6 +1179,7 @@ def _market_reimbursement_snapshot(
         "limitations": [
             "RU price-limit/JNVLP rows support regulated access/pricing presence, not a complete payer-coverage or restriction analysis.",
             "EAEU reimbursement and payer coverage must be assessed at member-state level unless a source-native union mechanism is provided.",
+            "RU federal/regional program or pathway sources are payer-breadth screening evidence, not full payer-tier or restriction clearance.",
         ],
         "evidence_refs": list(dict.fromkeys(refs))[:12],
     }
@@ -1428,9 +1439,14 @@ def _source_evidence_manifest(
     source_alias = {
         "uspto_pte": "uspto_pte_file_wrapper",
         "uspto_patent_center_file_wrapper": "uspto_pte_file_wrapper",
+        "uspto_file_wrapper_open_data": "uspto_pte_file_wrapper",
+        "uspto_maintenance_fees": "uspto_pte_file_wrapper",
+        "uspto_ptab": "uspto_pte_file_wrapper",
         "epo_register": "epo_register",
+        "eu_national_spc_registers": "eu_national_registers",
         "rospatent_searchplatform": "rospatent_searchplatform",
         "ru_eaeu_conflict_classifier": "rospatent_searchplatform",
+        "ru_eaeu_patent_reconciliation": "rospatent_searchplatform",
         "eapo_pharma_register": "eapo_pharma_register",
         "uspto_assignment": "uspto_assignment",
         "sec_edgar": "sec_edgar_contracts",
@@ -1452,7 +1468,7 @@ def _source_evidence_manifest(
         ]
         source["evidence_refs"] = list(dict.fromkeys(list(source.get("evidence_refs") or []) + refs))[:8]
         statuses = {str(check.get("status") or "").strip().lower() for check in source_checks}
-        if statuses & {"source_not_collected", "source_unavailable"}:
+        if statuses & {"source_not_collected", "source_unavailable", "not_source_verified"}:
             source["status"] = "limited"
         elif "conflict_requires_review" in statuses:
             source["status"] = "checked_with_conflict"

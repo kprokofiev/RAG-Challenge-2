@@ -1754,6 +1754,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
             "allowed_doc_kinds": [
                 "patent_term_extension",
                 "patent_file_wrapper",
+                "patent_national_legal_status",
                 "patent_legal_events",
                 "ru_patent_fips",
                 "uspto_assignment",
@@ -1781,10 +1782,27 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
                     "snippet": "CLEARANCE_CHECK | source=uspto_patent_center_file_wrapper | jurisdiction=US | patent=US11896586 | check_class=terminal_disclaimer_file_wrapper | status=source_not_collected | limitation=manual Patent Center review required",
                 },
                 {
+                    "evidence_id": "ev-wrapper-extra",
+                    "doc_id": "doc-wrapper-extra",
+                    "doc_kind": "patent_file_wrapper",
+                    "snippet": "\n".join(
+                        [
+                            "CLEARANCE_CHECK | source=uspto_maintenance_fees | jurisdiction=US | patent=US11896586 | check_class=maintenance_fee_status | status=not_source_verified",
+                            "CLEARANCE_CHECK | source=uspto_ptab | jurisdiction=US | patent=US11896586 | check_class=ptab_reexam_reissue_review | status=not_source_verified",
+                        ]
+                    ),
+                },
+                {
                     "evidence_id": "ev-epo-check",
                     "doc_id": "doc-epo-check",
                     "doc_kind": "patent_legal_events",
-                    "snippet": "CLEARANCE_CHECK | source=epo_register | jurisdiction=EU | patent=EP4353312 | check_class=SPC | status=no_source_event_found",
+                        "snippet": "CLEARANCE_CHECK | source=epo_register | jurisdiction=EU | patent=EP4353312 | check_class=SPC | status=no_source_event_found",
+                },
+                {
+                    "evidence_id": "ev-eu-national",
+                    "doc_id": "doc-eu-national",
+                    "doc_kind": "patent_national_legal_status",
+                    "snippet": "CLEARANCE_CHECK | source=eu_national_spc_registers | jurisdiction=EU | country=DE | patent=EP4353312 | check_class=SPC | status=not_source_verified",
                 },
                 {
                     "evidence_id": "ev-ru-conflict",
@@ -1808,6 +1826,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
                 doc_kinds=[
                     "patent_term_extension",
                     "patent_file_wrapper",
+                    "patent_national_legal_status",
                     "patent_legal_events",
                     "ru_patent_fips",
                     "uspto_assignment",
@@ -1833,8 +1852,9 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         manifest = linkage["source_evidence_manifest"]
         statuses = {source["source_id"]: source["status"] for source in manifest["sources"]}
         self.assertEqual(statuses["uspto_pte_file_wrapper"], "limited")
+        self.assertEqual(statuses["eu_national_registers"], "limited")
         self.assertEqual(statuses["rospatent_searchplatform"], "checked_with_conflict")
-        self.assertGreaterEqual(manifest["limited_source_count"], 2)
+        self.assertGreaterEqual(manifest["limited_source_count"], 3)
 
         retention = linkage["priority_evidence_retention"]
         self.assertEqual(retention["status"], "ok")
@@ -1869,6 +1889,16 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
                         "conclusion=NO_SINGLE_EAEU_UNION_REIMBURSEMENT_LIST_IDENTIFIED"
                     ),
                 },
+                {
+                    "evidence_id": "ev-ru-policy",
+                    "doc_id": "doc-ru-policy",
+                    "doc_kind": "payer_policy",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=ru_federal_program_sources | jurisdiction=RU | "
+                        "check_class=federal_state_guarantees_reimbursement_pathway | "
+                        "status=payer_pathway_source_checked | payer_signal=payer_pathway_scope"
+                    ),
+                },
             ],
         }
         plan = ExecQuestionPlan(
@@ -1883,6 +1913,11 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
 
         self.assertEqual(linkage["market_reimbursement_snapshot"]["verdict_hint"], "LIMITED")
         self.assertEqual(linkage["market_reimbursement_snapshot"]["regions"]["RU"]["listed_active_count"], 1)
+        self.assertEqual(linkage["market_reimbursement_snapshot"]["regions"]["RU"]["pathway_source_count"], 1)
+        self.assertEqual(
+            linkage["market_reimbursement_snapshot"]["regions"]["RU"]["conclusion"],
+            "SOURCE_NATIVE_PRICE_ACCESS_AND_POLICY_BREADTH_SIGNALS_PRESENT",
+        )
         self.assertTrue(linkage["market_reimbursement_snapshot"]["regions"]["EAEU"]["member_state_scope"])
         self.assertIn("ev-ru-price", linkage["priority_evidence_retention"]["retained_refs"])
 
@@ -1940,6 +1975,63 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "LIMITED")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("RU source-native", repaired.short_answer)
+
+    def test_verifier_lifts_sufficiency_to_screening_ready_partial(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="evidence_sufficiency_note",
+            title="Evidence sufficiency note",
+            verdict="INSUFFICIENT",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="INSUFFICIENT because full FTO, file-wrapper, SPC, payer tier, and restriction evidence are not decision-grade.",
+            full_answer=(
+                "The packet is not operations-ready: US terminal disclaimer/file-wrapper and EU SPC country-level checks are incomplete, "
+                "and payer tier/restriction evidence is still missing."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-fto", "ev-family", "ev-payer"],
+            "critical_unknowns": [],
+            "registrations": [{"region": "RU", "status": {"value": "active"}}],
+            "contract_linkage": {
+                "registration_identity_map": [{"context": "RU", "identity_confidence": "HIGH"}],
+                "source_evidence_manifest": {
+                    "checked_source_count": 5,
+                    "limited_source_count": 3,
+                    "legal_event_evidence_refs": ["ev-family"],
+                    "rights_evidence_refs": ["ev-fto"],
+                },
+                "fto_screening_snapshot": {
+                    "screening_level": "FTO_SCREENING_ONLY",
+                    "full_fto_verdict_allowed": False,
+                    "evidence_refs": ["ev-fto"],
+                },
+                "family_legal_events_snapshot": {
+                    "decision_grade": False,
+                    "coverage_status": "PARTIAL",
+                    "evidence_refs": ["ev-family"],
+                },
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED",
+                    "check_count": 4,
+                    "evidence_refs": ["ev-payer"],
+                },
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "PARTIAL")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("screening-ready", repaired.short_answer)
+        self.assertIn("operations-ready", " ".join(repaired.caveats).lower())
+        self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
 
     def test_market_entry_linkage_uses_product_context_form_and_strength_bridge(self):
         assembler = ExecEvidenceAssembler(retriever=None)

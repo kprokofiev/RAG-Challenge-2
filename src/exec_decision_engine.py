@@ -568,8 +568,18 @@ class ExecDecisionEngine:
             else:
                 verdict, confidence, sufficiency = "UNRESOLVED", "LOW", "INSUFFICIENT"
         elif block_spec.verdict_family == "sufficiency":
-            verdict = "INSUFFICIENT" if missing_classes else "SUFFICIENT"
-            confidence = "LOW" if missing_classes else "MEDIUM"
+            linkage = packet.get("contract_linkage", {}) or {}
+            source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+            source_count = int(source_manifest.get("checked_source_count") or 0) + int(source_manifest.get("limited_source_count") or 0)
+            fto = linkage.get("fto_screening_snapshot", {}) or {}
+            reimbursement = linkage.get("market_reimbursement_snapshot", {}) or {}
+            screening_ready = (
+                source_count >= 4
+                and str(fto.get("screening_level") or "") == "FTO_SCREENING_ONLY"
+                and str(reimbursement.get("verdict_hint") or "").upper() == "LIMITED"
+            )
+            verdict = "PARTIAL" if missing_classes and screening_ready else "INSUFFICIENT" if missing_classes else "SUFFICIENT"
+            confidence = "MEDIUM" if verdict == "PARTIAL" else "LOW" if missing_classes else "MEDIUM"
             sufficiency = verdict
         else:
             verdict = "HIGH" if blockers else "LOW"

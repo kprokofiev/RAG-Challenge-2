@@ -668,6 +668,52 @@ class ExecVerifier:
         eaeu_scoped = bool(eaeu_payload.get("member_state_scope"))
         return has_ru_source_native or eaeu_scoped
 
+    def _evidence_sufficiency_screening_ready_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "evidence_sufficiency_note" or block.verdict != "INSUFFICIENT":
+            return False
+        if self._relevant_critical_unknowns(block, packet):
+            return False
+        linkage = _contract_linkage(packet)
+        source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+        source_count = int(source_manifest.get("checked_source_count") or 0) + int(source_manifest.get("limited_source_count") or 0)
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        fto = linkage.get("fto_screening_snapshot", {}) or {}
+        reimbursement = _market_reimbursement_snapshot(packet)
+        has_ip_screening = (
+            str(fto.get("screening_level") or "") == "FTO_SCREENING_ONLY"
+            or bool(fto.get("evidence_refs"))
+            or bool(family_events.get("evidence_refs"))
+            or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+        )
+        has_payer_screening = (
+            str(reimbursement.get("verdict_hint") or "").upper() == "LIMITED"
+            and int(reimbursement.get("check_count") or 0) > 0
+        )
+        has_entry_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU")) or bool(
+            linkage.get("registration_identity_map")
+        )
+        text = _block_text(block)
+        has_operations_ready_gap = _contains_any_marker(
+            text,
+            (
+                "operations-ready",
+                "decision-grade",
+                "full fto",
+                "freedom-to-operate",
+                "payer tier",
+                "restriction",
+                "file-wrapper",
+                "spc",
+                "terminal disclaimer",
+                "insufficient",
+            ),
+        )
+        return source_count >= 4 and has_entry_anchor and has_ip_screening and has_payer_screening and has_operations_ready_gap
+
     def _regional_generic_collapse(
         self,
         block: ExecDecisionBlock,
@@ -918,6 +964,15 @@ class ExecVerifier:
                     issue_type="market_reimbursement_underresolved",
                     severity="WARN",
                     message="Market reimbursement window remains unresolved despite RU source-native price/access evidence or EAEU member-state-scope evidence.",
+                )
+            )
+
+        if self._evidence_sufficiency_screening_ready_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="evidence_sufficiency_screening_ready_understated",
+                    severity="WARN",
+                    message="Evidence sufficiency is marked insufficient even though the packet supports screening-ready partial use with explicit IP/FTO and payer limitations.",
                 )
             )
 
@@ -1393,6 +1448,56 @@ class ExecVerifier:
                 )
             applied_changes.append("lifted_market_reimbursement_from_unresolved_to_limited")
 
+        if (
+            any(issue.issue_type == "evidence_sufficiency_screening_ready_understated" for issue in verification.issues)
+            or self._evidence_sufficiency_screening_ready_understated(repaired, packet)
+        ):
+            linkage = _contract_linkage(packet)
+            source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+            reimbursement = _market_reimbursement_snapshot(packet)
+            refs = list(
+                dict.fromkeys(
+                    list((linkage.get("fto_screening_snapshot", {}) or {}).get("evidence_refs") or [])
+                    + list((linkage.get("family_legal_events_snapshot", {}) or {}).get("evidence_refs") or [])
+                    + list(reimbursement.get("evidence_refs") or [])
+                    + list(source_manifest.get("legal_event_evidence_refs") or [])
+                    + list(source_manifest.get("rights_evidence_refs") or [])
+                )
+            )
+            repaired.verdict = "PARTIAL"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "PARTIAL — the packet is screening-ready with explicit IP/FTO and payer-breadth limitations, but it is not operations-ready legal or reimbursement clearance."
+            )
+            repaired.full_answer = (
+                "The packet should not stay at pure insufficiency once it has source-enriched screening coverage: source manifests, IP/legal-event checks, RU/EAEU reconciliation, "
+                "and reimbursement/payer checks support preliminary decision support. The remaining gaps still matter, but they are operations-ready gaps: full US file-wrapper/terminal-disclaimer "
+                "clearance, EU country SPC/lapse/revocation closure, RU/EAEU patent reconciliation, and payer tier/restriction detail."
+            )
+            if refs:
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Source-enriched IP/FTO and reimbursement checks support screening-ready partial sufficiency, while full operations-ready clearance remains incomplete.",
+                        claim_type="hard_evidence_backed",
+                        evidence_refs=refs[:6],
+                    )
+                )
+                repaired.top_evidence_refs = list(dict.fromkeys(list(repaired.top_evidence_refs) + refs))[:8]
+            caveat = "Evidence sufficiency is screening-ready only; it is not a legal FTO opinion, payer-tier clearance, or operations-ready launch package."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            repaired.next_actions.append(
+                ExecNextAction(
+                    action_id="complete_operations_ready_legal_payer_clearance",
+                    action="Complete patent-family legal-status reconciliation, file-wrapper/SPC checks, and payer tier/restriction review before treating the dossier as operations-ready.",
+                    priority="NEXT",
+                    rationale="Screening-grade evidence supports a partial decision package, but commercial launch or paid client legal conclusions need source-native closure of the remaining gaps.",
+                    evidence_refs=refs[:6],
+                )
+            )
+            applied_changes.append("lifted_sufficiency_to_screening_ready_partial")
+
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
             positive_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"]
@@ -1519,6 +1624,7 @@ class ExecVerifier:
             "ip_window_closed_without_decision_grade_legal_status",
             "ip_window_underresolved_with_source_native_blockers",
             "market_reimbursement_underresolved",
+            "evidence_sufficiency_screening_ready_understated",
             "regional_generic_collapse",
             "regional_licensing_collapse",
             "synthesis_secondary_scope",
@@ -1538,6 +1644,7 @@ class ExecVerifier:
                 self._asset_dedicated_ip_fto_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._market_reimbursement_underresolved(block, packet),
+                self._evidence_sufficiency_screening_ready_understated(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),

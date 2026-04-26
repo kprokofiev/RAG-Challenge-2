@@ -299,6 +299,8 @@ def _block_specific_policy_notes(block_spec: BlockSpec) -> List[str]:
         notes.append("Reason region-by-region; do not collapse RU/EAEU opportunity with EU/US unresolved or blocked positions into one global unsupported verdict.")
     if block_spec.block_id == "market_reimbursement_window":
         notes.append("Do not require a single EAEU-union reimbursement list when source evidence establishes reimbursement/payer coverage is member-state scoped; decide RU on RU source-native evidence and carry non-RU EAEU member-state gaps as caveats/actions.")
+    if block_spec.block_id == "evidence_sufficiency_note":
+        notes.append("Distinguish screening-ready partial evidence from operations-ready sufficiency: IP/FTO and payer gaps can keep the package PARTIAL without collapsing it to pure INSUFFICIENT when source-enriched screening evidence is present.")
     if block_spec.block_id in {"asset_attractiveness", "rf_entry", "eaeu_entry", "generic_opportunity", "licensing_opportunity", "portfolio_opportunity"}:
         notes.append("Treat synthesis/manufacturing evidence as technical screening unless the question is explicitly CMC/manufacturing.")
     return notes
