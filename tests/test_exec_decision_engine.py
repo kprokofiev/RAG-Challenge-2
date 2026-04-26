@@ -221,6 +221,95 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertTrue(summary["ru_access_registration_id_overlap"])
         self.assertEqual(summary["market_reimbursement_verdict_hint"], "LIMITED")
 
+    def test_operations_readiness_snapshot_separates_screening_from_legal_opinion(self):
+        dossier = _sample_dossier()
+        dossier["registrations"].append(
+            {
+                "region": "EAEU",
+                "verdict": "confirmed",
+                "status": {"value": "authorised", "evidence_refs": ["ev-eaeu-reg"]},
+                "identifiers": [{"value": "LP-777", "evidence_refs": ["ev-eaeu-reg"]}],
+                "mah": {"value": "Example MAH", "evidence_refs": ["ev-eaeu-reg"]},
+                "evidence_refs": ["ev-eaeu-reg"],
+            }
+        )
+        dossier["evidence_registry"].extend(
+            [
+                {
+                    "evidence_id": "ev-eaeu-reg",
+                    "doc_kind": "eaeu_document",
+                    "snippet": "EAEU reg_no: LP-777 status authorised valid_to=2029-11-19",
+                },
+                {
+                    "evidence_id": "ev-ob",
+                    "doc_kind": "patent_expiry_us",
+                    "snippet": "LEGAL_EVENT | source=fda_orange_book_data_files | jurisdiction=US | patent=US9326945 | event_type=expiry | event_date=2031-08-24 | status=Orange Book listed",
+                },
+                {
+                    "evidence_id": "ev-fw",
+                    "doc_kind": "patent_file_wrapper",
+                    "snippet": "CLEARANCE_CHECK | source=uspto_file_wrapper_open_data | jurisdiction=US | patent=US9326945 | check_class=terminal_disclaimer_file_wrapper | status=not_source_verified",
+                },
+                {
+                    "evidence_id": "ev-assign",
+                    "doc_kind": "uspto_assignment",
+                    "snippet": "RIGHTS_RECORD | source=uspto_assignment | jurisdiction=US | patent=US9326945 | record_type=assignment | status=public USPTO assignment record",
+                },
+                {
+                    "evidence_id": "ev-epo",
+                    "doc_kind": "patent_legal_events",
+                    "snippet": "LEGAL_EVENT | source=epo_register | jurisdiction=EU | patent=EP4353312 | event_type=grant | event_date=2026-01-01 | status=granted",
+                },
+                {
+                    "evidence_id": "ev-spc",
+                    "doc_kind": "patent_national_legal_status",
+                    "snippet": "CLEARANCE_CHECK | source=eu_national_spc_registers | jurisdiction=EU | country=DE | patent=EP4353312 | check_class=SPC | status=not_source_verified",
+                },
+                {
+                    "evidence_id": "ev-ru",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "LEGAL_EVENT | source=rospatent_searchplatform | jurisdiction=RU | patent=RU1234567 | event_type=ru_legal_status | event_date=2026-01-01 | status=active",
+                },
+                {
+                    "evidence_id": "ev-eapo",
+                    "doc_kind": "ru_patent_fips",
+                    "snippet": "OFFICIAL_PATENT_REGISTER_NO_HIT | region=EAEU | search_term=apixaban | patents=0 | as_of=2026-04-26",
+                },
+                {
+                    "evidence_id": "ev-price",
+                    "doc_kind": "pricing",
+                    "snippet": "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU | check_class=jnvlp_price_limit_row | status=listed_active | registration_id=LP-777",
+                },
+                {
+                    "evidence_id": "ev-policy",
+                    "doc_kind": "payer_policy",
+                    "snippet": "REIMBURSEMENT_CHECK | source=ru_federal_program_sources | jurisdiction=RU | check_class=federal_program_or_pathway | status=payer_pathway_source_checked",
+                },
+                {
+                    "evidence_id": "ev-eec",
+                    "doc_kind": "payer_policy",
+                    "snippet": "REIMBURSEMENT_CHECK | source=eec_market_access_scope | jurisdiction=EAEU | check_class=eaeu_union_reimbursement_scope | status=member_state_scope",
+                },
+                {
+                    "evidence_id": "ev-bridge",
+                    "doc_kind": "product_identity_bridge",
+                    "snippet": "PRODUCT_IDENTITY_BRIDGE | source=eaeu_product_identity_bridge | jurisdiction=EAEU | registration_id=LP-777 | inn=apixaban | mah=Example MAH | linked_signal=LP-777 | match_level=exact",
+                },
+            ]
+        )
+
+        engine = ExecDecisionEngine()
+        packet = engine._build_packet(dossier, "case-1", engine.block_specs["asset_attractiveness"])
+        evidence_packet = engine.assembler.assemble(packet, _stub_question_plan(), case_id="case-1", allow_retrieval=False)
+        snapshot = evidence_packet["contract_linkage"]["operations_readiness_snapshot"]
+
+        self.assertTrue(snapshot["screening_ready"])
+        self.assertFalse(snapshot["operations_evidence_ready"])
+        self.assertFalse(snapshot["legal_opinion_ready"])
+        self.assertFalse(snapshot["payer_tier_clearance"])
+        self.assertIn("ru_payer_tier_restrictions", snapshot["missing_operations_checks"])
+        self.assertIn("us_pte_file_wrapper", snapshot["partial_operations_checks"])
+
     def test_eaeu_packet_includes_member_state_commercial_signals(self):
         engine = ExecDecisionEngine()
         block_spec = engine.block_specs["eaeu_entry"]

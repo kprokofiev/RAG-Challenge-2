@@ -377,6 +377,11 @@ def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", _value_text(value or "")).strip()
 
 
+def _contains_any_text(values: Iterable[Any], markers: Iterable[str]) -> bool:
+    text = _normalize_text(" ".join(_value_text(value) for value in values if value is not None)).lower()
+    return any(str(marker or "").lower() in text for marker in markers)
+
+
 def _status_positive(value: Any) -> bool:
     text = _normalize_text(value).lower()
     return any(marker in text for marker in _POSITIVE_STATUS_MARKERS)
@@ -1489,6 +1494,167 @@ def _source_evidence_manifest(
         "clearance_checks": (clearance_checks or [])[:24],
         "rights_evidence_refs": list(dict.fromkeys(rights_refs))[:12],
         "legal_event_evidence_refs": list(dict.fromkeys(event_refs))[:12],
+    }
+
+
+def _operation_row(check_id: str, layer: str, jurisdiction: str, status: str, evidence_refs: Optional[List[str]] = None) -> Dict[str, Any]:
+    normalized = str(status or "missing").strip().lower() or "missing"
+    if normalized in {"ok", "source_native_rows_found", "listed_active", "payer_benefit_list_signal", "payer_pathway_source_checked", "member_state_scope"}:
+        normalized = "checked"
+    if normalized in {"source_unavailable", "not_source_verified", "empty", "skipped", "unavailable"}:
+        normalized = "not_source_verified"
+    if normalized in {"checked_with_conflict", "conflict_requires_review"}:
+        normalized = "limited"
+    return {
+        "check_id": check_id,
+        "layer": layer,
+        "jurisdiction": jurisdiction,
+        "status": normalized,
+        "evidence_refs": list(dict.fromkeys(evidence_refs or []))[:8],
+    }
+
+
+def _source_status(source_manifest: Dict[str, Any], source_id: str) -> Tuple[str, List[str]]:
+    for source in source_manifest.get("sources", []) or []:
+        if str((source or {}).get("source_id") or "") == source_id:
+            return str((source or {}).get("status") or "missing"), list((source or {}).get("evidence_refs") or [])
+    return "missing", []
+
+
+def _has_reimbursement_source(checks: List[Dict[str, Any]], source_id: str) -> Tuple[str, List[str]]:
+    matched = [check for check in checks if str(check.get("source") or "") == source_id]
+    if not matched:
+        return "missing", []
+    refs = [ref for check in matched for ref in check.get("evidence_refs", []) or []]
+    statuses = {str(check.get("status") or "").strip().lower() for check in matched}
+    if statuses & {"checked", "listed_active", "source_native_rows_found", "payer_benefit_list_signal", "payer_pathway_source_checked", "member_state_scope"}:
+        return "checked", refs
+    if statuses & {"limited"}:
+        return "limited", refs
+    return "not_source_verified", refs
+
+
+def _operations_readiness_snapshot(
+    source_manifest: Dict[str, Any],
+    reimbursement_checks: List[Dict[str, Any]],
+    market_entry_linkage: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    rows: List[Dict[str, Any]] = []
+    for check_id, layer, jurisdiction, source_id in (
+        ("us_orange_book", "ip", "US", "fda_orange_book"),
+        ("us_pte_file_wrapper", "ip", "US", "uspto_pte_file_wrapper"),
+        ("us_assignment", "rights", "US", "uspto_assignment"),
+        ("sec_rights", "rights", "US", "sec_edgar_contracts"),
+        ("eu_epo_register", "ip", "EU", "epo_register"),
+        ("eu_national_registers", "ip", "EU", "eu_national_registers"),
+        ("ru_rospatent", "ip", "RU", "rospatent_searchplatform"),
+        ("eapo_pharma_register", "ip", "EAEU", "eapo_pharma_register"),
+    ):
+        status, refs = _source_status(source_manifest, source_id)
+        rows.append(_operation_row(check_id, layer, jurisdiction, status, refs))
+
+    for check_id, jurisdiction, source_id in (
+        ("ru_price_access", "RU", "ru_minzdrav_public_price_limits"),
+        ("ru_policy_pathway", "RU", "ru_federal_program_sources"),
+        ("ru_clinical_policy", "RU", "ru_minzdrav_clinical_recommendations"),
+        ("ru_procurement_breadth", "RU", "ru_zakupki_procurement"),
+        ("eaeu_reimbursement_scope", "EAEU", "eec_market_access_scope"),
+    ):
+        status, refs = _has_reimbursement_source(reimbursement_checks, source_id)
+        rows.append(_operation_row(check_id, "payer", jurisdiction, status, refs))
+
+    payer_tier_checks = [
+        check for check in reimbursement_checks
+        if _contains_any_text(
+            [check.get("source"), check.get("check_class"), check.get("conclusion"), check.get("limitation")],
+            ("payer_tier", "payer tier", "restriction_clearance", "restriction clearance", "tier/restriction"),
+        )
+    ]
+    payer_tier_clearance = any(
+        str(check.get("status") or "").strip().lower() in {"checked", "source_native_clearance", "payer_tier_clearance"}
+        for check in payer_tier_checks
+    )
+    rows.append(
+        _operation_row(
+            "ru_payer_tier_restrictions",
+            "payer",
+            "RU",
+            "checked" if payer_tier_clearance else "not_source_verified",
+            [ref for check in payer_tier_checks for ref in check.get("evidence_refs", []) or []],
+        )
+    )
+
+    eaeu_linkage = market_entry_linkage.get("EAEU", {}) or {}
+    eaeu_identity_ready = bool(
+        eaeu_linkage.get("same_identifier_confirmed")
+        or eaeu_linkage.get("product_context_match_confirmed")
+        or eaeu_linkage.get("access_registration_id_overlap")
+    )
+    rows.append(
+        _operation_row(
+            "eaeu_identity_bridge",
+            "identity",
+            "EAEU",
+            "checked" if eaeu_identity_ready else "not_source_verified",
+            list(eaeu_linkage.get("evidence_refs") or []),
+        )
+    )
+
+    missing = [row for row in rows if row["status"] in {"missing", "not_source_verified"}]
+    partial = [row for row in rows if row["status"] in {"limited", "checked_with_conflict"}]
+    checked_count = len([row for row in rows if row["status"] == "checked"])
+    legal_opinion_ready = any(
+        _contains_any_text(
+            [check.get("source"), check.get("check_class"), check.get("status"), check.get("conclusion")],
+            ("manual_legal_signoff", "legal_opinion_signed", "counsel_signed"),
+        )
+        for check in source_manifest.get("clearance_checks", []) or []
+    )
+    evidence_refs = list(
+        dict.fromkeys(
+            ref
+            for row in rows
+            for ref in row.get("evidence_refs", []) or []
+            if str(ref or "").strip()
+        )
+    )
+    jurisdiction_status: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        jurisdiction = row["jurisdiction"]
+        payload = jurisdiction_status.setdefault(
+            jurisdiction,
+            {"checked": 0, "partial": 0, "missing": 0, "checks": []},
+        )
+        if row["status"] == "checked":
+            payload["checked"] += 1
+        elif row["status"] in {"limited", "checked_with_conflict"}:
+            payload["partial"] += 1
+        else:
+            payload["missing"] += 1
+        payload["checks"].append(row["check_id"])
+    for payload in jurisdiction_status.values():
+        if payload["missing"]:
+            payload["status"] = "partial" if payload["checked"] or payload["partial"] else "missing"
+        elif payload["partial"]:
+            payload["status"] = "partial"
+        else:
+            payload["status"] = "complete"
+    return {
+        "screening_ready": checked_count >= 6,
+        "operations_evidence_ready": not missing and not partial and payer_tier_clearance,
+        "legal_opinion_ready": bool(legal_opinion_ready),
+        "payer_tier_clearance": bool(payer_tier_clearance),
+        "checked_count": checked_count,
+        "missing_operations_checks": [row["check_id"] for row in missing],
+        "partial_operations_checks": [row["check_id"] for row in partial],
+        "jurisdiction_status": jurisdiction_status,
+        "checks": rows[:32],
+        "limitations": [
+            "Automated public-source operations readiness is not a legal FTO opinion.",
+            "Operations evidence readiness requires source-native closure of file-wrapper/SPC/payer-tier checks.",
+            "Legal-opinion readiness requires explicit counsel/manual sign-off evidence.",
+        ],
+        "evidence_refs": evidence_refs[:16],
     }
 
 
@@ -2687,6 +2853,7 @@ class ExecEvidenceAssembler:
             }
 
         market_reimbursement = _market_reimbursement_snapshot(reimbursement_checks, market_entry_linkage)
+        operations_readiness = _operations_readiness_snapshot(source_manifest, reimbursement_checks, market_entry_linkage)
 
         ru_eaeu_sources = []
         ru_eaeu_evidence_refs: List[str] = []
@@ -2847,6 +3014,7 @@ class ExecEvidenceAssembler:
             "family_legal_events_snapshot": family_legal_events,
             "fto_screening_snapshot": fto_screening,
             "source_evidence_manifest": source_manifest,
+            "operations_readiness_snapshot": operations_readiness,
             "eaeu_registration": {
                 "registrations": eaeu_regs[:6],
                 "has_identifier_mah_linkage": any(item["identifier_mah_linked"] for item in eaeu_regs),
@@ -2967,6 +3135,12 @@ class ExecEvidenceAssembler:
                     "family_legal_events_coverage_status": (contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("coverage_status"),
                     "family_legal_events_regions_with_source": list((contract_linkage.get("family_legal_events_snapshot", {}) or {}).get("regions_with_source", [])),
                     "source_manifest_checked_count": (contract_linkage.get("source_evidence_manifest", {}) or {}).get("checked_source_count", 0),
+                    "operations_screening_ready": (contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("screening_ready", False),
+                    "operations_evidence_ready": (contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("operations_evidence_ready", False),
+                    "legal_opinion_ready": (contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("legal_opinion_ready", False),
+                    "payer_tier_clearance": (contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("payer_tier_clearance", False),
+                    "missing_operations_checks": list((contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("missing_operations_checks", []))[:12],
+                    "partial_operations_checks": list((contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("partial_operations_checks", []))[:12],
                     "priority_evidence_retained_count": priority_retention.get("retained_count", 0),
                     "priority_evidence_missing_count": priority_retention.get("missing_count", 0),
                     "generic_regions_with_potential": sorted(
