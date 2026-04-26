@@ -1266,6 +1266,82 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertIn("screening-grade", " ".join(repaired.caveats).lower())
 
+    def test_verifier_lifts_generic_not_evidenced_to_low_when_source_screening_exists(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="generic_opportunity",
+            title="Generic opportunity",
+            verdict="NOT_EVIDENCED",
+            confidence="MEDIUM",
+            sufficiency="INSUFFICIENT",
+            short_answer="The packet does not support a generic launch opportunity.",
+            full_answer="US and EU patent positions remain active/pending, with some EP entries withdrawn, so positive gate closure is missing.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "contract_linkage": {
+                "source_evidence_manifest": {"checked_source_count": 4, "limited_source_count": 4},
+                "family_legal_events_snapshot": {
+                    "coverage_status": "PARTIAL",
+                    "evidence_refs": ["ev-family"],
+                },
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LOW")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("lifted_generic_not_evidenced_to_screening_partial", verification.repair_reason)
+
+    def test_verifier_lifts_portfolio_low_to_medium_when_screening_anchors_exist(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="portfolio_opportunity",
+            title="Portfolio opportunity",
+            verdict="LOW",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Commercially strong, but not a clean portfolio opportunity due to legal-status caveats.",
+            full_answer="Approvals and phase 3 maturity exist, while jurisdiction-level legal/status reconciliation remains incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "portfolio_gap",
+                    "title": "Unreconciled legal-status trail",
+                    "severity": "IMPORTANT",
+                    "rationale": "Legal-status reconciliation remains a follow-up.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "phase3_results": {
+                "phase3_study_count": 2,
+                "phase3_with_ctgov_results_evidence": 1,
+            },
+        }
+        packet["evidence_packet_summary"] = {
+            "contract_linkage_summary": {
+                "ru_source_native_access_signal_count": 2,
+                "market_reimbursement_verdict_hint": "LIMITED",
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "MEDIUM")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("lifted_portfolio_low_to_screening_medium", verification.repair_reason)
+
     def test_verifier_promotes_sufficient_asset_conditional_go_without_blockers(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -2235,7 +2311,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("aligned_market_reimbursement_to_limited_screening_status", verification.repair_reason)
 
-    def test_verifier_keeps_generic_not_evidenced_screening_partial_when_legal_sources_exist(self):
+    def test_verifier_lifts_generic_not_evidenced_screening_partial_when_legal_sources_exist(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
             block_id="generic_opportunity",
@@ -2260,7 +2336,7 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
 
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "NOT_EVIDENCED")
+        self.assertEqual(repaired.verdict, "LOW")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("lifted_generic_not_evidenced_to_screening_partial", verification.repair_reason)
 
@@ -2647,6 +2723,61 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "GO")
         self.assertEqual(repaired.sufficiency, "SUFFICIENT")
         self.assertFalse(repaired.decision_blockers)
+        self.assertIn("promoted_eaeu_conditional_go_from_summary_linkage", verification.repair_reason)
+
+    def test_verifier_lifts_eaeu_hold_when_only_payer_policy_depth_is_missing(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="EAEU authorization is valid, but direct payer/policy/access evidence is missing.",
+            full_answer=(
+                "The status is authorised, which supports current validity rather than an expired or withdrawn state. "
+                "Commercial signals are non-negative overall, but a source-native payer/policy act is not fully closed."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "payer_depth",
+                    "title": "Direct EAEU/RU payer-policy/access evidence is missing",
+                    "severity": "IMPORTANT",
+                    "rationale": "Payer depth is lighter than ideal.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-eaeu-reg", "ev-bridge"],
+            "contract_linkage": {
+                "market_entry_linkage": {
+                    "EAEU": {
+                        "commercial_signal_count": 1,
+                        "identity_match": "same_identifier",
+                        "evidence_refs": ["ev-bridge"],
+                    }
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "eaeu_identity_match": "same_identifier",
+                    "eaeu_structured_bridge_signal_count": 1,
+                    "eaeu_has_valid_to": True,
+                    "eaeu_has_validity_state": True,
+                    "market_reimbursement_verdict_hint": "LIMITED",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
         self.assertIn("promoted_eaeu_conditional_go_from_summary_linkage", verification.repair_reason)
 
     def test_verifier_lifts_decision_blockers_sufficiency_to_screening_partial(self):

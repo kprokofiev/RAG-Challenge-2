@@ -166,6 +166,18 @@ def _has_explicit_negative_evidence(text: str) -> bool:
         "",
         lowered,
     )
+    lowered = re.sub(
+        r"\bnot\s+(?:expired|withdrawn|revoked|suspended|inactive|refused)\b",
+        "",
+        lowered,
+    )
+    lowered = re.sub(
+        r"\brather than an? (?:expired|withdrawn|revoked|suspended|inactive)(?: or (?:expired|withdrawn|revoked|suspended|inactive))* state\b",
+        "",
+        lowered,
+    )
+    lowered = re.sub(r"\bnon-negative\b", "", lowered)
+    lowered = re.sub(r"\bnot\s+fully\s+closed\b", "", lowered)
     patterns = (
         r"\bwithdrawn\b",
         r"\brevoked\b",
@@ -559,7 +571,7 @@ class ExecVerifier:
         block: ExecDecisionBlock,
         packet: Dict[str, Any],
     ) -> bool:
-        if block.block_id != "eaeu_entry" or block.verdict != "CONDITIONAL_GO":
+        if block.block_id != "eaeu_entry" or block.verdict not in {"CONDITIONAL_GO", "HOLD"}:
             return False
         if any(blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers):
             return False
@@ -567,13 +579,23 @@ class ExecVerifier:
         identity_match = str(summary.get("eaeu_identity_match") or (_market_entry_linkage(packet, "EAEU").get("identity_match") or ""))
         has_identity = _identity_match_rank(identity_match) >= 2
         has_validity = bool(summary.get("eaeu_has_valid_to")) or bool(summary.get("eaeu_has_validity_state"))
-        has_access_link = bool(summary.get("eaeu_access_registration_id_overlap")) or int((_market_entry_linkage(packet, "EAEU") or {}).get("commercial_signal_count") or 0) > 0
+        has_access_link = (
+            bool(summary.get("eaeu_access_registration_id_overlap"))
+            or int(summary.get("eaeu_structured_bridge_signal_count") or 0) > 0
+            or int((_market_entry_linkage(packet, "EAEU") or {}).get("commercial_signal_count") or 0) > 0
+        )
         has_payer_scope = str(summary.get("market_reimbursement_verdict_hint") or "").upper() in {"LIMITED", "OPEN"}
         text = _block_text(block)
         conditional_markers = (
             "primary commercial",
             "commercial source",
             "commercial artifact",
+            "payer",
+            "policy",
+            "pricing",
+            "reimbursement",
+            "access evidence",
+            "market-access",
             "strength",
             "patent",
             "fto",
@@ -587,7 +609,7 @@ class ExecVerifier:
             and has_access_link
             and has_payer_scope
             and _contains_any_marker(text, conditional_markers)
-            and not _contains_any_marker(text, ("withdrawn", "suspended", "revoked", "not registered", "inactive", "refused"))
+            and not _has_explicit_negative_evidence(text)
         )
 
     def _asset_ip_window_overconstraint(
@@ -884,7 +906,29 @@ class ExecVerifier:
         text = _block_text(block)
         has_source_screening = source_count >= 4 or bool(family_events.get("evidence_refs")) or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
         has_legal_gap_reasoning = _contains_any_marker(text, ("patent", "legal-status", "expiry", "spc", "pte", "term extension", "positive gate"))
-        return has_source_screening and has_legal_gap_reasoning and not _has_explicit_negative_evidence(text)
+        return has_source_screening and has_legal_gap_reasoning
+
+    def _portfolio_screening_underpromoted(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "portfolio_opportunity" or block.verdict != "LOW":
+            return False
+        if any(blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers):
+            return False
+        linkage = _contract_linkage(packet)
+        summary = (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
+        phase3 = linkage.get("phase3_results", {}) or {}
+        has_entry_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU")) or bool(linkage.get("registration_identity_map"))
+        has_clinical_or_market_anchor = (
+            int(phase3.get("phase3_study_count") or 0) > 0
+            or int(phase3.get("phase3_with_ctgov_results_evidence") or 0) > 0
+            or int(summary.get("ru_source_native_access_signal_count") or 0) > 0
+            or str(summary.get("market_reimbursement_verdict_hint") or "").upper() in {"LIMITED", "OPEN"}
+            or any(_positive_commercial_signal_count(packet, region) > 0 for region in ("RU", "EAEU", "US", "EU"))
+        )
+        return has_entry_anchor and has_clinical_or_market_anchor and not _has_explicit_negative_evidence(_block_text(block))
 
     def _regional_generic_collapse(
         self,
@@ -1208,6 +1252,15 @@ class ExecVerifier:
                     issue_type="decision_blockers_screening_sufficiency_understated",
                     severity="WARN",
                     message="Decision blockers are screening-classified from source-native IP evidence; the block should be partial rather than pure insufficiency.",
+                )
+            )
+
+        if self._portfolio_screening_underpromoted(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="portfolio_screening_underpromoted",
+                    severity="WARN",
+                    message="Portfolio opportunity is marked LOW despite registration and clinical/market screening anchors; legal-status caveats belong in risk/follow-up blocks.",
                 )
             )
 
@@ -1864,12 +1917,31 @@ class ExecVerifier:
             any(issue.issue_type == "generic_screening_sufficiency_understated" for issue in verification.issues)
             or self._generic_screening_sufficiency_understated(repaired, packet)
         ):
+            repaired.verdict = "LOW"
             repaired.sufficiency = "PARTIAL"
             repaired.confidence = "LOW" if repaired.confidence == "LOW" else "MEDIUM"
+            repaired.short_answer = (
+                "LOW — source-native legal screening evidence exists, but active/pending patent coverage and missing positive-gate closure keep generic opportunity weak rather than absent."
+            )
             caveat = "Generic opportunity is not positively evidenced, but source-native legal screening evidence exists; the gap is positive-gate closure, not absence of evidence."
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
             applied_changes.append("lifted_generic_not_evidenced_to_screening_partial")
+
+        if (
+            any(issue.issue_type == "portfolio_screening_underpromoted" for issue in verification.issues)
+            or self._portfolio_screening_underpromoted(repaired, packet)
+        ):
+            repaired.verdict = "MEDIUM"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "MEDIUM — portfolio value is supported at screening level by registration and clinical/market anchors, while IP/legal-status reconciliation remains a caveat rather than a reason to collapse the opportunity to LOW."
+            )
+            caveat = "Portfolio opportunity remains screening-grade until jurisdiction-level legal-status and payer evidence are reconciled."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_portfolio_low_to_screening_medium")
 
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
@@ -2005,6 +2077,7 @@ class ExecVerifier:
             "evidence_sufficiency_screening_ready_understated",
             "generic_screening_sufficiency_understated",
             "decision_blockers_screening_sufficiency_understated",
+            "portfolio_screening_underpromoted",
             "regional_generic_collapse",
             "regional_licensing_collapse",
             "synthesis_secondary_scope",
@@ -2032,6 +2105,7 @@ class ExecVerifier:
                 self._evidence_sufficiency_screening_ready_understated(block, packet),
                 self._generic_screening_sufficiency_understated(block, packet),
                 self._decision_blockers_screening_sufficiency_understated(block, packet),
+                self._portfolio_screening_underpromoted(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),
