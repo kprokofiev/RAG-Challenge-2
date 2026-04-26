@@ -665,6 +665,37 @@ class ExecVerifier:
         has_registration_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EU", "US", "EAEU"))
         return has_registration_anchor and has_clinical_or_market_anchor
 
+    def _asset_screening_coverage_overconstraint(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "asset_attractiveness" or block.verdict not in {"GO", "CONDITIONAL_GO", "HOLD", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        blocker_text = " ".join(f"{blocker.title} {blocker.rationale}" for blocker in block.decision_blockers)
+        coverage_markers = (
+            "coverage ledger",
+            "decision readiness",
+            "decision_readiness",
+            "decision-complete",
+            "run_manifest",
+            "expected fields",
+            "dossier incompleteness",
+            "synthesis is yellow",
+            "complete coverage",
+        )
+        if not _contains_any_marker(blocker_text, coverage_markers):
+            return False
+        linkage = _contract_linkage(packet)
+        summary = (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
+        has_entry_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU")) or bool(linkage.get("registration_identity_map"))
+        has_market_anchor = (
+            int(summary.get("ru_source_native_access_signal_count") or 0) > 0
+            or str(summary.get("market_reimbursement_verdict_hint") or "").upper() in {"LIMITED", "OPEN"}
+            or any(_positive_commercial_signal_count(packet, region) > 0 for region in ("RU", "EAEU", "US", "EU"))
+        )
+        return has_entry_anchor and has_market_anchor and not _has_explicit_negative_evidence(_block_text(block))
+
     def _ip_window_closed_without_decision_grade_legal_status(
         self,
         block: ExecDecisionBlock,
@@ -1039,6 +1070,15 @@ class ExecVerifier:
                     issue_type="asset_dedicated_ip_fto_overconstraint",
                     severity="WARN",
                     message="Asset attractiveness is being held down by IP/FTO screening gaps that belong in the dedicated legal-window block.",
+                )
+            )
+
+        if self._asset_screening_coverage_overconstraint(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="asset_screening_coverage_overconstraint",
+                    severity="WARN",
+                    message="Asset attractiveness is blocked by operations-ready coverage-ledger gaps even though the packet supports screening-ready asset attractiveness.",
                 )
             )
 
@@ -1487,6 +1527,57 @@ class ExecVerifier:
             applied_changes.append("moved_asset_ip_fto_hold_to_dedicated_legal_window_caveat")
 
         if (
+            any(issue.issue_type == "asset_screening_coverage_overconstraint" for issue in verification.issues)
+            or self._asset_screening_coverage_overconstraint(repaired, packet)
+        ):
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(
+                    f"{blocker.title} {blocker.rationale}",
+                    (
+                        "coverage ledger",
+                        "decision readiness",
+                        "decision_readiness",
+                        "decision-complete",
+                        "run_manifest",
+                        "expected fields",
+                        "dossier incompleteness",
+                        "synthesis is yellow",
+                        "complete coverage",
+                        "commercial evidence is not balanced",
+                    ),
+                )
+            ]
+            repaired.next_actions = [
+                action for action in repaired.next_actions
+                if not _contains_any_marker(
+                    f"{action.action} {action.rationale}",
+                    (
+                        "coverage ledger",
+                        "decision readiness",
+                        "decision_readiness",
+                        "decision-complete",
+                        "run_manifest",
+                        "expected fields",
+                        "dossier incompleteness",
+                        "complete coverage",
+                        "source-native commercial signal summaries for us and eu",
+                    ),
+                )
+            ]
+            if not any(blocker.severity in _BLOCKING_SEVERITIES for blocker in repaired.decision_blockers):
+                repaired.verdict = "GO"
+                repaired.sufficiency = "SUFFICIENT"
+                repaired.confidence = "MEDIUM"
+                repaired.short_answer = (
+                    "GO — the asset is screening-ready attractive on registration, clinical, and market anchors; operations-ready coverage gaps remain caveats and follow-up items."
+                )
+            caveat = "Coverage-ledger and operations-ready completeness gaps remain in the sufficiency/legal follow-up blocks; they should not be treated as primary asset-attractiveness blockers for screening."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("moved_asset_coverage_gap_to_screening_caveat")
+
+        if (
             any(issue.issue_type == "ip_window_closed_without_decision_grade_legal_status" for issue in verification.issues)
             or self._ip_window_closed_without_decision_grade_legal_status(repaired, packet)
         ):
@@ -1789,6 +1880,7 @@ class ExecVerifier:
             "eaeu_conditional_go_underpromoted",
             "asset_ip_window_overconstraint",
             "asset_dedicated_ip_fto_overconstraint",
+            "asset_screening_coverage_overconstraint",
             "ip_window_closed_without_decision_grade_legal_status",
             "ip_window_underresolved_with_source_native_blockers",
             "market_reimbursement_underresolved",
@@ -1813,6 +1905,7 @@ class ExecVerifier:
                 self._eaeu_conditional_go_underpromoted(block, packet),
                 self._asset_ip_window_overconstraint(block, packet),
                 self._asset_dedicated_ip_fto_overconstraint(block, packet),
+                self._asset_screening_coverage_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._market_reimbursement_underresolved(block, packet),
                 self._evidence_sufficiency_screening_ready_understated(block, packet),

@@ -996,6 +996,48 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertIn("residual-risk", " ".join(repaired.caveats).lower())
 
+    def test_verifier_moves_asset_coverage_gap_to_caveat_for_screening_ready_packet(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Conditional because coverage ledger is not decision-complete.",
+            full_answer="Core asset signals are favorable, but run_manifest and decision_readiness are incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "coverage_gap",
+                    "title": "Material dossier incompleteness prevents a positive BD verdict",
+                    "severity": "DECISION_BLOCKING",
+                    "rationale": "The coverage ledger is not decision-complete and decision_readiness is insufficient.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "registrations": [{"region": "RU", "status": {"value": "active"}}],
+            "contract_linkage": {"registration_identity_map": [{"context": "RU"}]},
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "ru_source_native_access_signal_count": 3,
+                    "market_reimbursement_verdict_hint": "LIMITED",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertFalse(repaired.decision_blockers)
+        self.assertIn("moved_asset_coverage_gap_to_screening_caveat", verification.repair_reason)
+
     def test_verifier_downgrades_closed_ip_window_when_legal_status_is_not_decision_grade(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
