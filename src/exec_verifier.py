@@ -1462,6 +1462,34 @@ class ExecVerifier:
                 )
             applied_changes.append("demoted_synthesis_to_screening_scope")
 
+        if self._rf_underlinked_conditional_go(repaired, packet):
+            linkage = _market_entry_linkage(packet, "RU")
+            match_level = str(linkage.get("identity_match") or "")
+            linkage_phrase = (
+                "the same RU registration identifier"
+                if match_level == "same_identifier"
+                else "the same RU MAH / product context"
+            )
+            repaired.verdict = "GO"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                f"GO — active RU registration is confirmed and RU commercial/access signals already map to {linkage_phrase}, so RF entry should not stay at CONDITIONAL_GO."
+            )
+            repaired.full_answer = (
+                "RF entry remains anchored to the active RU registration context. "
+                f"The packet carries explicit market-entry linkage showing that RU commercial/formulary/procurement evidence maps to {linkage_phrase}. "
+                "Residual IP/FTO and payer-breadth gaps remain in their dedicated blocks rather than blocking RU registration entry."
+            )
+            repaired.top_evidence_refs = list(dict.fromkeys(list(linkage.get("evidence_refs") or []) + list(repaired.top_evidence_refs)))[:8]
+            caveat = "RU access evidence is treated as product-context-linked rather than a pure INN-level proxy."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            repaired.decision_blockers = []
+            repaired.next_actions = []
+            if "promoted_rf_conditional_go_to_go_on_identity_linkage" not in applied_changes:
+                applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
+
         repaired_verification = self.verify_block(repaired, packet, block_spec=None)
         repaired_verification.repair_applied = bool(applied_changes)
         repaired_verification.repair_reason = "; ".join(applied_changes) if applied_changes else None

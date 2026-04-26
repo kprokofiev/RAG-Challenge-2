@@ -352,7 +352,7 @@ class ExecDecisionEngine:
                 section_linked_evidence.append(item)
                 seen_evidence.add(evidence_id)
                 continue
-            if doc_kind in allowed_doc_kinds and _is_priority_contract_evidence(item, doc_kind):
+            if _is_priority_contract_evidence(item, doc_kind):
                 priority_evidence.append(item)
                 seen_evidence.add(evidence_id)
                 continue

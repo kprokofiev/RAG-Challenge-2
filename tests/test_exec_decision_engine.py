@@ -172,6 +172,55 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertEqual([item["region"] for item in packet["registrations"]], ["RU"])
         self.assertTrue(packet["critical_unknowns"])
 
+    def test_packet_builder_retains_priority_contract_evidence_across_block_allowlists(self):
+        dossier = _sample_dossier()
+        dossier["registrations"] = [
+            {
+                "region": "RU",
+                "verdict": "confirmed",
+                "status": {"value": "registered", "evidence_refs": ["ev-reg-ru"]},
+                "identifiers": [{"value": "LP-007", "evidence_refs": ["ev-reg-ru"]}],
+                "evidence_refs": ["ev-reg-ru"],
+            }
+        ]
+        dossier["evidence_registry"].extend(
+            [
+                {
+                    "evidence_id": "ev-priority-bridge",
+                    "doc_kind": "product_identity_bridge",
+                    "source_label": "eaeu_product_identity_bridge",
+                    "snippet": (
+                        "PRODUCT_IDENTITY_BRIDGE | source=eaeu_product_identity_bridge | jurisdiction=RU "
+                        "| registration_id=LP-007 | trade_name=Apixaban | inn=apixaban | mah=Example MAH "
+                        "| form=tablet | strength=5 mg | status=Authorised | linked_signal=LP-007 "
+                        "| match_level=exact"
+                    ),
+                },
+                {
+                    "evidence_id": "ev-priority-reimbursement",
+                    "doc_kind": "pricing",
+                    "source_label": "ru_minzdrav_public_price_limits",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU "
+                        "| check_class=jnvlp_price_limit_row | status=listed_active | registration_id=LP-007"
+                    ),
+                },
+            ]
+        )
+
+        engine = ExecDecisionEngine()
+        packet = engine._build_packet(dossier, "case-1", engine.block_specs["rf_entry"])
+        selected_ids = {item.get("evidence_id") for item in packet["evidence_registry"]}
+
+        self.assertIn("ev-priority-bridge", selected_ids)
+        self.assertIn("ev-priority-reimbursement", selected_ids)
+
+        evidence_packet = engine.assembler.assemble(packet, _stub_question_plan(), case_id="case-1", allow_retrieval=False)
+        summary = evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]
+        self.assertEqual(summary["ru_identity_match"], "same_identifier")
+        self.assertTrue(summary["ru_access_registration_id_overlap"])
+        self.assertEqual(summary["market_reimbursement_verdict_hint"], "LIMITED")
+
     def test_eaeu_packet_includes_member_state_commercial_signals(self):
         engine = ExecDecisionEngine()
         block_spec = engine.block_specs["eaeu_entry"]
