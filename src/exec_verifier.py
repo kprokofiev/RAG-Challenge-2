@@ -763,6 +763,20 @@ class ExecVerifier:
         eaeu_scoped = bool(eaeu_payload.get("member_state_scope"))
         return has_ru_source_native or eaeu_scoped
 
+    def _market_reimbursement_overopen(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "market_reimbursement_window" or block.verdict != "OPEN":
+            return False
+        snapshot = _market_reimbursement_snapshot(packet)
+        if str(snapshot.get("verdict_hint") or "").strip().upper() != "LIMITED":
+            return False
+        text = _block_text(block)
+        payer_tier_markers = ("payer tier", "restriction", "formulary breadth", "coverage breadth", "payer-coverage", "direct payer")
+        return _contains_any_marker(text, payer_tier_markers) or not bool(snapshot.get("payer_tier_clearance"))
+
     def _evidence_sufficiency_screening_ready_understated(
         self,
         block: ExecDecisionBlock,
@@ -828,6 +842,22 @@ class ExecVerifier:
             or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
         )
         return source_count >= 4 and has_ip_screening and not _has_explicit_negative_evidence(_block_text(block))
+
+    def _generic_screening_sufficiency_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "generic_opportunity" or block.verdict != "NOT_EVIDENCED" or block.sufficiency != "INSUFFICIENT":
+            return False
+        linkage = _contract_linkage(packet)
+        source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+        source_count = int(source_manifest.get("checked_source_count") or 0) + int(source_manifest.get("limited_source_count") or 0)
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        text = _block_text(block)
+        has_source_screening = source_count >= 4 or bool(family_events.get("evidence_refs")) or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+        has_legal_gap_reasoning = _contains_any_marker(text, ("patent", "legal-status", "expiry", "spc", "pte", "term extension", "positive gate"))
+        return has_source_screening and has_legal_gap_reasoning and not _has_explicit_negative_evidence(text)
 
     def _regional_generic_collapse(
         self,
@@ -1109,12 +1139,30 @@ class ExecVerifier:
                 )
             )
 
+        if self._market_reimbursement_overopen(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="market_reimbursement_overopen",
+                    severity="WARN",
+                    message="Market reimbursement is marked OPEN even though source linkage only supports a LIMITED payer/access screening posture.",
+                )
+            )
+
         if self._evidence_sufficiency_screening_ready_understated(block, packet):
             issues.append(
                 ExecVerificationIssue(
                     issue_type="evidence_sufficiency_screening_ready_understated",
                     severity="WARN",
                     message="Evidence sufficiency is marked insufficient even though the packet supports screening-ready partial use with explicit IP/FTO and payer limitations.",
+                )
+            )
+
+        if self._generic_screening_sufficiency_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="generic_screening_sufficiency_understated",
+                    severity="WARN",
+                    message="Generic opportunity is not positive, but source-native legal screening evidence makes the block partial rather than pure insufficiency.",
                 )
             )
 
@@ -1642,7 +1690,11 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("lifted_underresolved_ip_window_to_limited_screening_status")
 
-        if any(issue.issue_type == "market_reimbursement_underresolved" for issue in verification.issues) or self._market_reimbursement_underresolved(repaired, packet):
+        if (
+            any(issue.issue_type in {"market_reimbursement_underresolved", "market_reimbursement_overopen"} for issue in verification.issues)
+            or self._market_reimbursement_underresolved(repaired, packet)
+            or self._market_reimbursement_overopen(repaired, packet)
+        ):
             snapshot = _market_reimbursement_snapshot(packet)
             regions = snapshot.get("regions", {}) or {}
             ru_payload = regions.get("RU", {}) or {}
@@ -1692,7 +1744,7 @@ class ExecVerifier:
                         evidence_refs=list(eaeu_payload.get("evidence_refs") or [])[:4],
                     )
                 )
-            applied_changes.append("lifted_market_reimbursement_from_unresolved_to_limited")
+            applied_changes.append("aligned_market_reimbursement_to_limited_screening_status")
 
         if (
             any(issue.issue_type == "evidence_sufficiency_screening_ready_understated" for issue in verification.issues)
@@ -1754,6 +1806,17 @@ class ExecVerifier:
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
             applied_changes.append("lifted_decision_blockers_to_screening_partial")
+
+        if (
+            any(issue.issue_type == "generic_screening_sufficiency_understated" for issue in verification.issues)
+            or self._generic_screening_sufficiency_understated(repaired, packet)
+        ):
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "LOW" if repaired.confidence == "LOW" else "MEDIUM"
+            caveat = "Generic opportunity is not positively evidenced, but source-native legal screening evidence exists; the gap is positive-gate closure, not absence of evidence."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_generic_not_evidenced_to_screening_partial")
 
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
@@ -1884,7 +1947,9 @@ class ExecVerifier:
             "ip_window_closed_without_decision_grade_legal_status",
             "ip_window_underresolved_with_source_native_blockers",
             "market_reimbursement_underresolved",
+            "market_reimbursement_overopen",
             "evidence_sufficiency_screening_ready_understated",
+            "generic_screening_sufficiency_understated",
             "decision_blockers_screening_sufficiency_understated",
             "regional_generic_collapse",
             "regional_licensing_collapse",
@@ -1908,7 +1973,9 @@ class ExecVerifier:
                 self._asset_screening_coverage_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._market_reimbursement_underresolved(block, packet),
+                self._market_reimbursement_overopen(block, packet),
                 self._evidence_sufficiency_screening_ready_understated(block, packet),
+                self._generic_screening_sufficiency_understated(block, packet),
                 self._decision_blockers_screening_sufficiency_understated(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),

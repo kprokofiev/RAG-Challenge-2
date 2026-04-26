@@ -2018,6 +2018,77 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("RU source-native", repaired.short_answer)
 
+    def test_verifier_downgrades_market_reimbursement_open_to_limited_without_payer_tier(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="market_reimbursement_window",
+            title="Market / reimbursement window",
+            verdict="OPEN",
+            confidence="MEDIUM",
+            sufficiency="SUFFICIENT",
+            short_answer="RU access is open but direct payer tier and restrictions are not fully closed.",
+            full_answer="The evidence supports JNVLP access, but payer tier and coverage breadth remain caveats.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-ru-price"],
+            "contract_linkage": {
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED",
+                    "check_count": 4,
+                    "evidence_refs": ["ev-ru-price"],
+                    "regions": {
+                        "RU": {
+                            "listed_active_count": 1,
+                            "pathway_source_count": 1,
+                            "current_effective_dates": ["2026-02-27"],
+                            "evidence_refs": ["ev-ru-price"],
+                        },
+                        "EAEU": {"member_state_scope": True},
+                    },
+                }
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LIMITED")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("aligned_market_reimbursement_to_limited_screening_status", verification.repair_reason)
+
+    def test_verifier_keeps_generic_not_evidenced_screening_partial_when_legal_sources_exist(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="generic_opportunity",
+            title="Generic opportunity",
+            verdict="NOT_EVIDENCED",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="US/EU patent and legal-status evidence exists, but positive gates are not met.",
+            full_answer="The packet has expiry/legal-status screening data, but PTE/SPC and legal-event reconciliation are incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "contract_linkage": {
+                "source_evidence_manifest": {"checked_source_count": 4, "limited_source_count": 2},
+                "family_legal_events_snapshot": {"coverage_status": "PARTIAL", "evidence_refs": ["ev-family"]},
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "NOT_EVIDENCED")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("lifted_generic_not_evidenced_to_screening_partial", verification.repair_reason)
+
     def test_verifier_lifts_sufficiency_to_screening_ready_partial(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
