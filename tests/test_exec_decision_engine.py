@@ -2255,6 +2255,59 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "GO")
         self.assertIn("promoted_eaeu_conditional_go_to_go_on_identity_linkage", verification.repair_reason)
 
+    def test_verifier_lifts_eaeu_hold_when_validity_is_present_in_linkage_summary(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="HOLD",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="HOLD because validity dates are not explicitly surfaced.",
+            full_answer="The EAEU registration is authorised, but validity dates are missing from the answer text.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "eaeu_validity_missing",
+                    "title": "Missing explicit validity dates",
+                    "severity": "DECISION_BLOCKING",
+                    "rationale": "Validity dates are missing for the matched EAEU registration.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-eaeu-reg", "ev-bridge"],
+            "contract_linkage": {
+                "market_entry_linkage": {
+                    "EAEU": {
+                        "commercial_signal_count": 1,
+                        "identity_match": "same_identifier",
+                        "evidence_refs": ["ev-bridge"],
+                    }
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "eaeu_identity_match": "same_identifier",
+                    "eaeu_access_registration_id_overlap": True,
+                    "eaeu_has_valid_to": True,
+                    "eaeu_has_validity_state": True,
+                    "eaeu_validity_types": ["date_present"],
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertFalse(repaired.decision_blockers)
+        self.assertIn("eaeu_validity_understated_hold", verification.repair_reason)
+
     def test_ru_market_linkage_can_match_source_native_portfolio_registration(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {
