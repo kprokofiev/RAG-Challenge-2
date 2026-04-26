@@ -1266,6 +1266,44 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
         self.assertIn("screening-grade", " ".join(repaired.caveats).lower())
 
+    def test_verifier_promotes_sufficient_asset_conditional_go_without_blockers(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="SUFFICIENT",
+            short_answer="Commercially attractive, but proceed conditionally because final legal/payer diligence is separate.",
+            full_answer="The asset has registration and market anchors; IP/FTO and payer diligence remain in dedicated blocks.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "phase3_results": {
+                "phase3_study_count": 2,
+                "phase3_with_ctgov_results_evidence": 1,
+            },
+            "market_reimbursement_snapshot": {
+                "verdict_hint": "LIMITED",
+            },
+        }
+        packet["evidence_packet_summary"] = {
+            "contract_linkage_summary": {
+                "ru_source_native_access_signal_count": 2,
+                "market_reimbursement_verdict_hint": "LIMITED",
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertIn("promoted_asset_conditional_go_to_go_without_decision_blockers", verification.repair_reason)
+
     def test_verifier_moves_asset_ip_fto_hold_to_dedicated_legal_window_caveat(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
