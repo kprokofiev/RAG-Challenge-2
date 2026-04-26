@@ -546,7 +546,8 @@ class ExecVerifier:
             return False
         text = _block_text(block)
         validity_markers = ("validity", "valid_to", "valid to", "validity dates", "validity term", "срок", "действ")
-        return _contains_any_marker(text, validity_markers) and not _has_explicit_negative_evidence(text)
+        hard_entry_negative = ("withdrawn", "suspended", "revoked", "not registered", "inactive", "refused")
+        return _contains_any_marker(text, validity_markers) and not _contains_any_marker(text, hard_entry_negative)
 
     def _eaeu_conditional_go_underpromoted(
         self,
@@ -581,7 +582,7 @@ class ExecVerifier:
             and has_access_link
             and has_payer_scope
             and _contains_any_marker(text, conditional_markers)
-            and not _has_explicit_negative_evidence(text)
+            and not _contains_any_marker(text, ("withdrawn", "suspended", "revoked", "not registered", "inactive", "refused"))
         )
 
     def _asset_ip_window_overconstraint(
