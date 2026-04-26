@@ -548,6 +548,42 @@ class ExecVerifier:
         validity_markers = ("validity", "valid_to", "valid to", "validity dates", "validity term", "срок", "действ")
         return _contains_any_marker(text, validity_markers) and not _has_explicit_negative_evidence(text)
 
+    def _eaeu_conditional_go_underpromoted(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "eaeu_entry" or block.verdict != "CONDITIONAL_GO":
+            return False
+        if any(blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers):
+            return False
+        summary = (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
+        identity_match = str(summary.get("eaeu_identity_match") or (_market_entry_linkage(packet, "EAEU").get("identity_match") or ""))
+        has_identity = _identity_match_rank(identity_match) >= 2
+        has_validity = bool(summary.get("eaeu_has_valid_to")) or bool(summary.get("eaeu_has_validity_state"))
+        has_access_link = bool(summary.get("eaeu_access_registration_id_overlap")) or int((_market_entry_linkage(packet, "EAEU") or {}).get("commercial_signal_count") or 0) > 0
+        has_payer_scope = str(summary.get("market_reimbursement_verdict_hint") or "").upper() in {"LIMITED", "OPEN"}
+        text = _block_text(block)
+        conditional_markers = (
+            "primary commercial",
+            "commercial source",
+            "commercial artifact",
+            "strength",
+            "patent",
+            "fto",
+            "freedom-to-operate",
+            "execution risk",
+            "dedicated",
+        )
+        return (
+            has_identity
+            and has_validity
+            and has_access_link
+            and has_payer_scope
+            and _contains_any_marker(text, conditional_markers)
+            and not _has_explicit_negative_evidence(text)
+        )
+
     def _asset_ip_window_overconstraint(
         self,
         block: ExecDecisionBlock,
@@ -741,6 +777,26 @@ class ExecVerifier:
             ),
         )
         return source_count >= 4 and has_entry_anchor and has_ip_screening and has_payer_screening and has_operations_ready_gap
+
+    def _decision_blockers_screening_sufficiency_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "decision_blockers" or block.sufficiency != "INSUFFICIENT":
+            return False
+        linkage = _contract_linkage(packet)
+        source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+        source_count = int(source_manifest.get("checked_source_count") or 0) + int(source_manifest.get("limited_source_count") or 0)
+        fto = linkage.get("fto_screening_snapshot", {}) or {}
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        has_ip_screening = (
+            str(fto.get("screening_level") or "") == "FTO_SCREENING_ONLY"
+            or bool(fto.get("evidence_refs"))
+            or bool(family_events.get("evidence_refs"))
+            or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+        )
+        return source_count >= 4 and has_ip_screening and not _has_explicit_negative_evidence(_block_text(block))
 
     def _regional_generic_collapse(
         self,
@@ -959,6 +1015,15 @@ class ExecVerifier:
                 )
             )
 
+        if self._eaeu_conditional_go_underpromoted(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="eaeu_conditional_go_underpromoted",
+                    severity="WARN",
+                    message="EAEU entry remains conditional despite source-linked identity, validity, and access evidence; residual FTO/commercial-depth gaps belong in caveats or dedicated blocks.",
+                )
+            )
+
         if self._asset_ip_window_overconstraint(block, packet):
             issues.append(
                 ExecVerificationIssue(
@@ -1010,6 +1075,15 @@ class ExecVerifier:
                     issue_type="evidence_sufficiency_screening_ready_understated",
                     severity="WARN",
                     message="Evidence sufficiency is marked insufficient even though the packet supports screening-ready partial use with explicit IP/FTO and payer limitations.",
+                )
+            )
+
+        if self._decision_blockers_screening_sufficiency_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="decision_blockers_screening_sufficiency_understated",
+                    severity="WARN",
+                    message="Decision blockers are screening-classified from source-native IP evidence; the block should be partial rather than pure insufficiency.",
                 )
             )
 
@@ -1213,9 +1287,10 @@ class ExecVerifier:
             applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
 
         if (
-            any(issue.issue_type in {"eaeu_identity_underlink", "eaeu_validity_understated_hold"} for issue in verification.issues)
+            any(issue.issue_type in {"eaeu_identity_underlink", "eaeu_validity_understated_hold", "eaeu_conditional_go_underpromoted"} for issue in verification.issues)
             or self._eaeu_underlinked_conditional_go(repaired, packet)
             or self._eaeu_validity_understated_hold(repaired, packet)
+            or self._eaeu_conditional_go_underpromoted(repaired, packet)
         ):
             identity_entry = _identity_entry(packet, "EAEU")
             linkage = _market_entry_linkage(packet, "EAEU")
@@ -1255,14 +1330,44 @@ class ExecVerifier:
                 blocker for blocker in repaired.decision_blockers
                 if not _contains_any_marker(
                     f"{blocker.title} {blocker.rationale}",
-                    ("inn-level", "identity", "linkage", "commercial", "access", "product context", "validity", "validity dates", "validity term"),
+                    (
+                        "inn-level",
+                        "identity",
+                        "linkage",
+                        "commercial",
+                        "access",
+                        "product context",
+                        "validity",
+                        "validity dates",
+                        "validity term",
+                        "primary commercial",
+                        "strength",
+                        "patent",
+                        "fto",
+                        "freedom-to-operate",
+                    ),
                 )
             ]
             repaired.next_actions = [
                 action for action in repaired.next_actions
                 if not _contains_any_marker(
                     f"{action.action} {action.rationale}",
-                    ("inn-level", "identity", "linkage", "commercial", "access", "product context", "validity", "validity dates", "validity term"),
+                    (
+                        "inn-level",
+                        "identity",
+                        "linkage",
+                        "commercial",
+                        "access",
+                        "product context",
+                        "validity",
+                        "validity dates",
+                        "validity term",
+                        "primary commercial",
+                        "strength",
+                        "patent",
+                        "fto",
+                        "freedom-to-operate",
+                    ),
                 )
             ]
             caveat = "Dossier-wide IP/FTO and rights gaps remain in their dedicated blocks; they do not override the EAEU registration-entry conclusion when EAEU-native identity, status, validity, and market-entry linkage are source-backed."
@@ -1270,6 +1375,8 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             if any(issue.issue_type == "eaeu_validity_understated_hold" for issue in verification.issues):
                 applied_changes.append("fixed_eaeu_validity_understated_hold")
+            if any(issue.issue_type == "eaeu_conditional_go_underpromoted" for issue in verification.issues):
+                applied_changes.append("promoted_eaeu_conditional_go_from_summary_linkage")
             applied_changes.append("promoted_eaeu_conditional_go_to_go_on_identity_linkage")
 
         if any(issue.issue_type == "eaeu_same_id_overconstraint" for issue in verification.issues) or self._eaeu_same_id_overconstraint(repaired, packet):
@@ -1546,6 +1653,17 @@ class ExecVerifier:
             )
             applied_changes.append("lifted_sufficiency_to_screening_ready_partial")
 
+        if (
+            any(issue.issue_type == "decision_blockers_screening_sufficiency_understated" for issue in verification.issues)
+            or self._decision_blockers_screening_sufficiency_understated(repaired, packet)
+        ):
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM" if repaired.confidence == "LOW" else repaired.confidence
+            caveat = "Decision blockers are classified at screening level; source-native IP evidence exists, but operations-ready legal/FTO reconciliation remains incomplete."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_decision_blockers_to_screening_partial")
+
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
             positive_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"]
@@ -1668,12 +1786,14 @@ class ExecVerifier:
             "eaeu_same_id_overconstraint",
             "eaeu_identity_underlink",
             "eaeu_validity_understated_hold",
+            "eaeu_conditional_go_underpromoted",
             "asset_ip_window_overconstraint",
             "asset_dedicated_ip_fto_overconstraint",
             "ip_window_closed_without_decision_grade_legal_status",
             "ip_window_underresolved_with_source_native_blockers",
             "market_reimbursement_underresolved",
             "evidence_sufficiency_screening_ready_understated",
+            "decision_blockers_screening_sufficiency_understated",
             "regional_generic_collapse",
             "regional_licensing_collapse",
             "synthesis_secondary_scope",
@@ -1690,11 +1810,13 @@ class ExecVerifier:
                 self._eaeu_same_id_overconstraint(block, packet),
                 self._eaeu_underlinked_conditional_go(block, packet),
                 self._eaeu_validity_understated_hold(block, packet),
+                self._eaeu_conditional_go_underpromoted(block, packet),
                 self._asset_ip_window_overconstraint(block, packet),
                 self._asset_dedicated_ip_fto_overconstraint(block, packet),
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._market_reimbursement_underresolved(block, packet),
                 self._evidence_sufficiency_screening_ready_understated(block, packet),
+                self._decision_blockers_screening_sufficiency_understated(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),

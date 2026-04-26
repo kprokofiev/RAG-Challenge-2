@@ -2308,6 +2308,95 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertFalse(repaired.decision_blockers)
         self.assertIn("eaeu_validity_understated_hold", verification.repair_reason)
 
+    def test_verifier_lifts_eaeu_conditional_when_summary_linkage_is_complete(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Conditional because primary commercial source and FTO are still caveats.",
+            full_answer="The EAEU record is authorised, but primary commercial source depth and patent/FTO execution risk keep it conditional.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "commercial_depth",
+                    "title": "Primary commercial source not attached",
+                    "severity": "IMPORTANT",
+                    "rationale": "Primary commercial source is lighter than ideal.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-eaeu-reg", "ev-bridge"],
+            "contract_linkage": {
+                "market_entry_linkage": {
+                    "EAEU": {
+                        "commercial_signal_count": 1,
+                        "identity_match": "same_identifier",
+                        "evidence_refs": ["ev-bridge"],
+                    }
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "eaeu_identity_match": "same_identifier",
+                    "eaeu_access_registration_id_overlap": True,
+                    "eaeu_has_valid_to": True,
+                    "eaeu_has_validity_state": True,
+                    "market_reimbursement_verdict_hint": "LIMITED",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertFalse(repaired.decision_blockers)
+        self.assertIn("promoted_eaeu_conditional_go_from_summary_linkage", verification.repair_reason)
+
+    def test_verifier_lifts_decision_blockers_sufficiency_to_screening_partial(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="decision_blockers",
+            title="Decision blockers",
+            verdict="NOT_EVIDENCED",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="No confirmed blocker classification because legal/FTO coverage is incomplete.",
+            full_answer="Source-native IP records exist but operations-ready family reconciliation is incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "contract_linkage": {
+                "source_evidence_manifest": {"checked_source_count": 4, "limited_source_count": 2},
+                "fto_screening_snapshot": {
+                    "screening_level": "FTO_SCREENING_ONLY",
+                    "evidence_refs": ["ev-fto"],
+                },
+                "family_legal_events_snapshot": {
+                    "coverage_status": "PARTIAL",
+                    "evidence_refs": ["ev-family"],
+                },
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("lifted_decision_blockers_to_screening_partial", verification.repair_reason)
+
     def test_ru_market_linkage_can_match_source_native_portfolio_registration(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {
