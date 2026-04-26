@@ -161,6 +161,11 @@ def _has_explicit_negative_evidence(text: str) -> bool:
         "",
         lowered,
     )
+    lowered = re.sub(
+        r"\b(?:not\s+)?(?:fully\s+)?closed evidence state\b",
+        "",
+        lowered,
+    )
     patterns = (
         r"\bwithdrawn\b",
         r"\brevoked\b",

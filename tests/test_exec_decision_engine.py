@@ -915,6 +915,54 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "GO")
         self.assertEqual(repaired.sufficiency, "SUFFICIENT")
 
+    def test_verifier_promotes_rf_conditional_go_despite_closed_evidence_state_phrase(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Conditional GO because the record is not a fully closed evidence state.",
+            full_answer=(
+                "RU registration and access linkage are confirmed, but the record is not a fully closed evidence state "
+                "because an explicit RU policy-act source was not retrieved."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "rf_entry_blocker_1",
+                    "title": "Explicit RU policy-act confirmation not retrieved",
+                    "severity": "IMPORTANT",
+                    "rationale": "This is a verification gap, not a demonstrated source-backed block.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=["The record is not a fully closed evidence state."],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "market_entry_linkage": {
+                "RU": {
+                    "registration_anchor_present": True,
+                    "commercial_signal_count": 39,
+                    "identity_match": "same_identifier",
+                    "identity_match_scope": "source_native_registered_product_context",
+                    "source_native_registration_id_overlap": True,
+                    "source_native_reimbursement_signal_count": 32,
+                    "evidence_refs": ["ev-com-1"],
+                }
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertIn("promoted_rf_conditional_go_to_go_on_identity_linkage", verification.repair_reason)
+
     def test_verifier_removes_eaeu_same_id_overconstraint_when_native_identity_is_strong(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
