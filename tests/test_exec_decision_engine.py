@@ -1488,6 +1488,44 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "HOLD")
         self.assertEqual(verification.overall_status, "PASS")
 
+    def test_verifier_allows_conditional_asset_when_blockers_are_reflected(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="CONDITIONAL_GO with limited regional readiness.",
+            full_answer="The asset remains attractive in the US/EU, but RF/EAEU entry blockers and operations-readiness caveats remain explicit.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "blk-1",
+                    "title": "RF/EAEU registration blockers",
+                    "severity": "MUST_VERIFY_NOW",
+                    "rationale": "No RU or EAEU registration is source-verified for the scoped product context.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[
+                {
+                    "action_id": "act-1",
+                    "action": "Verify missing regional registrations.",
+                    "priority": "HIGH",
+                    "rationale": "Retrieve or confirm source-native RU/EAEU no-registration evidence before any multi-region entry decision.",
+                    "evidence_refs": [],
+                }
+            ],
+            caveats=["Partial screening verdict, not operations-ready."],
+        )
+
+        repaired, verification = verifier.verify_and_repair(block, _sample_dossier(), block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertIsNone(verification.repair_reason)
+
 
 class ExecRetrievalEscalationTests(unittest.TestCase):
     def test_commercial_priority_prefers_source_native(self):

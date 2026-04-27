@@ -892,6 +892,21 @@ class ExecVerifier:
         )
         return source_count >= 4 and has_ip_screening and not _has_explicit_negative_evidence(_block_text(block))
 
+    @staticmethod
+    def _conditional_asset_blockers_are_reflected(block: ExecDecisionBlock) -> bool:
+        if block.block_id != "asset_attractiveness":
+            return False
+        if block.verdict != "CONDITIONAL_GO":
+            return False
+        if block.sufficiency == "SUFFICIENT" or block.confidence == "HIGH":
+            return False
+        if not block.decision_blockers:
+            return False
+        text = _block_text(block).lower()
+        if not any(marker in text for marker in ("conditional", "partial", "limited", "caveat", "blocker", "not operations-ready")):
+            return False
+        return bool(block.next_actions or block.caveats or "retrieve" in text or "verify" in text)
+
     def _generic_screening_sufficiency_understated(
         self,
         block: ExecDecisionBlock,
@@ -1039,7 +1054,7 @@ class ExecVerifier:
 
         if block.verdict in _GO_VERDICTS and any(
             blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers
-        ):
+        ) and not self._conditional_asset_blockers_are_reflected(block):
             issues.append(
                 ExecVerificationIssue(
                     issue_type="verdict_blocker_conflict",
