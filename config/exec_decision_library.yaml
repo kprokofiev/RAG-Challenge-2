@@ -81,6 +81,7 @@ blocks:
     sections:
       - registrations
       - commercial_signals
+      - clinical_studies
       - product_contexts
       - unknowns
       - dossier_quality_v2
@@ -89,6 +90,7 @@ blocks:
     field_prefixes:
       - registrations
       - commercial_signals
+      - clinical_studies
       - product_contexts
     allowed_doc_kinds:
       - grls
@@ -102,6 +104,11 @@ blocks:
       - ru_formulary_summary
       - ru_procurement_summary
       - ru_policy_act
+      - ctgov
+      - ctgov_api
+      - ctgov_protocol
+      - ctgov_results
+      - ctgov_documents
     escalation_classes:
       - ru_registration_confirmation
       - ru_formulary_signal
@@ -119,6 +126,7 @@ blocks:
     sections:
       - registrations
       - commercial_signals
+      - clinical_studies
       - product_contexts
       - unknowns
       - dossier_quality_v2
@@ -127,6 +135,7 @@ blocks:
     field_prefixes:
       - registrations
       - commercial_signals
+      - clinical_studies
       - product_contexts
     allowed_doc_kinds:
       - eaeu_document
@@ -145,6 +154,11 @@ blocks:
       - formulary
       - pricing
       - payer_policy
+      - ctgov
+      - ctgov_api
+      - ctgov_protocol
+      - ctgov_results
+      - ctgov_documents
     escalation_classes:
       - eaeu_registration_confirmation
       - eaeu_market_signal

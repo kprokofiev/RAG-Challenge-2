@@ -395,6 +395,68 @@ def _has_explicit_no_registration_record(packet: Dict[str, Any], region: str) ->
     return bool(_explicit_no_registration_refs(packet, region))
 
 
+def _strip_no_record_phrases(text: str) -> str:
+    stripped = str(text or "").lower()
+    no_record_phrases = (
+        "no public registration record verified",
+        "no public registration record",
+        "no public registration",
+        "no registration record found",
+        "no registration record",
+        "no public record",
+        "no-record",
+        "not found in public registry",
+    )
+    for phrase in no_record_phrases:
+        stripped = stripped.replace(phrase, " ")
+    return stripped
+
+
+def _has_source_backed_registration_blocker(packet: Dict[str, Any], region: str) -> bool:
+    """True only for source-backed blockers, not mere absence of a public record."""
+    region = str(region or "").strip().upper()
+    blocker_markers = (
+        "application withdrawn",
+        "authorisation refused",
+        "authorization refused",
+        "clinical hold",
+        "failed registration",
+        "import ban",
+        "marketing authorisation refused",
+        "marketing authorization refused",
+        "prohibited",
+        "registration failed",
+        "rejected",
+        "refused",
+        "revoked",
+        "suspended",
+        "terminated",
+        "withdrawn",
+    )
+    texts: List[str] = []
+    for item in _packet_section_items(packet, "registrations"):
+        if not isinstance(item, dict) or _region_text(item) != region:
+            continue
+        texts.append(
+            " ".join(
+                str(part or "")
+                for part in (
+                    _registration_status_text(item),
+                    _scalar_text(item.get("summary")),
+                    _scalar_text(item.get("limitations")),
+                )
+            )
+        )
+    for candidate in _candidate_evidence(packet):
+        text = str(candidate.get("searchable") or "")
+        lowered = text.lower()
+        if region.lower() not in lowered and f"jurisdiction={region.lower()}" not in lowered and f"region={region.lower()}" not in lowered:
+            continue
+        texts.append(text)
+    cleaned = " ".join(_strip_no_record_phrases(text) for text in texts)
+    return any(marker in cleaned for marker in blocker_markers)
+
+
 def _eaeu_native_entry_decision_supported(packet: Dict[str, Any]) -> bool:
     identity_entry = _identity_entry(packet, "EAEU")
     if not identity_entry:
@@ -548,12 +610,16 @@ class ExecVerifier:
         block: ExecDecisionBlock,
         packet: Dict[str, Any],
     ) -> bool:
-        if block.block_id != "rf_entry" or block.verdict not in {"HOLD", "CONDITIONAL_GO", "INSUFFICIENT_EVIDENCE"}:
+        if block.block_id != "rf_entry" or block.verdict not in {"NO_GO", "CONDITIONAL_GO", "INSUFFICIENT_EVIDENCE"}:
             return False
         if _has_positive_registration(packet, "RU"):
             return False
         if not _has_explicit_no_registration_record(packet, "RU"):
             return False
+        if _has_source_backed_registration_blocker(packet, "RU"):
+            return False
+        if block.verdict == "NO_GO":
+            return True
         text = _block_text(block)
         return _contains_any_marker(
             text,
@@ -585,12 +651,16 @@ class ExecVerifier:
         block: ExecDecisionBlock,
         packet: Dict[str, Any],
     ) -> bool:
-        if block.block_id != "eaeu_entry" or block.verdict not in {"HOLD", "CONDITIONAL_GO", "INSUFFICIENT_EVIDENCE"}:
+        if block.block_id != "eaeu_entry" or block.verdict not in {"NO_GO", "CONDITIONAL_GO", "INSUFFICIENT_EVIDENCE"}:
             return False
         if _has_positive_registration(packet, "EAEU") or _eaeu_native_entry_decision_supported(packet):
             return False
         if not _has_explicit_no_registration_record(packet, "EAEU"):
             return False
+        if _has_source_backed_registration_blocker(packet, "EAEU"):
+            return False
+        if block.verdict == "NO_GO":
+            return True
         text = _block_text(block)
         no_record_markers = (
             "no confirmed",
@@ -1343,7 +1413,7 @@ class ExecVerifier:
                 ExecVerificationIssue(
                     issue_type="rf_no_record_understated",
                     severity="WARN",
-                    message="RF entry is marked unresolved despite an explicit RU no-registration/no-public-record state; this should be a clean NO_GO for entry.",
+                    message="RF entry treats explicit RU no-registration/no-public-record as a terminal entry closure; for business screening it should be a no-current-market-status HOLD with original/new-registration pathway checks.",
                 )
             )
 
@@ -1361,7 +1431,7 @@ class ExecVerifier:
                 ExecVerificationIssue(
                     issue_type="eaeu_no_record_understated",
                     severity="WARN",
-                    message="EAEU entry is held despite an explicit source-native no-registration/no-public-record state; this should be a clean NO_GO for entry, not unresolved HOLD.",
+                    message="EAEU entry treats explicit no-registration/no-public-record as terminal closure; for business screening it should be a no-current-market-status HOLD with original/new-registration pathway checks.",
                 )
             )
 
@@ -1697,40 +1767,55 @@ class ExecVerifier:
 
         if any(issue.issue_type == "rf_no_record_understated" for issue in verification.issues) or self._rf_no_record_understated(repaired, packet):
             refs = _explicit_no_registration_refs(packet, "RU")
-            repaired.verdict = "NO_GO"
-            repaired.sufficiency = "SUFFICIENT"
+            repaired.verdict = "HOLD"
+            repaired.sufficiency = "PARTIAL"
             repaired.confidence = "MEDIUM"
             repaired.short_answer = (
-                "NO_GO — the packet carries an explicit RU no-public-registration state, so RF entry should be closed for this snapshot rather than left as insufficient evidence."
+                "HOLD — no public RU registration is verified, so current marketed entry is absent, but this is an original/new-registration screening opportunity rather than a terminal NO_GO."
             )
             repaired.full_answer = (
-                "RF entry requires an active RU registration identity and RU-linked access/commercial evidence. "
-                "The current packet instead contains an explicit no-public-registration state for RU and no RU-linked access signal. "
-                "That is enough to decide the entry block as NO_GO for the current snapshot while leaving IP/FTO and payer breadth in their dedicated blocks."
+                "The packet supports `current_registration_status=NOT_REGISTERED_PUBLIC_RECORD` for RU. "
+                "That closes only the already-marketed/current-access path: it does not prove that RU entry is impossible. "
+                "For primary business screening, the defensible branch is `generic_entry_path=NOT_APPLICABLE_NO_REFERENCE_REGISTRATION` and "
+                "`original_registration_path=POSSIBLE_BUT_UNPROVEN`, pending source-backed checks of local clinical activity, foreign approval maturity, regulatory route, IP/FTO, and payer feasibility."
             )
             repaired.top_evidence_refs = list(dict.fromkeys(refs + list(repaired.top_evidence_refs)))[:8]
             repaired.decision_blockers = [
                 ExecBlocker(
-                    blocker_id="ru_no_public_registration_record",
-                    title="No public RU registration record",
-                    severity="DECISION_BLOCKING",
-                    rationale="The source packet does not confirm an active RU registration identity for the target product context and carries an explicit no-record state.",
+                    blocker_id="ru_current_registration_absent",
+                    title="No current RU public registration",
+                    severity="IMPORTANT",
+                    rationale="No source-native RU public registration record is verified, so current marketed access is absent; this is not, by itself, a source-backed prohibition on original/new-drug registration.",
                     evidence_refs=refs[:4],
                 )
             ]
             repaired.next_actions = [
                 ExecNextAction(
-                    action_id="verify_grls_before_rf_entry",
-                    action="Re-check GRLS/RU registration export before any RF entry action.",
+                    action_id="check_ru_original_registration_pathway",
+                    action="Evaluate RU original/new-drug registration pathway, including foreign approval package, local bridging or full-dossier requirements, orphan/special-access options, and sponsor/partner posture.",
                     priority="NOW",
-                    rationale="A future registry update could change the entry posture, but the current evidence supports no public RU registration record.",
+                    rationale="Absence of current RU registration shifts the decision from marketed-entry approval to pathway feasibility screening.",
+                    evidence_refs=refs[:4],
+                ),
+                ExecNextAction(
+                    action_id="check_ru_local_development_activity",
+                    action="Check RU clinical-trial/development activity: sponsor, collaborators, phase, status, sites, centers, and whether activity signals launch preparation.",
+                    priority="NOW",
+                    rationale="Local development activity determines whether the no-record state is white space, an early launch signal, or a low-priority region.",
+                    evidence_refs=[],
+                ),
+            ]
+            repaired.why_this_verdict.append(
+                ExecWhyClaim(
+                    claim="Explicit no-public-registration evidence supports no current RU marketed-access anchor, but no source-backed prohibition or failed registration is present in the packet.",
+                    claim_type="hard_evidence_backed" if refs else "inference",
                     evidence_refs=refs[:4],
                 )
-            ]
-            caveat = "RF NO_GO is a registration-entry conclusion for the current public-source snapshot; it is not a legal FTO or payer-coverage conclusion."
+            )
+            caveat = "No public RU registration means no current RU marketed-entry anchor; it must not be interpreted as proof that original/new-drug registration is impossible."
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
-            applied_changes.append("converted_rf_no_record_insufficient_to_no_go")
+            applied_changes.append("reframed_rf_no_record_as_original_registration_opportunity")
 
         if any(issue.issue_type == "eaeu_holdable_position" for issue in verification.issues) or self._eaeu_holdable_regulatory_position(repaired, packet):
             repaired.verdict = "HOLD"
@@ -1747,39 +1832,55 @@ class ExecVerifier:
 
         if any(issue.issue_type == "eaeu_no_record_understated" for issue in verification.issues) or self._eaeu_no_record_understated(repaired, packet):
             refs = _explicit_no_registration_refs(packet, "EAEU")
-            repaired.verdict = "NO_GO"
-            repaired.sufficiency = "SUFFICIENT"
+            repaired.verdict = "HOLD"
+            repaired.sufficiency = "PARTIAL"
             repaired.confidence = "MEDIUM"
             repaired.short_answer = (
-                "NO_GO — the packet carries an explicit EAEU no-public-registration state, so entry should be closed for this jurisdiction rather than left as unresolved HOLD."
+                "HOLD — no public EAEU registration is verified, so current EAEU marketed entry is absent, but this is a white-space/original-registration screening branch rather than terminal NO_GO."
             )
             repaired.full_answer = (
-                "For the EAEU entry block, the decisive fact is not an unresolved identity caveat but the absence of a confirmed EAEU-native registration anchor in a source-native no-record artifact. "
-                "That supports a clean regulatory-entry NO_GO for the current snapshot. IP/FTO and payer breadth still remain separate screening limitations, but they do not change the EAEU registration-entry result."
+                "The packet supports `current_registration_status=NOT_REGISTERED_PUBLIC_RECORD` for EAEU. "
+                "That means no confirmed current EAEU market authorization/product-context anchor is present, but it does not prove that entry is impossible. "
+                "The proper screening split is `generic_entry_path=NOT_APPLICABLE_NO_REFERENCE_REGISTRATION` and "
+                "`original_registration_path=POSSIBLE_BUT_UNPROVEN`, pending checks of EAEU/member-state regulatory route, local development activity, foreign approvals, IP/FTO, and payer feasibility."
             )
             repaired.top_evidence_refs = list(dict.fromkeys(refs + list(repaired.top_evidence_refs)))[:8]
             repaired.decision_blockers = [
                 ExecBlocker(
-                    blocker_id="eaeu_no_public_registration_record",
-                    title="No public EAEU registration record",
-                    severity="DECISION_BLOCKING",
-                    rationale="Source-native product-identity/no-record evidence does not confirm an active EAEU registration anchor for the target product context.",
+                    blocker_id="eaeu_current_registration_absent",
+                    title="No current EAEU public registration",
+                    severity="IMPORTANT",
+                    rationale="No source-native EAEU public registration record is verified, so current marketed access is absent; this is not, by itself, a source-backed prohibition on original/new-drug registration.",
                     evidence_refs=refs[:4],
                 )
             ]
             repaired.next_actions = [
                 ExecNextAction(
-                    action_id="verify_eaeu_registry_before_entry",
-                    action="Re-check the EAEU/native registry source before any EAEU entry action.",
+                    action_id="check_eaeu_original_registration_pathway",
+                    action="Evaluate EAEU original/new-drug registration pathway and member-state route requirements, using foreign approvals, clinical package maturity, and potential partner/sponsor evidence.",
                     priority="NOW",
-                    rationale="A future registry update could change the entry posture, but the current evidence supports no public EAEU registration record.",
+                    rationale="Absence of current EAEU registration shifts the decision from marketed-entry approval to pathway feasibility screening.",
+                    evidence_refs=refs[:4],
+                ),
+                ExecNextAction(
+                    action_id="check_eaeu_local_development_activity",
+                    action="Check EAEU/RU/BY/AM/KZ/KG clinical-trial/development activity: sponsor, collaborators, phase, status, sites, centers, and launch-preparation signals.",
+                    priority="NOW",
+                    rationale="Local development activity determines whether the no-record state is white space, an early launch signal, or a low-priority region.",
+                    evidence_refs=[],
+                ),
+            ]
+            repaired.why_this_verdict.append(
+                ExecWhyClaim(
+                    claim="Explicit no-public-registration evidence supports no current EAEU marketed-access anchor, but no source-backed prohibition or failed registration is present in the packet.",
+                    claim_type="hard_evidence_backed" if refs else "inference",
                     evidence_refs=refs[:4],
                 )
-            ]
-            caveat = "EAEU NO_GO is a registration-entry conclusion for the current public-source snapshot; it is not a full IP/FTO or payer-coverage conclusion."
+            )
+            caveat = "No public EAEU registration means no current EAEU marketed-entry anchor; it must not be interpreted as proof that original/new-drug registration is impossible."
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
-            applied_changes.append("converted_eaeu_no_record_hold_to_no_go")
+            applied_changes.append("reframed_eaeu_no_record_as_original_registration_opportunity")
 
         if any(issue.issue_type == "rf_identity_underlink" for issue in verification.issues) or self._rf_underlinked_conditional_go(repaired, packet):
             linkage = _market_entry_linkage(packet, "RU")

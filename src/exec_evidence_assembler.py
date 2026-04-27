@@ -330,9 +330,18 @@ def _compact_value(value: Any) -> Any:
             "summary",
             "title",
             "study_id",
+            "trial_id",
             "phase",
+            "sponsor",
+            "collaborators",
+            "countries",
+            "sites_count",
+            "start_date",
+            "primary_completion_date",
+            "completion_date",
             "conclusion",
             "efficacy_keypoints",
+            "enrollment",
             "n_enrolled",
             "category",
             "family_id",
@@ -407,6 +416,122 @@ def _compact_refs(value: Any, limit: int = 8) -> List[str]:
 def _is_phase3(value: Any) -> bool:
     text = _value_text(value).lower().replace("_", " ")
     return "phase 3" in text or "phase iii" in text
+
+
+def _country_regions(value: Any) -> List[str]:
+    text = _normalize_text(value).lower()
+    if not text:
+        return []
+    country_map = {
+        "russian federation": "RU",
+        "russia": "RU",
+        "россия": "RU",
+        "belarus": "BY",
+        "беларус": "BY",
+        "armenia": "AM",
+        "армения": "AM",
+        "kazakhstan": "KZ",
+        "казахстан": "KZ",
+        "kyrgyzstan": "KG",
+        "kyrgyz republic": "KG",
+        "киргиз": "KG",
+        "united states": "US",
+        "usa": "US",
+        "united kingdom": "UK",
+        "germany": "EU",
+        "france": "EU",
+        "italy": "EU",
+        "spain": "EU",
+        "netherlands": "EU",
+        "poland": "EU",
+        "sweden": "EU",
+        "denmark": "EU",
+        "belgium": "EU",
+        "austria": "EU",
+    }
+    regions: List[str] = []
+    for marker, region in country_map.items():
+        if marker in text and region not in regions:
+            regions.append(region)
+    return regions
+
+
+def _clinical_status_bucket(value: Any) -> str:
+    text = _normalize_text(value).lower().replace("_", " ")
+    if any(marker in text for marker in ("recruiting", "active", "not yet recruiting", "enrolling")):
+        return "active"
+    if "completed" in text:
+        return "completed"
+    if any(marker in text for marker in ("withdrawn", "terminated", "suspended")):
+        return "stopped"
+    return "unknown"
+
+
+def _local_development_signal(studies: List[Dict[str, Any]], target_region: str) -> Dict[str, Any]:
+    target_region = str(target_region or "").strip().upper()
+    target_regions = {"RU"} if target_region == "RU" else {"RU", "BY", "AM", "KZ", "KG", "EAEU"}
+    local_studies: List[Dict[str, Any]] = []
+    studies_with_country_info = 0
+    all_refs: List[str] = []
+    for study in studies:
+        if not isinstance(study, dict):
+            continue
+        refs = _compact_refs(study)
+        all_refs.extend(refs)
+        country_regions = _country_regions(
+            study.get("countries")
+            or study.get("country")
+            or study.get("locations")
+            or study.get("sites")
+        )
+        if country_regions:
+            studies_with_country_info += 1
+        record_region = _region_from_record(study)
+        if record_region not in {"GLOBAL", "US"} and record_region not in country_regions:
+            country_regions.append(record_region)
+        if not set(country_regions).intersection(target_regions):
+            continue
+        status = _value_text(study.get("status"))
+        local_studies.append(
+            {
+                "study_id": _value_text(study.get("study_id") or study.get("trial_id")),
+                "title": _value_text(study.get("title"))[:180],
+                "phase": _value_text(study.get("phase")),
+                "status": status,
+                "status_bucket": _clinical_status_bucket(status),
+                "sponsor": _value_text(study.get("sponsor"))[:120],
+                "collaborators": _value_text(study.get("collaborators"))[:160],
+                "countries": _value_text(study.get("countries") or study.get("country"))[:160],
+                "sites_count": _value_text(study.get("sites_count")),
+                "evidence_refs": refs[:5],
+            }
+        )
+    active_count = sum(1 for study in local_studies if study.get("status_bucket") == "active")
+    completed_count = sum(1 for study in local_studies if study.get("status_bucket") == "completed")
+    stopped_count = sum(1 for study in local_studies if study.get("status_bucket") == "stopped")
+    if active_count:
+        signal = "ACTIVE_LOCAL_TRIALS"
+    elif local_studies:
+        signal = "LOCAL_TRIALS_PRESENT"
+    elif studies and studies_with_country_info:
+        signal = "FOREIGN_ONLY_DEVELOPMENT"
+    elif studies:
+        signal = "UNKNOWN"
+    else:
+        signal = "NO_PUBLIC_ACTIVITY"
+    return {
+        "signal": signal,
+        "target_region": target_region,
+        "local_trial_count": len(local_studies),
+        "active_local_trial_count": active_count,
+        "completed_local_trial_count": completed_count,
+        "stopped_local_trial_count": stopped_count,
+        "foreign_or_nonlocal_trial_count": max(0, len(studies) - len(local_studies)),
+        "studies_with_country_info": studies_with_country_info,
+        "studies": local_studies[:10],
+        "evidence_refs": list(dict.fromkeys(ref for study in local_studies for ref in study.get("evidence_refs", [])))[:10],
+        "all_clinical_evidence_refs": list(dict.fromkeys(all_refs))[:12],
+    }
 
 
 def _has_negative_results_phrase(value: Any) -> bool:
@@ -2308,10 +2433,19 @@ class ExecEvidenceAssembler:
             registration_identity_map.append(identity_entry)
             registrations_by_region[region].append(identity_entry)
 
+        all_clinical_studies = [
+            study for study in selected_sections.get("clinical_studies", []) or []
+            if isinstance(study, dict)
+        ]
+        local_development_signal = {
+            "RU": _local_development_signal(all_clinical_studies, "RU"),
+            "EAEU": _local_development_signal(all_clinical_studies, "EAEU"),
+        }
+
         clinical_linked: List[Dict[str, Any]] = []
         phase3_with_results_refs = 0
-        for study in selected_sections.get("clinical_studies", []) or []:
-            if not isinstance(study, dict) or not _is_phase3(study.get("phase")):
+        for study in all_clinical_studies:
+            if not _is_phase3(study.get("phase")):
                 continue
             refs = _compact_refs(study)
             result_refs = [
@@ -3015,6 +3149,7 @@ class ExecEvidenceAssembler:
             "fto_screening_snapshot": fto_screening,
             "source_evidence_manifest": source_manifest,
             "operations_readiness_snapshot": operations_readiness,
+            "local_development_signal_by_region": local_development_signal,
             "eaeu_registration": {
                 "registrations": eaeu_regs[:6],
                 "has_identifier_mah_linkage": any(item["identifier_mah_linked"] for item in eaeu_regs),
@@ -3141,6 +3276,10 @@ class ExecEvidenceAssembler:
                     "payer_tier_clearance": (contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("payer_tier_clearance", False),
                     "missing_operations_checks": list((contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("missing_operations_checks", []))[:12],
                     "partial_operations_checks": list((contract_linkage.get("operations_readiness_snapshot", {}) or {}).get("partial_operations_checks", []))[:12],
+                    "ru_local_development_signal": ((contract_linkage.get("local_development_signal_by_region", {}) or {}).get("RU", {}) or {}).get("signal"),
+                    "ru_local_trial_count": ((contract_linkage.get("local_development_signal_by_region", {}) or {}).get("RU", {}) or {}).get("local_trial_count", 0),
+                    "eaeu_local_development_signal": ((contract_linkage.get("local_development_signal_by_region", {}) or {}).get("EAEU", {}) or {}).get("signal"),
+                    "eaeu_local_trial_count": ((contract_linkage.get("local_development_signal_by_region", {}) or {}).get("EAEU", {}) or {}).get("local_trial_count", 0),
                     "priority_evidence_retained_count": priority_retention.get("retained_count", 0),
                     "priority_evidence_missing_count": priority_retention.get("missing_count", 0),
                     "generic_regions_with_potential": sorted(

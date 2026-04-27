@@ -168,8 +168,9 @@ class ExecDecisionEngineTests(unittest.TestCase):
         block_spec = engine.block_specs["rf_entry"]
         packet = engine._build_packet(_sample_dossier(), "case-1", block_spec)
         self.assertIn("registrations", packet)
-        self.assertNotIn("clinical_studies", packet)
+        self.assertIn("clinical_studies", packet)
         self.assertEqual([item["region"] for item in packet["registrations"]], ["RU"])
+        self.assertEqual(len(packet["clinical_studies"]), 1)
         self.assertTrue(packet["critical_unknowns"])
 
     def test_packet_builder_retains_priority_contract_evidence_across_block_allowlists(self):
@@ -343,6 +344,57 @@ class ExecDecisionEngineTests(unittest.TestCase):
             {item["region"] for item in packet["commercial_signals"]},
             {"RU", "KZ"},
         )
+
+    def test_rf_entry_packet_includes_clinical_activity_for_no_registration_screening(self):
+        engine = ExecDecisionEngine()
+        dossier = _sample_dossier()
+        dossier["registrations"] = [
+            {
+                "region": "RU",
+                "status": {"value": "No public registration record verified as of 2026-04-27", "evidence_refs": ["ev-ru-no-record"]},
+                "evidence_refs": ["ev-ru-no-record"],
+            }
+        ]
+        dossier["clinical_studies"] = [
+            {
+                "study_id": {"value": "NCT-RU-1", "evidence_refs": ["ev-ctgov-ru"]},
+                "title": {"value": "Tofersen local study", "evidence_refs": ["ev-ctgov-ru"]},
+                "phase": {"value": "Phase 3", "evidence_refs": ["ev-ctgov-ru"]},
+                "status": {"value": "Recruiting", "evidence_refs": ["ev-ctgov-ru"]},
+                "countries": ["Russia"],
+                "sponsor": {"value": "Example Sponsor", "evidence_refs": ["ev-ctgov-ru"]},
+                "sites_count": 2,
+                "evidence_refs": ["ev-ctgov-ru"],
+            }
+        ]
+        dossier["evidence_registry"].extend(
+            [
+                {
+                    "evidence_id": "ev-ru-no-record",
+                    "doc_id": "doc-ru-no-record",
+                    "doc_kind": "product_identity_bridge",
+                    "snippet": "PRODUCT_IDENTITY_BRIDGE | jurisdiction=RU | status=No public registration record verified as of 2026-04-27",
+                },
+                {
+                    "evidence_id": "ev-ctgov-ru",
+                    "doc_id": "doc-ctgov-ru",
+                    "doc_kind": "ctgov_api",
+                    "snippet": "NCT-RU-1 | Phase 3 | Recruiting | countries=Russia | sponsor=Example Sponsor | sites=2",
+                },
+            ]
+        )
+
+        packet = engine._build_packet(dossier, "case-1", engine.block_specs["rf_entry"])
+        evidence_packet = engine.assembler.assemble(packet, _stub_question_plan(), case_id="case-1", allow_retrieval=False)
+        local_signal = evidence_packet["contract_linkage"]["local_development_signal_by_region"]["RU"]
+        summary = evidence_packet["evidence_packet_summary"]["contract_linkage_summary"]
+
+        self.assertEqual(len(packet["clinical_studies"]), 1)
+        self.assertEqual(local_signal["signal"], "ACTIVE_LOCAL_TRIALS")
+        self.assertEqual(local_signal["local_trial_count"], 1)
+        self.assertEqual(local_signal["studies"][0]["sponsor"], "Example Sponsor")
+        self.assertEqual(summary["ru_local_development_signal"], "ACTIVE_LOCAL_TRIALS")
+        self.assertEqual(summary["ru_local_trial_count"], 1)
 
     def test_packet_builder_preserves_section_linked_evidence_before_truncation(self):
         engine = ExecDecisionEngine()
@@ -2518,15 +2570,15 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
 
-    def test_verifier_converts_eaeu_no_record_hold_to_no_go(self):
+    def test_verifier_reframes_eaeu_no_record_no_go_to_original_registration_hold(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
             block_id="eaeu_entry",
             title="EAEU entry",
-            verdict="HOLD",
+            verdict="NO_GO",
             confidence="LOW",
-            sufficiency="PARTIAL",
-            short_answer="HOLD because there is no confirmed EAEU-native registration anchor.",
+            sufficiency="INSUFFICIENT",
+            short_answer="NO_GO because there is no confirmed EAEU-native registration anchor.",
             full_answer="The packet does not confirm an active EAEU registration and no commercial access signal is present.",
             why_this_verdict=[],
             decision_blockers=[],
@@ -2551,11 +2603,13 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
 
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "NO_GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
-        self.assertIn("converted_eaeu_no_record_hold_to_no_go", verification.repair_reason)
+        self.assertEqual(repaired.verdict, "HOLD")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("NOT_REGISTERED_PUBLIC_RECORD", repaired.full_answer)
+        self.assertIn("POSSIBLE_BUT_UNPROVEN", repaired.full_answer)
+        self.assertIn("reframed_eaeu_no_record_as_original_registration_opportunity", verification.repair_reason)
 
-    def test_verifier_converts_rf_no_record_insufficient_to_no_go(self):
+    def test_verifier_reframes_rf_no_record_insufficient_to_original_registration_hold(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
             block_id="rf_entry",
@@ -2580,9 +2634,46 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
 
         self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "HOLD")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("NOT_REGISTERED_PUBLIC_RECORD", repaired.full_answer)
+        self.assertIn("NOT_APPLICABLE_NO_REFERENCE_REGISTRATION", repaired.full_answer)
+        self.assertIn("check_ru_local_development_activity", [action.action_id for action in repaired.next_actions])
+        self.assertIn("reframed_rf_no_record_as_original_registration_opportunity", verification.repair_reason)
+
+    def test_verifier_keeps_rf_true_registration_blocker_as_no_go(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="NO_GO",
+            confidence="MEDIUM",
+            sufficiency="SUFFICIENT",
+            short_answer="NO_GO because the RU application was refused.",
+            full_answer="The RU registration application was refused by the source registry.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "registrations": [
+                {"region": "RU", "status": {"value": "Registration application refused as of 2026-04-27"}},
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-ru-refused",
+                    "doc_kind": "ru_registration_export",
+                    "snippet": "GRLS | jurisdiction=RU | status=Registration application refused",
+                }
+            ],
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.verdict, "NO_GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
-        self.assertIn("converted_rf_no_record_insufficient_to_no_go", verification.repair_reason)
+        self.assertFalse(verification.repair_applied)
 
     def test_verifier_lifts_portfolio_not_evidenced_to_low_when_screening_anchors_exist(self):
         verifier = ExecVerifier()
