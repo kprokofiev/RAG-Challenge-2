@@ -1030,6 +1030,34 @@ class ExecVerifier:
         eaeu_scoped = bool(eaeu_payload.get("member_state_scope"))
         return has_ru_source_native or eaeu_scoped
 
+    def _market_reimbursement_limited_by_no_registration(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "market_reimbursement_window":
+            return False
+        snapshot = _market_reimbursement_snapshot(packet)
+        summary = _contract_linkage_summary(packet)
+        hint = str(snapshot.get("verdict_hint") or summary.get("market_reimbursement_verdict_hint") or "").strip().upper()
+        no_ru_access = int(summary.get("ru_source_native_access_signal_count") or 0) == 0
+        missing_ops = {str(item or "").strip().lower() for item in summary.get("missing_operations_checks", []) or []}
+        no_product_access = hint == "LIMITED_BY_NO_REGISTRATION" or (no_ru_access and "ru_price_access" in missing_ops)
+        if not no_product_access:
+            return False
+        text = _block_text(block).lower()
+        claims_ru_access_present = _contains_any_marker(
+            text,
+            (
+                "ru source-native price/access evidence is present",
+                "ru source-native access evidenced",
+                "ru price/access evidence is present",
+                "regulated access/pricing signal",
+                "jnvlp evidence supports",
+            ),
+        )
+        return block.verdict in {"OPEN", "LIMITED"} or claims_ru_access_present
+
     def _market_reimbursement_overopen(
         self,
         block: ExecDecisionBlock,
@@ -1257,6 +1285,39 @@ class ExecVerifier:
         regional = _regional_opportunity(packet, "licensing_opportunity")
         verdicts = {str((payload or {}).get("verdict") or "") for payload in regional.values()}
         return any(value in {"LOW", "MEDIUM"} for value in verdicts)
+
+    def _licensing_low_underframed_region_dependent(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "licensing_opportunity" or block.verdict != "LOW":
+            return False
+        regional = _regional_opportunity(packet, "licensing_opportunity")
+        verdicts_by_region = {
+            region: str((payload or {}).get("verdict") or "")
+            for region, payload in regional.items()
+        }
+        has_medium_whitespace = any(
+            region in {"RU", "EAEU"} and verdict == "MEDIUM"
+            for region, verdict in verdicts_by_region.items()
+        )
+        has_low_controlled = any(
+            region in {"US", "EU"} and verdict == "LOW"
+            for region, verdict in verdicts_by_region.items()
+        )
+        text = _block_text(block).lower()
+        already_region_framed = _contains_any_marker(text, ("region-dependent", "ru/eaeu", "original-registration", "original registration"))
+        return has_medium_whitespace and has_low_controlled and not already_region_framed
+
+    def _recommended_next_step_not_evidenced(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "recommended_next_step":
+            return False
+        return block.verdict in {"NOT_EVIDENCED", "HIGH", "MEDIUM", "LOW"}
 
     def _business_block_synthesis_overconstraint(
         self,
@@ -1560,6 +1621,15 @@ class ExecVerifier:
                 )
             )
 
+        if self._market_reimbursement_limited_by_no_registration(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="market_reimbursement_limited_by_no_registration",
+                    severity="WARN",
+                    message="Market reimbursement/access is overstated: RU product-linked registration/access evidence is not present.",
+                )
+            )
+
         if self._evidence_sufficiency_screening_ready_understated(block, packet):
             issues.append(
                 ExecVerificationIssue(
@@ -1629,6 +1699,24 @@ class ExecVerifier:
                     issue_type="regional_licensing_collapse",
                     severity="WARN",
                     message="Licensing opportunity collapsed into NOT_EVIDENCED even though the packet now shows region-dependent business-development posture.",
+                )
+            )
+
+        if self._licensing_low_underframed_region_dependent(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="licensing_low_underframed_region_dependent",
+                    severity="WARN",
+                    message="Licensing opportunity is LOW but should be explicitly framed as region-dependent where RU/EAEU remain potential original-registration/licensing whitespace.",
+                )
+            )
+
+        if self._recommended_next_step_not_evidenced(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="recommended_next_step_not_evidenced",
+                    severity="WARN",
+                    message="Recommended next step should use an action verdict, not an evidence/opportunity verdict.",
                 )
             )
 
@@ -2307,6 +2395,54 @@ class ExecVerifier:
             applied_changes.append("aligned_market_reimbursement_to_limited_screening_status")
 
         if (
+            any(issue.issue_type == "market_reimbursement_limited_by_no_registration" for issue in verification.issues)
+            or self._market_reimbursement_limited_by_no_registration(repaired, packet)
+        ):
+            snapshot = _market_reimbursement_snapshot(packet)
+            summary = _contract_linkage_summary(packet)
+            refs = list(dict.fromkeys(list(snapshot.get("evidence_refs") or []) + list(repaired.top_evidence_refs)))
+            repaired.verdict = "LIMITED_BY_NO_REGISTRATION"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "LIMITED_BY_NO_REGISTRATION — no source-native RU registration or RU-linked product access/price row is evidenced; payer/pathway sources are not enough to claim current RU access."
+            )
+            repaired.full_answer = (
+                "The packet may contain payer-policy or pathway-source checks, but the linkage summary reports no RU source-native access signal and still lists RU price/access as a missing operations check. "
+                "For a not-registered product, reimbursement should be framed as limited by the absent current registration/product-context access channel, not as RU price/access evidence being present. "
+                "The next step is to verify source-native RU/EAEU registration and local access pathway evidence before making payer breadth claims."
+            )
+            repaired.why_this_verdict = [
+                claim for claim in repaired.why_this_verdict
+                if not _contains_any_marker(
+                    claim.claim,
+                    ("ru source-native price/access evidence", "regulated access/pricing signal", "jnvlp evidence supports"),
+                )
+            ]
+            if refs:
+                repaired.top_evidence_refs = refs[:8]
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Market reimbursement is limited by absent source-native RU registration/product-linked access evidence; policy checks are not product access clearance.",
+                        claim_type="inference",
+                        evidence_refs=refs[:6],
+                    )
+                )
+            caveat = "No public RU registration found is not a NO_GO, but it means no current marketed/access channel is established for reimbursement analysis."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            repaired.next_actions.append(
+                ExecNextAction(
+                    action_id="verify_ru_eaeu_registration_and_access_pathway",
+                    action="Retrieve source-native RU/EAEU registration records and product-linked RU access/price rows before claiming reimbursement breadth.",
+                    priority="NOW",
+                    rationale="The current packet has no RU source-native access signal and still marks RU price/access as missing.",
+                    evidence_refs=refs[:6],
+                )
+            )
+            applied_changes.append("reframed_market_reimbursement_as_limited_by_no_registration")
+
+        if (
             any(issue.issue_type == "evidence_sufficiency_screening_ready_understated" for issue in verification.issues)
             or self._evidence_sufficiency_screening_ready_understated(repaired, packet)
         ):
@@ -2515,7 +2651,7 @@ class ExecVerifier:
             regional = _regional_opportunity(packet, "licensing_opportunity")
             medium_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "MEDIUM"]
             low_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "LOW"]
-            repaired.verdict = "MEDIUM" if medium_regions else "LOW"
+            repaired.verdict = "REGION_DEPENDENT" if medium_regions and low_regions else "MEDIUM" if medium_regions else "LOW"
             repaired.sufficiency = "PARTIAL"
             repaired.confidence = "MEDIUM" if medium_regions else "LOW"
             repaired.short_answer = (
@@ -2528,6 +2664,60 @@ class ExecVerifier:
             )
             repaired.caveats.append("Licensing opportunity is region-dependent; established registration contexts can legitimately imply weak opportunity rather than no evidence.")
             applied_changes.append("reframed_licensing_opportunity_by_region")
+
+        if (
+            any(issue.issue_type == "licensing_low_underframed_region_dependent" for issue in verification.issues)
+            or self._licensing_low_underframed_region_dependent(repaired, packet)
+        ):
+            regional = _regional_opportunity(packet, "licensing_opportunity")
+            medium_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "MEDIUM"]
+            low_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "LOW"]
+            repaired.verdict = "REGION_DEPENDENT"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "REGION_DEPENDENT — US/EU are already controlled or authorized and are not obvious licensing openings; RU/EAEU may be an original-registration/licensing whitespace, but evidence is not BD-ready."
+            )
+            repaired.full_answer = (
+                "A flat LOW licensing verdict hides the important regional split. "
+                f"Current packet posture shows potential BD/original-registration work in {', '.join(medium_regions) or 'RU/EAEU'}, "
+                f"while {', '.join(low_regions) or 'US/EU'} look weaker because authorization/control is already established or no incremental licensing unlock is evidenced. "
+                "This supports a region-dependent, screening-grade licensing answer rather than a single global low verdict."
+            )
+            caveat = "Licensing upside is region-dependent: RU/EAEU whitespace remains preliminary and needs source-native registration, local development, and rights/transferability checks."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("reframed_low_licensing_as_region_dependent")
+
+        if (
+            any(issue.issue_type == "recommended_next_step_not_evidenced" for issue in verification.issues)
+            or self._recommended_next_step_not_evidenced(repaired, packet)
+        ):
+            text = _block_text(repaired).lower()
+            registration_or_local = _contains_any_marker(text, ("registration", "local clinical", "local development", "ru/eaeu", "eaeu/ru"))
+            repaired.verdict = "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT" if registration_or_local else "FOCUSED_RETRIEVAL"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT — retrieve source-native RU/EAEU registration records and local-development evidence before any non-retrieval BD action."
+                if registration_or_local
+                else "FOCUSED_RETRIEVAL — close the named source-native evidence gaps before any non-retrieval BD action."
+            )
+            repaired.full_answer = (
+                "The recommended-next-step block is an action recommendation, so an evidence verdict such as NOT_EVIDENCED is not client-readable. "
+                "The correct decision language is the concrete next action: focused retrieval of missing source-native records, especially RU/EAEU registration and local clinical/development evidence when those gaps drive the hold."
+            )
+            if not repaired.next_actions:
+                repaired.next_actions.append(
+                    ExecNextAction(
+                        action_id="focused_registration_local_development_retrieval",
+                        action="Retrieve missing source-native RU/EAEU registration records, local clinical activity, foreign approval precedent, and product-linked access evidence.",
+                        priority="NOW",
+                        rationale="These gaps determine whether the case is original-registration/licensing whitespace or a blocked regional entry.",
+                        evidence_refs=list(repaired.top_evidence_refs)[:6],
+                    )
+                )
+            applied_changes.append("converted_next_step_to_action_verdict")
 
         if any(issue.issue_type == "synthesis_secondary_scope" for issue in verification.issues) or self._business_block_synthesis_overconstraint(repaired, packet):
             repaired.decision_blockers = [
@@ -2623,6 +2813,7 @@ class ExecVerifier:
             "ip_window_underresolved_with_source_native_blockers",
             "market_reimbursement_underresolved",
             "market_reimbursement_overopen",
+            "market_reimbursement_limited_by_no_registration",
             "evidence_sufficiency_screening_ready_understated",
             "generic_screening_sufficiency_understated",
             "decision_blockers_screening_sufficiency_understated",
@@ -2631,6 +2822,8 @@ class ExecVerifier:
             "key_risks_not_evidenced_understated",
             "regional_generic_collapse",
             "regional_licensing_collapse",
+            "licensing_low_underframed_region_dependent",
+            "recommended_next_step_not_evidenced",
             "synthesis_secondary_scope",
         }
         has_reparable_warn = any(
@@ -2655,6 +2848,7 @@ class ExecVerifier:
                 self._ip_window_closed_without_decision_grade_legal_status(block, packet),
                 self._market_reimbursement_underresolved(block, packet),
                 self._market_reimbursement_overopen(block, packet),
+                self._market_reimbursement_limited_by_no_registration(block, packet),
                 self._evidence_sufficiency_screening_ready_understated(block, packet),
                 self._generic_screening_sufficiency_understated(block, packet),
                 self._decision_blockers_screening_sufficiency_understated(block, packet),
@@ -2663,6 +2857,8 @@ class ExecVerifier:
                 self._key_risks_not_evidenced_understated(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
+                self._licensing_low_underframed_region_dependent(block, packet),
+                self._recommended_next_step_not_evidenced(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),
             )
         )

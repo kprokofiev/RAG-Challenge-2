@@ -1271,6 +1271,9 @@ def _market_reimbursement_snapshot(
         payload["registration_ids"] = sorted(set(payload["registration_ids"]))[:8]
         payload["evidence_refs"] = list(dict.fromkeys(payload["evidence_refs"]))[:10]
         linkage = market_entry_linkage.get(region, {}) or {}
+        payload["registration_anchor_present"] = bool(linkage.get("registration_anchor_present"))
+        payload["linked_commercial_signal_count"] = int(linkage.get("commercial_signal_count") or 0)
+        payload["source_native_access_signal_count"] = int(linkage.get("source_native_reimbursement_signal_count") or 0)
         if payload["listed_active_count"] > 0 and (payload["benefit_signal_count"] > 0 or payload["pathway_source_count"] > 0):
             conclusion = "SOURCE_NATIVE_PRICE_ACCESS_AND_POLICY_BREADTH_SIGNALS_PRESENT"
         elif payload["listed_active_count"] > 0:
@@ -1287,15 +1290,21 @@ def _market_reimbursement_snapshot(
 
     ru_payload = by_region.get("RU", {}) or {}
     eaeu_payload = by_region.get("EAEU", {}) or {}
-    if int(ru_payload.get("listed_active_count") or 0) > 0 and bool(eaeu_payload.get("member_state_scope")):
+    ru_product_access = int(ru_payload.get("listed_active_count") or 0) > 0 or int(ru_payload.get("benefit_signal_count") or 0) > 0
+    ru_registration_anchor = bool((market_entry_linkage.get("RU", {}) or {}).get("registration_anchor_present"))
+    eaeu_registration_anchor = bool((market_entry_linkage.get("EAEU", {}) or {}).get("registration_anchor_present"))
+    if ru_product_access and bool(eaeu_payload.get("member_state_scope")):
         overall = "RU_SOURCE_NATIVE_ACCESS_EVIDENCED_EAEU_MEMBER_STATE_SCOPE"
         verdict_hint = "LIMITED"
-    elif int(ru_payload.get("listed_active_count") or 0) > 0:
+    elif ru_product_access:
         overall = "RU_SOURCE_NATIVE_ACCESS_EVIDENCED"
         verdict_hint = "LIMITED"
+    elif reimbursement_checks and not (ru_registration_anchor or eaeu_registration_anchor):
+        overall = "LIMITED_BY_NO_REGISTRATION"
+        verdict_hint = "LIMITED_BY_NO_REGISTRATION"
     elif reimbursement_checks:
-        overall = "PARTIAL_REIMBURSEMENT_SCOPE_EVIDENCE"
-        verdict_hint = "LIMITED"
+        overall = "REIMBURSEMENT_SCOPE_SOURCES_CHECKED_PRODUCT_ACCESS_NOT_EVIDENCED"
+        verdict_hint = "UNRESOLVED"
     else:
         overall = "REIMBURSEMENT_STATUS_UNRESOLVED"
         verdict_hint = "UNRESOLVED"

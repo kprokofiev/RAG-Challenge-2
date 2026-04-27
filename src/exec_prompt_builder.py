@@ -298,10 +298,23 @@ def _block_specific_policy_notes(block_spec: BlockSpec) -> List[str]:
     if block_spec.block_id == "eaeu_entry":
         notes.append("Different RU and EAEU registration identifiers may represent separate product contexts; GRLS same-id corroboration is optional when EAEU-native identity, status, and validity are already confirmed.")
         notes.append("Absence of an EAEU public registration record MUST NOT automatically produce NO_GO. If no source-backed prohibition, failed/withdrawn/refused registration, or blocking legal/FTO fact is present, classify current_registration_status=NOT_REGISTERED_PUBLIC_RECORD, generic_entry_path=NOT_APPLICABLE_NO_REFERENCE_REGISTRATION, original_registration_path=POSSIBLE_BUT_UNPROVEN, and use HOLD/PARTIAL pending EAEU/member-state clinical-development, foreign-approval, regulatory-route, IP/FTO, and payer checks.")
+    if block_spec.block_id == "original_registration_path":
+        notes.append("No public RU/EAEU registration is not a NO_GO. If foreign approvals or clinical maturity exist and no source-backed refusal/prohibition is present, use POSSIBLE_BUT_UNPROVEN or POSSIBLE_BUT_REQUIRES_DOSSIER, and name the missing route/dossier/local evidence.")
+    if block_spec.block_id == "local_clinical_activity":
+        notes.append("Separate local RU/EAEU development from foreign-only development. No local trial/site/sponsor evidence should be FOREIGN_ONLY_DEVELOPMENT or NO_PUBLIC_ACTIVITY, not a market-entry NO_GO.")
+    if block_spec.block_id == "foreign_approval_precedent":
+        notes.append("US/EU approval can support a foreign-approval precedent for original/licensing screening, but it does not substitute for RU/EAEU registration or payer evidence.")
+    if block_spec.block_id == "generic_path_applicability":
+        notes.append("If no RU/EAEU reference registration is found, classify the regional generic path as NOT_APPLICABLE_NO_REFERENCE_REGISTRATION unless a source-backed reference or legal substitute is evidenced. Patent openness alone does not make a generic path applicable.")
     if block_spec.block_id in {"generic_opportunity", "licensing_opportunity"}:
         notes.append("Reason region-by-region; do not collapse RU/EAEU opportunity with EU/US unresolved or blocked positions into one global unsupported verdict.")
+    if block_spec.block_id == "licensing_opportunity":
+        notes.append("If US/EU are already controlled or authorized but RU/EAEU have no current registration and may require original-registration/licensing work, prefer REGION_DEPENDENT or MEDIUM_LOW with explicit regional explanation over a flat LOW.")
     if block_spec.block_id == "market_reimbursement_window":
         notes.append("Do not require a single EAEU-union reimbursement list when source evidence establishes reimbursement/payer coverage is member-state scoped; decide RU on RU source-native evidence and carry non-RU EAEU member-state gaps as caveats/actions.")
+        notes.append("If no source-native RU registration or RU-linked access/price row is evidenced, do not say RU price/access evidence is present. Use LIMITED_BY_NO_REGISTRATION or UNRESOLVED and state that payer/access checks are not product-context linked.")
+    if block_spec.block_id == "recommended_next_step":
+        notes.append("This is an action block: never use NOT_EVIDENCED. Choose the concrete action verdict that describes the next task, especially FOCUSED_RETRIEVAL or CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT when missing source-native registration/local activity is the blocker.")
     if block_spec.block_id == "evidence_sufficiency_note":
         notes.append("Distinguish screening-ready partial evidence from operations-ready sufficiency: IP/FTO and payer gaps can keep the package PARTIAL without collapsing it to pure INSUFFICIENT when source-enriched screening evidence is present.")
     if block_spec.block_id == "portfolio_opportunity":

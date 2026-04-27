@@ -536,6 +536,20 @@ class ExecDecisionEngine:
         synthesis = packet.get("synthesis_steps", []) or []
         critical_unknowns = packet.get("critical_unknowns", []) or []
         confirmed_regions = sum(1 for item in registrations if isinstance(item, dict) and _infer_registration_positive(item))
+        positive_regions = {
+            _normalize_region(item.get("region"))
+            for item in registrations
+            if isinstance(item, dict) and _infer_registration_positive(item)
+        }
+        local_clinical_count = sum(
+            1
+            for item in clinical
+            if isinstance(item, dict)
+            and any(
+                marker in json.dumps(item, ensure_ascii=False).lower()
+                for marker in ("russia", "russian federation", "ru ", " belarus", "kazakhstan", "armenia", "kyrgyzstan", "eaeu")
+            )
+        )
         missing_classes = self._missing_evidence_classes(packet, block_spec)
         blockers: List[Dict[str, Any]] = []
         if critical_unknowns:
@@ -591,6 +605,43 @@ class ExecDecisionEngine:
             verdict = "PARTIAL" if missing_classes and screening_ready else "INSUFFICIENT" if missing_classes else "SUFFICIENT"
             confidence = "MEDIUM" if verdict == "PARTIAL" else "LOW" if missing_classes else "MEDIUM"
             sufficiency = verdict
+        elif block_spec.verdict_family == "action":
+            if any("registration" in item.lower() or "clinical" in item.lower() for item in missing_classes):
+                verdict, confidence, sufficiency = "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT", "MEDIUM", "PARTIAL"
+            elif missing_classes or blockers:
+                verdict, confidence, sufficiency = "FOCUSED_RETRIEVAL", "MEDIUM", "PARTIAL"
+            else:
+                verdict, confidence, sufficiency = "PROCEED_TO_BD_REVIEW", "MEDIUM", "SUFFICIENT"
+        elif block_spec.verdict_family == "pathway":
+            if positive_regions & {"RU", "EAEU"}:
+                verdict, confidence, sufficiency = "POSSIBLE", "MEDIUM", "PARTIAL" if missing_classes else "SUFFICIENT"
+            elif positive_regions & {"US", "EU"} or clinical:
+                verdict, confidence, sufficiency = "POSSIBLE_BUT_UNPROVEN", "MEDIUM", "PARTIAL"
+            else:
+                verdict, confidence, sufficiency = "UNKNOWN", "LOW", "INSUFFICIENT"
+        elif block_spec.verdict_family == "activity":
+            if local_clinical_count:
+                verdict, confidence, sufficiency = "ACTIVE_LOCAL_TRIALS", "MEDIUM", "PARTIAL"
+            elif clinical:
+                verdict, confidence, sufficiency = "FOREIGN_ONLY_DEVELOPMENT", "MEDIUM", "PARTIAL"
+            else:
+                verdict, confidence, sufficiency = "NO_PUBLIC_ACTIVITY", "LOW", "PARTIAL"
+        elif block_spec.verdict_family == "precedent":
+            if {"US", "EU"} <= positive_regions:
+                verdict, confidence, sufficiency = "CONFIRMED_US_EU_APPROVAL", "MEDIUM", "PARTIAL"
+            elif positive_regions & {"US", "EU"}:
+                verdict, confidence, sufficiency = "FOREIGN_APPROVAL_PRESENT", "MEDIUM", "PARTIAL"
+            elif clinical:
+                verdict, confidence, sufficiency = "PARTIAL_FOREIGN_PRECEDENT", "LOW", "PARTIAL"
+            else:
+                verdict, confidence, sufficiency = "UNKNOWN", "LOW", "INSUFFICIENT"
+        elif block_spec.verdict_family == "applicability":
+            if not (positive_regions & {"RU", "EAEU"}):
+                verdict, confidence, sufficiency = "NOT_APPLICABLE_NO_REFERENCE_REGISTRATION", "MEDIUM", "PARTIAL"
+            elif patents or blockers:
+                verdict, confidence, sufficiency = "BLOCKED_BY_PATENTS", "MEDIUM", "PARTIAL"
+            else:
+                verdict, confidence, sufficiency = "APPLICABLE", "MEDIUM", "PARTIAL"
         else:
             verdict = "HIGH" if blockers else "LOW"
             confidence = "MEDIUM" if blockers else "LOW"

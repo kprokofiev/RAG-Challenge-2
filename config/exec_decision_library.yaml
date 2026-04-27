@@ -1,5 +1,5 @@
 version: "v1"
-updated_at: "2026-04-14"
+updated_at: "2026-04-28"
 
 blocks:
   - block_id: asset_attractiveness
@@ -166,6 +166,160 @@ blocks:
     appendix_question_ids: [q_reg_4geo, q_reg_status_detail, q_commercial_opportunity]
     topline_key: eaeu_entry
 
+  - block_id: original_registration_path
+    title: "Original / new registration path"
+    block_class: secondary
+    verdict_family: pathway
+    verdicts: [POSSIBLE, POSSIBLE_BUT_REQUIRES_DOSSIER, POSSIBLE_BUT_UNPROVEN, BLOCKED, UNKNOWN]
+    regions: [RU, EAEU]
+    sections:
+      - registrations
+      - clinical_studies
+      - product_contexts
+      - rights_enrichment
+      - legal_events_enrichment
+      - fto_screening
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - registrations
+      - clinical_studies
+      - product_contexts
+    allowed_doc_kinds:
+      - grls
+      - grls_card
+      - ru_registration_export
+      - eaeu_document
+      - eaeu_registration
+      - ru_official_act
+      - product_identity_bridge
+      - us_fda
+      - approval_letter
+      - label
+      - eu_regulatory_summary
+      - smpc
+      - epar
+      - assessment_report
+      - ctgov
+      - ctgov_api
+      - ctgov_protocol
+      - ctgov_results
+      - ctgov_documents
+      - patent_legal_events
+      - patent_national_legal_status
+      - ru_patent_fips
+    escalation_classes:
+      - regional_registration_route
+      - clinical_maturity
+      - foreign_approval_precedent
+    appendix_question_ids: [q_reg_4geo, q_clinical_overview, q_data_completeness]
+
+  - block_id: local_clinical_activity
+    title: "Local clinical activity"
+    block_class: secondary
+    verdict_family: activity
+    verdicts: [ACTIVE_LOCAL_TRIALS, FOREIGN_ONLY_DEVELOPMENT, NO_PUBLIC_ACTIVITY, UNKNOWN]
+    regions: [RU, EAEU]
+    sections:
+      - clinical_studies
+      - registrations
+      - product_contexts
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - clinical_studies
+      - registrations
+    allowed_doc_kinds:
+      - ctgov
+      - ctgov_api
+      - ctgov_protocol
+      - ctgov_results
+      - ctgov_documents
+      - ru_official_act
+      - ru_registration_export
+      - eaeu_document
+      - product_identity_bridge
+    escalation_classes:
+      - ru_eaeu_trial_presence
+      - sponsor_collaborator
+      - site_country_status
+    appendix_question_ids: [q_clinical_overview, q_data_completeness]
+
+  - block_id: foreign_approval_precedent
+    title: "Foreign approval precedent"
+    block_class: secondary
+    verdict_family: precedent
+    verdicts: [CONFIRMED_US_EU_APPROVAL, FOREIGN_APPROVAL_PRESENT, PARTIAL_FOREIGN_PRECEDENT, NOT_EVIDENCED, UNKNOWN]
+    regions: [US, EU, RU, EAEU]
+    sections:
+      - registrations
+      - product_contexts
+      - clinical_studies
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - registrations
+      - product_contexts
+      - clinical_studies
+    allowed_doc_kinds:
+      - us_fda
+      - approval_letter
+      - label
+      - eu_regulatory_summary
+      - smpc
+      - epar
+      - assessment_report
+      - product_identity_bridge
+      - ctgov
+      - ctgov_results
+    escalation_classes:
+      - us_approval
+      - eu_authorization
+      - product_identity_bridge
+    appendix_question_ids: [q_reg_4geo, q_clinical_overview]
+
+  - block_id: generic_path_applicability
+    title: "Generic path applicability"
+    block_class: secondary
+    verdict_family: applicability
+    verdicts: [APPLICABLE, NOT_APPLICABLE_NO_REFERENCE_REGISTRATION, BLOCKED_BY_PATENTS, UNKNOWN]
+    regions: [RU, EAEU, US, EU]
+    sections:
+      - registrations
+      - patent_families
+      - legal_events_enrichment
+      - fto_screening
+      - unknowns
+      - dossier_quality_v2
+      - coverage_ledger
+    field_prefixes:
+      - registrations
+      - patent_families
+    allowed_doc_kinds:
+      - grls
+      - ru_registration_export
+      - eaeu_document
+      - eaeu_registration
+      - us_fda
+      - approval_letter
+      - eu_regulatory_summary
+      - patent_family_summary
+      - patent_legal_events
+      - patent_expiry_us
+      - patent_term_extension
+      - patent_file_wrapper
+      - patent_national_legal_status
+      - eaeu_pharma_register
+      - ru_patent_fips
+    escalation_classes:
+      - reference_registration
+      - patent_fto
+      - generic_route
+    appendix_question_ids: [q_reg_4geo, q_ip_blockers, q_patent_expiry]
+
   - block_id: generic_opportunity
     title: "Generic opportunity"
     block_class: critical
@@ -210,7 +364,7 @@ blocks:
     title: "Licensing opportunity"
     block_class: secondary
     verdict_family: opportunity
-    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    verdicts: [HIGH, MEDIUM, MEDIUM_LOW, REGION_DEPENDENT, LOW, NOT_EVIDENCED]
     regions: [US, EU, RU, EAEU]
     sections:
       - passport
@@ -342,7 +496,7 @@ blocks:
     title: "Market / reimbursement window"
     block_class: secondary
     verdict_family: window
-    verdicts: [OPEN, NARROW, LIMITED, CLOSED, UNRESOLVED]
+    verdicts: [OPEN, NARROW, LIMITED, LIMITED_BY_NO_REGISTRATION, CLOSED, UNRESOLVED]
     regions: [RU, EAEU]
     sections:
       - commercial_signals
@@ -469,7 +623,7 @@ blocks:
     title: "Recommended next step"
     block_class: secondary
     verdict_family: action
-    verdicts: [HIGH, MEDIUM, LOW, NOT_EVIDENCED]
+    verdicts: [FOCUSED_RETRIEVAL, CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT, LEGAL_FTO_CLEARANCE, COMMERCIAL_DILIGENCE, PROCEED_TO_BD_REVIEW, DEFER]
     regions: [US, EU, RU, EAEU]
     sections:
       - unknowns

@@ -16,6 +16,7 @@ from src.exec_prompt_builder import (
     ExecRetrievalPlan,
     build_answer_prompt,
     build_planner_prompt,
+    load_exec_decision_library,
     resolve_primary_question_trace,
 )
 from src.exec_retrieval_escalation import ExecRetrievalEscalator
@@ -163,6 +164,22 @@ def _stub_question_plan():
 
 
 class ExecDecisionEngineTests(unittest.TestCase):
+    def test_decision_library_exposes_entry_path_blocks_and_action_verdicts(self):
+        library = load_exec_decision_library()
+
+        for block_id in (
+            "original_registration_path",
+            "local_clinical_activity",
+            "foreign_approval_precedent",
+            "generic_path_applicability",
+        ):
+            self.assertIn(block_id, library)
+
+        self.assertIn("FOCUSED_RETRIEVAL", library["recommended_next_step"].verdicts)
+        self.assertNotIn("NOT_EVIDENCED", library["recommended_next_step"].verdicts)
+        self.assertIn("LIMITED_BY_NO_REGISTRATION", library["market_reimbursement_window"].verdicts)
+        self.assertIn("REGION_DEPENDENT", library["licensing_opportunity"].verdicts)
+
     def test_packet_builder_filters_sections_and_regions(self):
         engine = ExecDecisionEngine()
         block_spec = engine.block_specs["rf_entry"]
@@ -1344,6 +1361,64 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "MEDIUM")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
 
+    def test_verifier_reframes_low_licensing_as_region_dependent(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="licensing_opportunity",
+            title="Licensing opportunity",
+            verdict="LOW",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="Licensing potential is low because there are no commercial signals.",
+            full_answer="US and EU are already authorized; RU and EAEU registration is not evidenced.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "contract_linkage": {
+                "licensing_opportunity_by_region": {
+                    "US": {"verdict": "LOW"},
+                    "EU": {"verdict": "LOW"},
+                    "RU": {"verdict": "MEDIUM"},
+                    "EAEU": {"verdict": "MEDIUM"},
+                }
+            }
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "REGION_DEPENDENT")
+        self.assertIn("US/EU", repaired.short_answer)
+        self.assertIn("reframed_low_licensing_as_region_dependent", verification.repair_reason)
+
+    def test_verifier_converts_recommended_next_step_to_action_verdict(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="recommended_next_step",
+            title="Recommended next step",
+            verdict="NOT_EVIDENCED",
+            confidence="LOW",
+            sufficiency="PARTIAL",
+            short_answer="Retrieve missing source-native EU/EAEU/RU registration records.",
+            full_answer="The next operational step is registration and local development retrieval.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+
+        repaired, verification = verifier.verify_and_repair(
+            block,
+            {"evidence_ids": [], "critical_unknowns": []},
+            block_spec=None,
+            allow_repair=True,
+        )
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT")
+        self.assertIn("converted_next_step_to_action_verdict", verification.repair_reason)
+
     def test_verifier_demotes_synthesis_to_screening_scope_for_asset(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -2358,6 +2433,51 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertTrue(linkage["market_reimbursement_snapshot"]["regions"]["EAEU"]["member_state_scope"])
         self.assertIn("ev-ru-price", linkage["priority_evidence_retention"]["retained_refs"])
 
+    def test_evidence_assembler_marks_reimbursement_limited_by_no_registration(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        base_packet = {
+            "block_id": "market_reimbursement_window",
+            "inn": "tofersen",
+            "allowed_doc_kinds": ["payer_policy"],
+            "required_sections": ["registrations", "commercial_signals", "product_contexts"],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-eaeu-scope",
+                    "doc_id": "doc-eaeu-scope",
+                    "doc_kind": "payer_policy",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=eec_market_access_scope | jurisdiction=EAEU | "
+                        "check_class=eaeu_union_reimbursement_scope | status=member_state_scope | "
+                        "conclusion=NO_SINGLE_EAEU_UNION_REIMBURSEMENT_LIST_IDENTIFIED"
+                    ),
+                },
+                {
+                    "evidence_id": "ev-ru-policy",
+                    "doc_id": "doc-ru-policy",
+                    "doc_kind": "payer_policy",
+                    "snippet": (
+                        "REIMBURSEMENT_CHECK | source=ru_federal_program_sources | jurisdiction=RU | "
+                        "check_class=federal_state_guarantees_reimbursement_pathway | "
+                        "status=payer_pathway_source_checked | term_hits=0"
+                    ),
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="market_reimbursement_window",
+            answer_type="window",
+            needed_dossier_sections=["registrations", "commercial_signals", "product_contexts"],
+            retrieval_plan=ExecRetrievalPlan(doc_kinds=["payer_policy"], queries=["tofersen reimbursement"]),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+        snapshot = evidence_packet["contract_linkage"]["market_reimbursement_snapshot"]
+
+        self.assertEqual(snapshot["verdict_hint"], "LIMITED_BY_NO_REGISTRATION")
+        self.assertEqual(snapshot["conclusion"], "LIMITED_BY_NO_REGISTRATION")
+        self.assertEqual(snapshot["regions"]["RU"]["listed_active_count"], 0)
+        self.assertFalse(snapshot["regions"]["RU"]["registration_anchor_present"])
+
     def test_verifier_lifts_market_reimbursement_from_unresolved_to_limited(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -2412,6 +2532,60 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "LIMITED")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("RU source-native", repaired.short_answer)
+
+    def test_verifier_reframes_market_reimbursement_when_ru_access_unlinked(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="market_reimbursement_window",
+            title="Market / reimbursement window",
+            verdict="LIMITED",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="LIMITED — RU source-native price/access evidence is present, while EAEU reimbursement remains member-state scoped.",
+            full_answer="RU source-native price/access evidence is present.",
+            why_this_verdict=[
+                ExecWhyClaim(
+                    claim="RU source-native price/access evidence is present.",
+                    claim_type="inference",
+                    evidence_refs=[],
+                )
+            ],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-policy", "ev-eaeu"],
+            "contract_linkage": {
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED_BY_NO_REGISTRATION",
+                    "evidence_refs": ["ev-policy"],
+                    "regions": {
+                        "RU": {
+                            "listed_active_count": 0,
+                            "evidence_refs": ["ev-policy"],
+                        },
+                        "EAEU": {
+                            "member_state_scope": True,
+                            "evidence_refs": ["ev-eaeu"],
+                        },
+                    },
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "ru_source_native_access_signal_count": 0,
+                    "missing_operations_checks": ["ru_price_access"],
+                    "market_reimbursement_verdict_hint": "LIMITED_BY_NO_REGISTRATION",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LIMITED_BY_NO_REGISTRATION")
+        self.assertIn("no source-native RU registration", repaired.short_answer)
+        self.assertIn("reframed_market_reimbursement_as_limited_by_no_registration", verification.repair_reason)
 
     def test_verifier_downgrades_market_reimbursement_open_to_limited_without_payer_tier(self):
         verifier = ExecVerifier()
