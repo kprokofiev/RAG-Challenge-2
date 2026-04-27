@@ -1077,7 +1077,8 @@ class ExecVerifier:
                 "jnvlp evidence supports",
             ),
         )
-        return block.verdict in {"OPEN", "LIMITED"} or claims_ru_access_present
+        correct_verdict_understated = block.verdict == "LIMITED_BY_NO_REGISTRATION" and block.sufficiency == "INSUFFICIENT"
+        return block.verdict in {"OPEN", "LIMITED"} or claims_ru_access_present or correct_verdict_understated
 
     def _market_reimbursement_overopen(
         self,
@@ -1340,7 +1341,9 @@ class ExecVerifier:
     ) -> bool:
         if block.block_id != "recommended_next_step":
             return False
-        return block.verdict in {"NOT_EVIDENCED", "HIGH", "MEDIUM", "LOW"}
+        if block.verdict in {"NOT_EVIDENCED", "HIGH", "MEDIUM", "LOW"}:
+            return True
+        return block.verdict in {"FOCUSED_RETRIEVAL", "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT"} and block.sufficiency == "INSUFFICIENT"
 
     def _local_clinical_activity_underclassified(
         self,

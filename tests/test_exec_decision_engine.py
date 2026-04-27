@@ -1419,6 +1419,34 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT")
         self.assertIn("converted_next_step_to_action_verdict", verification.repair_reason)
 
+    def test_verifier_lifts_action_next_step_sufficiency_to_partial(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="recommended_next_step",
+            title="Recommended next step",
+            verdict="CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="Verify RU/EAEU registration and local development status.",
+            full_answer="The concrete action is known, but the answerer left the action block as insufficient.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+
+        repaired, verification = verifier.verify_and_repair(
+            block,
+            {"evidence_ids": [], "critical_unknowns": []},
+            block_spec=None,
+            allow_repair=True,
+        )
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CHECK_REGISTRATION_AND_LOCAL_DEVELOPMENT")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("converted_next_step_to_action_verdict", verification.repair_reason)
+
     def test_verifier_demotes_synthesis_to_screening_scope_for_asset(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -2759,6 +2787,52 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.verdict, "LIMITED_BY_NO_REGISTRATION")
         self.assertIn("no source-native RU registration", repaired.short_answer)
+        self.assertIn("reframed_market_reimbursement_as_limited_by_no_registration", verification.repair_reason)
+
+    def test_verifier_lifts_limited_by_no_registration_sufficiency_to_partial(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="market_reimbursement_window",
+            title="Market / reimbursement window",
+            verdict="LIMITED_BY_NO_REGISTRATION",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="No RU registration or RU-linked payer/access evidence is present.",
+            full_answer="The current record supports limited-by-no-registration status, but the model left the block insufficient.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-policy"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-policy",
+                    "doc_kind": "payer_policy",
+                    "snippet": "REIMBURSEMENT_CHECK | source=ru_policy_scope | status=checked_no_product_access_row",
+                }
+            ],
+            "contract_linkage": {
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED_BY_NO_REGISTRATION",
+                    "evidence_refs": ["ev-policy"],
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "ru_source_native_access_signal_count": 0,
+                    "missing_operations_checks": ["ru_price_access"],
+                    "market_reimbursement_verdict_hint": "LIMITED_BY_NO_REGISTRATION",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LIMITED_BY_NO_REGISTRATION")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
         self.assertIn("reframed_market_reimbursement_as_limited_by_no_registration", verification.repair_reason)
 
     def test_verifier_downgrades_market_reimbursement_open_to_limited_without_payer_tier(self):
