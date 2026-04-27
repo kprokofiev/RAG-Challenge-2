@@ -1351,7 +1351,7 @@ class ExecVerifier:
                     )
                 )
 
-        if block.verdict in _GO_VERDICTS and any(
+        if block.block_id != "key_risks" and block.verdict in _GO_VERDICTS and any(
             blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers
         ) and not self._conditional_asset_blockers_are_reflected(block):
             issues.append(

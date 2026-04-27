@@ -2760,6 +2760,34 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("lifted_key_risks_not_evidenced_to_high_screening", verification.repair_reason)
 
+    def test_verifier_allows_high_key_risk_with_must_verify_blockers(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="key_risks",
+            title="Key risks",
+            verdict="HIGH",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="HIGH risk because IP and registration gaps remain material.",
+            full_answer="High risk is compatible with must-verify blockers in a risk block.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "risk_blocker",
+                    "title": "FTO and registration gaps require verification",
+                    "severity": "MUST_VERIFY_NOW",
+                    "rationale": "A high-risk verdict should surface blockers instead of conflicting with them.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+
+        verification = verifier.verify_block(block, packet={}, block_spec=None)
+
+        self.assertEqual(verification.overall_status, "PASS")
+
     def test_verifier_does_not_rewarn_when_synthesis_is_only_caveat(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
