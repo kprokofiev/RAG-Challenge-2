@@ -289,6 +289,26 @@ def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
     return bool(_RU_FIPS_DOC_ID_RE.search(snippet) and _RU_FIPS_EXPIRY_DATE_RE.search(snippet))
 
 
+def _is_block_preferred_evidence(item: Dict[str, Any], doc_kind: str, question_id: str) -> bool:
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ("doc_kind", "source_label", "title", "snippet", "source_url")
+    ).lower()
+    question_id = str(question_id or "").strip()
+    if question_id == "foreign_approval_precedent":
+        if doc_kind in {"us_fda", "label", "approval_letter"}:
+            return any(marker in text for marker in ("qalsody", "tofersen", "nda 215887", "initial u.s. approval", "approval"))
+        if doc_kind in {"eu_regulatory_summary", "smpc", "epar", "assessment_report"}:
+            return any(marker in text for marker in ("qalsody", "tofersen", "authorised", "authorized", "marketing authorisation", "epar", "chmp"))
+    if question_id == "local_clinical_activity":
+        return doc_kind in {"ctgov", "ctgov_api", "ctgov_protocol", "ctgov_results", "ctgov_documents"}
+    if question_id == "evidence_sufficiency_note":
+        if doc_kind in {"us_fda", "label", "approval_letter", "eu_regulatory_summary", "smpc", "epar", "assessment_report"}:
+            return any(marker in text for marker in ("qalsody", "tofersen", "approval", "authorised", "authorized", "marketing authorisation", "nda 215887"))
+        return doc_kind in {"ctgov", "ctgov_api", "ctgov_protocol", "ctgov_results", "ctgov_documents"}
+    return False
+
+
 def _iter_evidence_refs(value: Any) -> Iterable[str]:
     if isinstance(value, dict):
         refs = value.get("evidence_refs", [])
@@ -2216,6 +2236,17 @@ class ExecEvidenceAssembler:
             return True
 
         registry = list(base_packet.get("evidence_registry", []) or [])
+        question_id = str(plan.question_id or base_packet.get("block_id") or "").strip()
+        for item in registry:
+            doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+            if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
+                continue
+            if not _is_block_preferred_evidence(item, doc_kind, question_id):
+                continue
+            _append(item, doc_kind)
+            if len(selected) >= limits["max_chunks"]:
+                return selected[: limits["max_chunks"]]
+
         for item in registry:
             doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
             if not _is_priority_contract_evidence(item, doc_kind):

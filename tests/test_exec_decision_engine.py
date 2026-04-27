@@ -1728,6 +1728,53 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertTrue(any(item["doc_kind"] == "ru_registration_export" for item in evidence_packet["selected_evidence"]))
         self.assertIn("direct_ru_registration_confirmation", evidence_packet["missing_evidence_classes"])
 
+    def test_foreign_approval_precedent_prefers_fda_ema_evidence_over_priority_fillers(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        filler = [
+            {
+                "evidence_id": f"ev-priority-{idx}",
+                "doc_id": f"doc-priority-{idx}",
+                "doc_kind": "patent_legal_events",
+                "snippet": "LEGAL_EVENT | source=epo_register | jurisdiction=EU | patent=EP123 | status=active",
+            }
+            for idx in range(8)
+        ]
+        base_packet = {
+            "block_id": "foreign_approval_precedent",
+            "allowed_doc_kinds": ["patent_legal_events", "us_fda", "approval_letter", "eu_regulatory_summary", "smpc"],
+            "evidence_registry": filler
+            + [
+                {
+                    "evidence_id": "ev-fda-label",
+                    "doc_id": "doc-fda-label",
+                    "doc_kind": "us_fda",
+                    "snippet": "QALSODY tofersen NDA 215887 Initial U.S. Approval 2023 official FDA label.",
+                },
+                {
+                    "evidence_id": "ev-ema-summary",
+                    "doc_id": "doc-ema-summary",
+                    "doc_kind": "eu_regulatory_summary",
+                    "snippet": "EMA EPAR Qalsody active substance tofersen status Authorised marketing authorisation.",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="foreign_approval_precedent",
+            answer_type="evidence_summary",
+            needed_dossier_sections=[],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["patent_legal_events", "us_fda", "approval_letter", "eu_regulatory_summary", "smpc"],
+                queries=["tofersen foreign approval precedent"],
+                max_chunks=4,
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+
+        self.assertIn("ev-fda-label", evidence_packet["selected_evidence_ids"])
+        self.assertIn("ev-ema-summary", evidence_packet["selected_evidence_ids"])
+        self.assertLessEqual(len(evidence_packet["selected_evidence"]), 4)
+
     def test_evidence_assembler_emits_contract_linkage(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {
@@ -2714,6 +2761,165 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertIn("screening-ready", repaired.short_answer)
         self.assertIn("operations-ready", " ".join(repaired.caveats).lower())
         self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
+
+    def test_verifier_classifies_local_clinical_activity_from_deterministic_signal(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="local_clinical_activity",
+            title="Local clinical activity",
+            verdict="UNKNOWN",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="UNKNOWN because local RU/EAEU trial activity cannot be determined.",
+            full_answer="The model could not determine whether local RU/EAEU sites or sponsors are present.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+            top_evidence_refs=["ev-ctgov"],
+        )
+        packet = {
+            "evidence_ids": ["ev-ctgov"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-ctgov",
+                    "doc_kind": "ctgov_api",
+                    "snippet": "NCT00000000 tofersen Phase 3 foreign-only development; no Russia or EAEU sites in checked record.",
+                }
+            ],
+            "contract_linkage": {
+                "local_development_signal_by_region": {
+                    "RU": {
+                        "signal": "FOREIGN_ONLY_DEVELOPMENT",
+                        "local_trial_count": 0,
+                        "all_clinical_evidence_refs": ["ev-ctgov"],
+                    },
+                    "EAEU": {
+                        "signal": "FOREIGN_ONLY_DEVELOPMENT",
+                        "local_trial_count": 0,
+                        "all_clinical_evidence_refs": ["ev-ctgov"],
+                    },
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "ru_local_development_signal": "FOREIGN_ONLY_DEVELOPMENT",
+                    "eaeu_local_development_signal": "FOREIGN_ONLY_DEVELOPMENT",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "FOREIGN_ONLY_DEVELOPMENT")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("classified_local_clinical_activity_from_deterministic_signal", verification.repair_reason)
+
+    def test_verifier_confirms_foreign_approval_precedent_from_fda_and_ema_records(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="foreign_approval_precedent",
+            title="Foreign approval precedent",
+            verdict="PARTIAL_FOREIGN_PRECEDENT",
+            confidence="LOW",
+            sufficiency="PARTIAL",
+            short_answer="PARTIAL because source-native US/EU approval records are incomplete.",
+            full_answer="Likely foreign approval exists, but the source-native bridge is incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-fda-label", "ev-ema-epar"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-fda-label",
+                    "doc_kind": "us_fda",
+                    "source_label": "fda_current_label",
+                    "snippet": "QALSODY tofersen NDA 215887 Initial U.S. Approval 2023 official FDA label.",
+                },
+                {
+                    "evidence_id": "ev-ema-epar",
+                    "doc_kind": "eu_regulatory_summary",
+                    "source_label": "ema_epar",
+                    "snippet": "EMA EPAR Qalsody active substance tofersen status Authorised marketing authorisation.",
+                },
+            ],
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONFIRMED_US_EU_APPROVAL")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("ev-fda-label", repaired.top_evidence_refs)
+        self.assertIn("ev-ema-epar", repaired.top_evidence_refs)
+        self.assertIn("confirmed_foreign_approval_precedent_from_source_native_records", verification.repair_reason)
+
+    def test_verifier_raises_partial_sufficiency_confidence_to_screening_medium(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="evidence_sufficiency_note",
+            title="Evidence sufficiency note",
+            verdict="PARTIAL",
+            confidence="LOW",
+            sufficiency="PARTIAL",
+            short_answer="PARTIAL LOW because chemistry identity and legal status gaps remain.",
+            full_answer="Screening evidence exists, but operations-ready legal and chemistry closure is incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-fda-label", "ev-ema-epar", "ev-fto"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-fda-label",
+                    "doc_kind": "us_fda",
+                    "snippet": "QALSODY tofersen NDA 215887 Initial U.S. Approval 2023 official FDA label.",
+                },
+                {
+                    "evidence_id": "ev-ema-epar",
+                    "doc_kind": "eu_regulatory_summary",
+                    "snippet": "EMA EPAR Qalsody active substance tofersen status Authorised marketing authorisation.",
+                },
+                {
+                    "evidence_id": "ev-fto",
+                    "doc_kind": "patent_legal_events",
+                    "snippet": "FTO_SCREENING_ONLY | POTENTIAL_BLOCKERS_REQUIRE_REVIEW | family legal events coverage PARTIAL.",
+                },
+            ],
+            "contract_linkage": {
+                "operations_readiness_snapshot": {"screening_ready": True, "operations_evidence_ready": False},
+                "source_evidence_manifest": {"checked_source_count": 4, "legal_event_evidence_refs": ["ev-fto"]},
+                "fto_screening_snapshot": {
+                    "screening_level": "FTO_SCREENING_ONLY",
+                    "conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "evidence_refs": ["ev-fto"],
+                },
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "operations_screening_ready": True,
+                    "fto_screening_conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "family_legal_events_coverage_status": "PARTIAL",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "PARTIAL")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("screening-ready", repaired.short_answer)
+        self.assertIn("raised_partial_sufficiency_confidence_to_screening_medium", verification.repair_reason)
 
     def test_verifier_lifts_sufficiency_to_partial_when_operations_screening_ready_has_clean_no_record(self):
         verifier = ExecVerifier()

@@ -125,6 +125,27 @@ def _candidate_evidence(packet: Dict[str, Any]) -> List[Dict[str, str]]:
     return candidates
 
 
+def _foreign_approval_source_refs(packet: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    us_refs: List[str] = []
+    eu_refs: List[str] = []
+    for candidate in _candidate_evidence(packet):
+        searchable = str(candidate.get("searchable") or "").lower()
+        ref = str(candidate.get("ref") or "").strip()
+        if not ref:
+            continue
+        if any(marker in searchable for marker in ("us_fda", "fda ", "approval_letter", "label")) and any(
+            marker in searchable
+            for marker in ("qalsody", "tofersen", "nda 215887", "initial u.s. approval", "approval")
+        ):
+            us_refs.append(ref)
+        if any(marker in searchable for marker in ("eu_regulatory_summary", "smpc", "epar", "assessment_report", "ema ")) and any(
+            marker in searchable
+            for marker in ("qalsody", "tofersen", "authorised", "authorized", "marketing authorisation", "epar", "chmp")
+        ):
+            eu_refs.append(ref)
+    return list(dict.fromkeys(us_refs)), list(dict.fromkeys(eu_refs))
+
+
 def _scalar_text(value: Any) -> str:
     if isinstance(value, dict):
         if "value" in value:
@@ -1319,6 +1340,51 @@ class ExecVerifier:
             return False
         return block.verdict in {"NOT_EVIDENCED", "HIGH", "MEDIUM", "LOW"}
 
+    def _local_clinical_activity_underclassified(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "local_clinical_activity" or block.verdict not in {"UNKNOWN", "NOT_EVIDENCED"}:
+            return False
+        linkage = _contract_linkage(packet)
+        local = linkage.get("local_development_signal_by_region", {}) or {}
+        summary = _contract_linkage_summary(packet)
+        ru_signal = str(((local.get("RU") or {}).get("signal") or summary.get("ru_local_development_signal") or "")).upper()
+        eaeu_signal = str(((local.get("EAEU") or {}).get("signal") or summary.get("eaeu_local_development_signal") or "")).upper()
+        signals = {ru_signal, eaeu_signal}
+        if signals.intersection({"ACTIVE_LOCAL_TRIALS", "LOCAL_TRIALS_PRESENT", "FOREIGN_ONLY_DEVELOPMENT", "NO_PUBLIC_ACTIVITY"}):
+            return True
+        return False
+
+    def _foreign_approval_precedent_underconfirmed(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "foreign_approval_precedent" or block.verdict == "CONFIRMED_US_EU_APPROVAL":
+            return False
+        us_refs, eu_refs = _foreign_approval_source_refs(packet)
+        return bool(us_refs and eu_refs)
+
+    def _evidence_sufficiency_partial_low_confidence_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "evidence_sufficiency_note" or block.verdict != "PARTIAL" or block.confidence != "LOW":
+            return False
+        summary = _contract_linkage_summary(packet)
+        if not _operations_screening_ready(packet) and str(summary.get("operations_screening_ready") or "").lower() != "true":
+            return False
+        us_refs, eu_refs = _foreign_approval_source_refs(packet)
+        has_regulatory_sources = bool(us_refs or eu_refs)
+        has_ip_sources = str(summary.get("fto_screening_conclusion") or "").upper() in {
+            "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+            "INSUFFICIENT_FOR_FTO",
+        } or str(summary.get("family_legal_events_coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+        return has_regulatory_sources and has_ip_sources
+
     def _business_block_synthesis_overconstraint(
         self,
         block: ExecDecisionBlock,
@@ -1717,6 +1783,33 @@ class ExecVerifier:
                     issue_type="recommended_next_step_not_evidenced",
                     severity="WARN",
                     message="Recommended next step should use an action verdict, not an evidence/opportunity verdict.",
+                )
+            )
+
+        if self._local_clinical_activity_underclassified(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="local_clinical_activity_underclassified",
+                    severity="WARN",
+                    message="Local clinical activity is UNKNOWN even though deterministic local-development signals are available.",
+                )
+            )
+
+        if self._foreign_approval_precedent_underconfirmed(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="foreign_approval_precedent_underconfirmed",
+                    severity="WARN",
+                    message="Foreign approval precedent is undercalled despite source-native FDA and EMA/EU evidence in the packet.",
+                )
+            )
+
+        if self._evidence_sufficiency_partial_low_confidence_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="evidence_sufficiency_partial_low_confidence_understated",
+                    severity="WARN",
+                    message="Evidence sufficiency is PARTIAL but confidence is lower than the screening-ready source set supports.",
                 )
             )
 
@@ -2719,6 +2812,121 @@ class ExecVerifier:
                 )
             applied_changes.append("converted_next_step_to_action_verdict")
 
+        if (
+            any(issue.issue_type == "local_clinical_activity_underclassified" for issue in verification.issues)
+            or self._local_clinical_activity_underclassified(repaired, packet)
+        ):
+            linkage = _contract_linkage(packet)
+            local = linkage.get("local_development_signal_by_region", {}) or {}
+            ru_payload = local.get("RU", {}) or {}
+            eaeu_payload = local.get("EAEU", {}) or {}
+            ru_signal = str(ru_payload.get("signal") or _contract_linkage_summary(packet).get("ru_local_development_signal") or "").upper()
+            eaeu_signal = str(eaeu_payload.get("signal") or _contract_linkage_summary(packet).get("eaeu_local_development_signal") or "").upper()
+            refs = list(
+                dict.fromkeys(
+                    list(ru_payload.get("all_clinical_evidence_refs") or [])
+                    + list(eaeu_payload.get("all_clinical_evidence_refs") or [])
+                    + list(repaired.top_evidence_refs)
+                )
+            )
+            if "ACTIVE_LOCAL_TRIALS" in {ru_signal, eaeu_signal}:
+                repaired.verdict = "ACTIVE_LOCAL_TRIALS"
+                repaired.confidence = "MEDIUM"
+                local_phrase = "source-linked RU/EAEU trial activity is present"
+            elif "LOCAL_TRIALS_PRESENT" in {ru_signal, eaeu_signal}:
+                repaired.verdict = "ACTIVE_LOCAL_TRIALS"
+                repaired.confidence = "LOW"
+                local_phrase = "RU/EAEU local trial records are present but activity status is not fully resolved"
+            elif "FOREIGN_ONLY_DEVELOPMENT" in {ru_signal, eaeu_signal}:
+                repaired.verdict = "FOREIGN_ONLY_DEVELOPMENT"
+                repaired.confidence = "MEDIUM"
+                local_phrase = "foreign clinical development is evidenced and no RU/EAEU local trial/site signal is present in the checked corpus"
+            else:
+                repaired.verdict = "NO_PUBLIC_ACTIVITY"
+                repaired.confidence = "MEDIUM" if refs else "LOW"
+                local_phrase = "no public RU/EAEU local trial activity is surfaced in the checked corpus"
+            repaired.sufficiency = "PARTIAL"
+            repaired.short_answer = (
+                f"{repaired.verdict} — {local_phrase}. This is a screening classification, not proof that hidden or unpublished local activity cannot exist."
+            )
+            repaired.full_answer = (
+                "The deterministic local-development signal should be used for the client-facing screening map. "
+                f"RU signal={ru_signal or 'UNKNOWN'} and EAEU signal={eaeu_signal or 'UNKNOWN'} with local trial counts "
+                f"RU={ru_payload.get('local_trial_count', 0)}, EAEU={eaeu_payload.get('local_trial_count', 0)}. "
+                "This supports a bounded local-activity verdict rather than UNKNOWN, while retaining a follow-up to recheck source-native RU/EAEU registries if launch diligence depends on it."
+            )
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(
+                    f"{blocker.title} {blocker.rationale}",
+                    ("cannot conclusively confirm or exclude", "identity bridge not fully resolved", "no extractable eaeu"),
+                )
+            ]
+            if refs:
+                repaired.top_evidence_refs = refs[:8]
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Clinical evidence supports a bounded local-development screening signal for RU/EAEU.",
+                        claim_type="inference",
+                        evidence_refs=refs[:6],
+                    )
+                )
+            caveat = "Local clinical activity is bounded at public-source screening level; recheck RU/EAEU trial registries before treating absence as exhaustive."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("classified_local_clinical_activity_from_deterministic_signal")
+
+        if (
+            any(issue.issue_type == "foreign_approval_precedent_underconfirmed" for issue in verification.issues)
+            or self._foreign_approval_precedent_underconfirmed(repaired, packet)
+        ):
+            us_refs, eu_refs = _foreign_approval_source_refs(packet)
+            refs = list(dict.fromkeys(us_refs[:4] + eu_refs[:4] + list(repaired.top_evidence_refs)))[:8]
+            repaired.verdict = "CONFIRMED_US_EU_APPROVAL"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "CONFIRMED_US_EU_APPROVAL — source-native FDA and EMA/EU records in the packet support Qalsody/tofersen approval or authorization precedent."
+            )
+            repaired.full_answer = (
+                "The packet includes source-native US FDA evidence for Qalsody/tofersen (NDA 215887 / label or review material) and EMA/EU evidence for Qalsody/tofersen "
+                "(EPAR/SmPC/assessment or regulatory summary). That is enough for a confirmed foreign-approval-precedent screening verdict. "
+                "This does not substitute for RU/EAEU registration, but it closes the client-facing question of whether foreign regulator precedent exists."
+            )
+            repaired.top_evidence_refs = refs
+            repaired.why_this_verdict = [
+                ExecWhyClaim(
+                    claim="Source-native FDA and EMA/EU evidence supports confirmed US/EU foreign approval precedent for Qalsody/tofersen.",
+                    claim_type="hard_evidence_backed",
+                    evidence_refs=refs[:6],
+                )
+            ]
+            repaired.decision_blockers = [
+                blocker for blocker in repaired.decision_blockers
+                if not _contains_any_marker(
+                    f"{blocker.title} {blocker.rationale}",
+                    ("missing source-native us approval", "missing source-native eu", "identity bridge incomplete"),
+                )
+            ]
+            caveat = "Foreign approval precedent does not itself establish RU/EAEU registration or reimbursement."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("confirmed_foreign_approval_precedent_from_source_native_records")
+
+        if (
+            any(issue.issue_type == "evidence_sufficiency_partial_low_confidence_understated" for issue in verification.issues)
+            or self._evidence_sufficiency_partial_low_confidence_understated(repaired, packet)
+        ):
+            repaired.confidence = "MEDIUM"
+            if not repaired.short_answer or "LOW" in repaired.short_answer:
+                repaired.short_answer = (
+                    "PARTIAL — the packet is screening-ready with source-native regulatory, clinical, IP/FTO, and payer-scope limitations, but it remains below operations-ready sufficiency."
+                )
+            caveat = "Partial sufficiency has medium screening confidence; operations-ready legal, payer, and chemistry/identity closure remains separate."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("raised_partial_sufficiency_confidence_to_screening_medium")
+
         if any(issue.issue_type == "synthesis_secondary_scope" for issue in verification.issues) or self._business_block_synthesis_overconstraint(repaired, packet):
             repaired.decision_blockers = [
                 blocker for blocker in repaired.decision_blockers
@@ -2824,6 +3032,9 @@ class ExecVerifier:
             "regional_licensing_collapse",
             "licensing_low_underframed_region_dependent",
             "recommended_next_step_not_evidenced",
+            "local_clinical_activity_underclassified",
+            "foreign_approval_precedent_underconfirmed",
+            "evidence_sufficiency_partial_low_confidence_understated",
             "synthesis_secondary_scope",
         }
         has_reparable_warn = any(
@@ -2859,6 +3070,9 @@ class ExecVerifier:
                 self._regional_licensing_collapse(block, packet),
                 self._licensing_low_underframed_region_dependent(block, packet),
                 self._recommended_next_step_not_evidenced(block, packet),
+                self._local_clinical_activity_underclassified(block, packet),
+                self._foreign_approval_precedent_underconfirmed(block, packet),
+                self._evidence_sufficiency_partial_low_confidence_understated(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),
             )
         )
