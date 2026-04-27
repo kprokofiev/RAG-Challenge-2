@@ -1213,7 +1213,9 @@ class ExecVerifier:
         if any(blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers):
             return False
         if _has_explicit_no_registration_record(packet, "EAEU") and not _has_positive_registration(packet, "EAEU"):
-            return False
+            us_refs, eu_refs = _foreign_approval_source_refs(packet)
+            if not (us_refs and eu_refs and _operations_screening_ready(packet)):
+                return False
         linkage = _contract_linkage(packet)
         summary = (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
         phase3 = linkage.get("phase3_results", {}) or {}
@@ -2626,11 +2628,13 @@ class ExecVerifier:
             any(issue.issue_type == "portfolio_screening_underpromoted" for issue in verification.issues)
             or self._portfolio_screening_underpromoted(repaired, packet)
         ):
+            us_refs, eu_refs = _foreign_approval_source_refs(packet)
+            anchor_phrase = "foreign approval and clinical anchors" if us_refs and eu_refs else "registration and clinical/market anchors"
             repaired.verdict = "MEDIUM"
             repaired.sufficiency = "PARTIAL"
             repaired.confidence = "MEDIUM"
             repaired.short_answer = (
-                "MEDIUM — portfolio value is supported at screening level by registration and clinical/market anchors, while IP/legal-status reconciliation remains a caveat rather than a reason to collapse the opportunity to LOW."
+                f"MEDIUM — portfolio value is supported at screening level by {anchor_phrase}, while IP/legal-status and RU/EAEU market-entry gaps remain caveats rather than a reason to collapse the opportunity to LOW."
             )
             caveat = "Portfolio opportunity remains screening-grade until jurisdiction-level legal-status and payer evidence are reconciled."
             if caveat not in repaired.caveats:

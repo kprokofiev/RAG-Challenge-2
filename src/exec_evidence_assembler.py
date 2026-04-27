@@ -295,12 +295,12 @@ def _is_block_preferred_evidence(item: Dict[str, Any], doc_kind: str, question_i
         for key in ("doc_kind", "source_label", "title", "snippet", "source_url")
     ).lower()
     question_id = str(question_id or "").strip()
-    if question_id == "foreign_approval_precedent":
+    if question_id in {"foreign_approval_precedent", "portfolio_opportunity"}:
         if doc_kind in {"us_fda", "label", "approval_letter"}:
             return any(marker in text for marker in ("qalsody", "tofersen", "nda 215887", "initial u.s. approval", "approval"))
         if doc_kind in {"eu_regulatory_summary", "smpc", "epar", "assessment_report"}:
             return any(marker in text for marker in ("qalsody", "tofersen", "authorised", "authorized", "marketing authorisation", "epar", "chmp"))
-    if question_id == "local_clinical_activity":
+    if question_id in {"local_clinical_activity", "portfolio_opportunity"}:
         return doc_kind in {"ctgov", "ctgov_api", "ctgov_protocol", "ctgov_results", "ctgov_documents"}
     if question_id == "evidence_sufficiency_note":
         if doc_kind in {"us_fda", "label", "approval_letter", "eu_regulatory_summary", "smpc", "epar", "assessment_report"}:

@@ -1523,6 +1523,74 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("lifted_portfolio_low_to_screening_medium", verification.repair_reason)
 
+    def test_verifier_lifts_portfolio_low_when_no_eaeu_registration_but_us_eu_approval_exists(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="portfolio_opportunity",
+            title="Portfolio opportunity",
+            verdict="LOW",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="LOW because there is no EAEU registration and no commercial signal.",
+            full_answer="The asset has clinical maturity, but EAEU registration is absent and legal-status work remains incomplete.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-fda-label", "ev-ema-epar", "ev-ctgov", "ev-eaeu-no-record"],
+            "registrations": [
+                {"region": "US", "status": {"value": "approved"}},
+                {"region": "EU", "status": {"value": "authorised"}},
+                {"region": "EAEU", "status": {"value": "No public registration record verified as of 2026-04-28"}},
+            ],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-fda-label",
+                    "doc_kind": "us_fda",
+                    "snippet": "QALSODY tofersen NDA 215887 Initial U.S. Approval 2023 official FDA label.",
+                },
+                {
+                    "evidence_id": "ev-ema-epar",
+                    "doc_kind": "eu_regulatory_summary",
+                    "snippet": "EMA EPAR Qalsody active substance tofersen status Authorised marketing authorisation.",
+                },
+                {
+                    "evidence_id": "ev-ctgov",
+                    "doc_kind": "ctgov_api",
+                    "snippet": "Tofersen Phase 3 clinical development record.",
+                },
+                {
+                    "evidence_id": "ev-eaeu-no-record",
+                    "doc_kind": "product_identity_bridge",
+                    "snippet": "PRODUCT_IDENTITY_BRIDGE | jurisdiction=EAEU | status=No public registration record verified as of 2026-04-28",
+                },
+            ],
+            "contract_linkage": {
+                "operations_readiness_snapshot": {"screening_ready": True},
+                "phase3_results": {
+                    "phase3_study_count": 2,
+                    "phase3_with_ctgov_results_evidence": 1,
+                },
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "operations_screening_ready": True,
+                    "phase3_with_ctgov_results_evidence": 1,
+                    "family_legal_events_coverage_status": "PARTIAL",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "MEDIUM")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("foreign approval and clinical anchors", repaired.short_answer)
+        self.assertIn("lifted_portfolio_low_to_screening_medium", verification.repair_reason)
+
     def test_verifier_promotes_sufficient_asset_conditional_go_without_blockers(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
@@ -1774,6 +1842,65 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertIn("ev-fda-label", evidence_packet["selected_evidence_ids"])
         self.assertIn("ev-ema-summary", evidence_packet["selected_evidence_ids"])
         self.assertLessEqual(len(evidence_packet["selected_evidence"]), 4)
+
+    def test_portfolio_opportunity_prefers_foreign_approval_and_clinical_evidence(self):
+        assembler = ExecEvidenceAssembler(retriever=None)
+        filler = [
+            {
+                "evidence_id": f"ev-rights-{idx}",
+                "doc_id": f"doc-rights-{idx}",
+                "doc_kind": "patent_rights_record",
+                "snippet": "RIGHTS_RECORD | source=uspto_assignment | patent=US123 | status=assignment record",
+            }
+            for idx in range(12)
+        ]
+        base_packet = {
+            "block_id": "portfolio_opportunity",
+            "allowed_doc_kinds": [
+                "patent_rights_record",
+                "us_fda",
+                "eu_regulatory_summary",
+                "ctgov_api",
+            ],
+            "evidence_registry": filler
+            + [
+                {
+                    "evidence_id": "ev-fda-label",
+                    "doc_id": "doc-fda-label",
+                    "doc_kind": "us_fda",
+                    "snippet": "QALSODY tofersen NDA 215887 Initial U.S. Approval 2023 official FDA label.",
+                },
+                {
+                    "evidence_id": "ev-ema-summary",
+                    "doc_id": "doc-ema-summary",
+                    "doc_kind": "eu_regulatory_summary",
+                    "snippet": "EMA EPAR Qalsody active substance tofersen status Authorised marketing authorisation.",
+                },
+                {
+                    "evidence_id": "ev-ctgov",
+                    "doc_id": "doc-ctgov",
+                    "doc_kind": "ctgov_api",
+                    "snippet": "Tofersen Phase 3 clinical development record with ALS population.",
+                },
+            ],
+        }
+        plan = ExecQuestionPlan(
+            question_id="portfolio_opportunity",
+            answer_type="commercial_assessment",
+            needed_dossier_sections=[],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["patent_rights_record", "us_fda", "eu_regulatory_summary", "ctgov_api"],
+                queries=["tofersen portfolio opportunity"],
+                max_chunks=5,
+            ),
+        )
+
+        evidence_packet = assembler.assemble(base_packet, plan, case_id="case-1", allow_retrieval=False)
+
+        self.assertIn("ev-fda-label", evidence_packet["selected_evidence_ids"])
+        self.assertIn("ev-ema-summary", evidence_packet["selected_evidence_ids"])
+        self.assertIn("ev-ctgov", evidence_packet["selected_evidence_ids"])
+        self.assertLessEqual(len(evidence_packet["selected_evidence"]), 5)
 
     def test_evidence_assembler_emits_contract_linkage(self):
         assembler = ExecEvidenceAssembler(retriever=None)
