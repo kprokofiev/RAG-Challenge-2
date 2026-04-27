@@ -2785,6 +2785,34 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
 
         self.assertEqual(verification.overall_status, "PASS")
 
+    def test_verifier_does_not_treat_regulatory_route_gap_as_synthesis_scope(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="HOLD",
+            confidence="LOW",
+            sufficiency="PARTIAL",
+            short_answer="HOLD because EAEU-specific route evidence is missing.",
+            full_answer=(
+                "current_registration_status=NOT_REGISTERED_PUBLIC_RECORD. "
+                "The original registration pathway is possible but unproven because regulatory route evidence is missing."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "contract_linkage": {
+                "synthesis_screening": {"decision_use": "technical_screening_only"},
+            }
+        }
+
+        verification = verifier.verify_block(block, packet, block_spec=None)
+
+        self.assertEqual(verification.overall_status, "PASS")
+
     def test_market_entry_linkage_uses_product_context_form_and_strength_bridge(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {

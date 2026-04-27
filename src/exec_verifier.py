@@ -1275,7 +1275,15 @@ class ExecVerifier:
         if block.verdict not in {"HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE", "NOT_EVIDENCED"}:
             return False
         text = _block_primary_decision_text(block)
-        synthesis_markers = ("synthesis", "route", "manufacturing", "process", "cmc")
+        synthesis_markers = (
+            "synthesis",
+            "manufacturing",
+            "cmc",
+            "process chemistry",
+            "chemical process",
+            "manufacturing process",
+            "synthesis route",
+        )
         if not _contains_any_marker(text, synthesis_markers):
             return False
         screening = (_contract_linkage(packet).get("synthesis_screening", {}) or {})
