@@ -141,6 +141,7 @@ blocks:
       - ru_formulary_summary
       - ru_procurement_summary
       - ru_policy_act
+      - product_identity_bridge
       - formulary
       - pricing
       - payer_policy
@@ -265,6 +266,12 @@ blocks:
       - eu_regulatory_summary
       - eaeu_document
       - ctgov
+      - ctgov_api
+      - ctgov_results
+      - approval_letter
+      - assessment_report
+      - epar
+      - product_identity_bridge
       - patent_family_summary
       - patent_legal_events
       - patent_term_extension
@@ -378,7 +385,14 @@ blocks:
     allowed_doc_kinds:
       - label
       - smpc
+      - us_fda
+      - eu_regulatory_summary
+      - approval_letter
+      - assessment_report
+      - epar
       - ctgov
+      - ctgov_api
+      - ctgov_results
       - patent_family_summary
       - patent_legal_events
       - patent_term_extension
@@ -498,7 +512,14 @@ blocks:
     allowed_doc_kinds:
       - label
       - smpc
+      - us_fda
+      - eu_regulatory_summary
+      - approval_letter
+      - assessment_report
+      - epar
       - ctgov
+      - ctgov_api
+      - ctgov_results
       - patent_family_summary
       - patent_legal_events
       - patent_term_extension
@@ -506,6 +527,7 @@ blocks:
       - patent_national_legal_status
       - patent_rights_record
       - ru_registration_export
+      - product_identity_bridge
     escalation_classes:
       - coverage_gap
       - unsupported_claim_review

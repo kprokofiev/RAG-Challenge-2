@@ -259,6 +259,18 @@ def _block_text(block: ExecDecisionBlock) -> str:
     return " ".join(part for part in parts if part).strip()
 
 
+def _block_primary_decision_text(block: ExecDecisionBlock) -> str:
+    parts: List[str] = [block.short_answer, block.full_answer]
+    parts.extend(claim.claim for claim in block.why_this_verdict)
+    for blocker in block.decision_blockers:
+        parts.append(blocker.title)
+        parts.append(blocker.rationale)
+    for action in block.next_actions:
+        parts.append(action.action)
+        parts.append(action.rationale)
+    return " ".join(part for part in parts if part).strip()
+
+
 def _has_context_integrity_green(packet: Dict[str, Any]) -> bool:
     readiness = ((packet.get("dossier_quality_v2") or {}).get("decision_readiness") or {})
     return str(readiness.get("context_integrity") or "").upper() == "GREEN"
@@ -293,6 +305,94 @@ def _market_reimbursement_snapshot(packet: Dict[str, Any]) -> Dict[str, Any]:
 
 def _ru_eaeu_ip_snapshot(packet: Dict[str, Any]) -> Dict[str, Any]:
     return (_contract_linkage(packet).get("ru_eaeu_ip_window_snapshot", {}) or {})
+
+
+def _contract_linkage_summary(packet: Dict[str, Any]) -> Dict[str, Any]:
+    return (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
+
+
+def _operations_screening_ready(packet: Dict[str, Any]) -> bool:
+    linkage = _contract_linkage(packet)
+    operations = linkage.get("operations_readiness_snapshot", {}) or {}
+    summary = _contract_linkage_summary(packet)
+    return bool(operations.get("screening_ready")) or bool(summary.get("operations_screening_ready"))
+
+
+def _source_manifest_count(packet: Dict[str, Any]) -> int:
+    linkage = _contract_linkage(packet)
+    source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+    summary = _contract_linkage_summary(packet)
+    return (
+        int(source_manifest.get("checked_source_count") or 0)
+        + int(source_manifest.get("limited_source_count") or 0)
+        + int(summary.get("source_manifest_checked_count") or 0)
+    )
+
+
+def _explicit_no_registration_refs(packet: Dict[str, Any], region: str) -> List[str]:
+    region = str(region or "").strip().upper()
+    region_markers = {region.lower(), f"jurisdiction={region.lower()}", f"region={region.lower()}"}
+    no_record_markers = (
+        "no public registration record",
+        "no public registration record verified",
+        "no public registration",
+        "no registration record",
+        "official absence",
+        "source-native no-record",
+        "no-record",
+    )
+    refs: List[str] = []
+    for item in _packet_section_items(packet, "registrations"):
+        if not isinstance(item, dict) or _region_text(item) != region:
+            continue
+        text = " ".join(
+            str(part or "")
+            for part in (
+                _registration_status_text(item),
+                _scalar_text(item.get("summary")),
+                _scalar_text(item.get("limitations")),
+            )
+        ).lower()
+        if any(marker in text for marker in no_record_markers):
+            refs.extend(str(ref) for ref in item.get("evidence_refs", []) or [] if ref)
+    for candidate in _candidate_evidence(packet):
+        text = str(candidate.get("searchable") or "").lower()
+        if not any(marker in text for marker in region_markers):
+            continue
+        if "registration" not in text and "product_identity_bridge" not in text:
+            continue
+        if any(marker in text for marker in no_record_markers):
+            refs.append(candidate["ref"])
+    return list(dict.fromkeys(refs))
+
+
+def _has_explicit_no_registration_record(packet: Dict[str, Any], region: str) -> bool:
+    region = str(region or "").strip().upper()
+    for item in _packet_section_items(packet, "registrations"):
+        if not isinstance(item, dict) or _region_text(item) != region:
+            continue
+        text = " ".join(
+            str(part or "")
+            for part in (
+                _registration_status_text(item),
+                _scalar_text(item.get("summary")),
+                _scalar_text(item.get("limitations")),
+            )
+        ).lower()
+        if any(
+            marker in text
+            for marker in (
+                "no public registration record",
+                "no public registration record verified",
+                "no public registration",
+                "no registration record",
+                "official absence",
+                "source-native no-record",
+                "no-record",
+            )
+        ):
+            return True
+    return bool(_explicit_no_registration_refs(packet, region))
 
 
 def _eaeu_native_entry_decision_supported(packet: Dict[str, Any]) -> bool:
@@ -454,6 +554,29 @@ class ExecVerifier:
             return False
         text = _block_text(block)
         return _contains_marker(text, _MISSING_EVIDENCE_MARKERS) and not _has_explicit_negative_evidence(text)
+
+    def _eaeu_no_record_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "eaeu_entry" or block.verdict not in {"HOLD", "CONDITIONAL_GO", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        if _has_positive_registration(packet, "EAEU") or _eaeu_native_entry_decision_supported(packet):
+            return False
+        if not _has_explicit_no_registration_record(packet, "EAEU"):
+            return False
+        text = _block_text(block)
+        no_record_markers = (
+            "no confirmed",
+            "no public registration",
+            "does not confirm",
+            "not confirm",
+            "registration anchor",
+            "not registered",
+            "no-record",
+        )
+        return _contains_any_marker(text, no_record_markers)
 
     def _rf_underlinked_conditional_go(
         self,
@@ -833,26 +956,33 @@ class ExecVerifier:
     ) -> bool:
         if block.block_id != "evidence_sufficiency_note" or block.verdict != "INSUFFICIENT":
             return False
-        if self._relevant_critical_unknowns(block, packet):
+        if self._relevant_critical_unknowns(block, packet) and not _operations_screening_ready(packet):
             return False
         linkage = _contract_linkage(packet)
-        source_manifest = linkage.get("source_evidence_manifest", {}) or {}
-        source_count = int(source_manifest.get("checked_source_count") or 0) + int(source_manifest.get("limited_source_count") or 0)
+        source_count = _source_manifest_count(packet)
         family_events = linkage.get("family_legal_events_snapshot", {}) or {}
         fto = linkage.get("fto_screening_snapshot", {}) or {}
         reimbursement = _market_reimbursement_snapshot(packet)
+        summary = _contract_linkage_summary(packet)
         has_ip_screening = (
             str(fto.get("screening_level") or "") == "FTO_SCREENING_ONLY"
             or bool(fto.get("evidence_refs"))
             or bool(family_events.get("evidence_refs"))
             or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+            or str(summary.get("fto_screening_conclusion") or "").upper() in {"POTENTIAL_BLOCKERS_REQUIRE_REVIEW", "INSUFFICIENT_FOR_FTO"}
+            or str(summary.get("family_legal_events_coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
         )
         has_payer_screening = (
             str(reimbursement.get("verdict_hint") or "").upper() == "LIMITED"
             and int(reimbursement.get("check_count") or 0) > 0
+        ) or (
+            str(summary.get("market_reimbursement_verdict_hint") or "").upper() == "LIMITED"
+            and _operations_screening_ready(packet)
         )
-        has_entry_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU")) or bool(
-            linkage.get("registration_identity_map")
+        has_entry_state = (
+            any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU"))
+            or bool(linkage.get("registration_identity_map"))
+            or any(_has_explicit_no_registration_record(packet, region) for region in ("RU", "EAEU"))
         )
         text = _block_text(block)
         has_operations_ready_gap = _contains_any_marker(
@@ -870,7 +1000,13 @@ class ExecVerifier:
                 "insufficient",
             ),
         )
-        return source_count >= 4 and has_entry_anchor and has_ip_screening and has_payer_screening and has_operations_ready_gap
+        return (
+            (source_count >= 4 or _operations_screening_ready(packet))
+            and has_entry_state
+            and has_ip_screening
+            and has_payer_screening
+            and has_operations_ready_gap
+        )
 
     def _decision_blockers_screening_sufficiency_understated(
         self,
@@ -932,6 +1068,8 @@ class ExecVerifier:
             return False
         if any(blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers):
             return False
+        if _has_explicit_no_registration_record(packet, "EAEU") and not _has_positive_registration(packet, "EAEU"):
+            return False
         linkage = _contract_linkage(packet)
         summary = (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
         phase3 = linkage.get("phase3_results", {}) or {}
@@ -944,6 +1082,64 @@ class ExecVerifier:
             or any(_positive_commercial_signal_count(packet, region) > 0 for region in ("RU", "EAEU", "US", "EU"))
         )
         return has_entry_anchor and has_clinical_or_market_anchor and not _has_explicit_negative_evidence(_block_text(block))
+
+    def _portfolio_not_evidenced_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "portfolio_opportunity" or block.verdict != "NOT_EVIDENCED":
+            return False
+        linkage = _contract_linkage(packet)
+        summary = _contract_linkage_summary(packet)
+        phase3 = linkage.get("phase3_results", {}) or {}
+        has_entry_state = (
+            any(_has_positive_registration(packet, region) for region in ("US", "EU"))
+            or any(_has_explicit_no_registration_record(packet, region) for region in ("RU", "EAEU"))
+            or bool(linkage.get("registration_identity_map"))
+        )
+        has_clinical_anchor = (
+            int(phase3.get("phase3_study_count") or 0) > 0
+            or int(phase3.get("phase3_with_ctgov_results_evidence") or 0) > 0
+            or int(summary.get("phase3_with_ctgov_results_evidence") or 0) > 0
+        )
+        has_screening_sources = _source_manifest_count(packet) >= 4 or _operations_screening_ready(packet)
+        has_ip_or_payer_context = (
+            str(summary.get("market_reimbursement_verdict_hint") or "").upper() in {"LIMITED", "OPEN"}
+            or str(summary.get("family_legal_events_coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+            or str(summary.get("fto_screening_conclusion") or "").upper() in {"POTENTIAL_BLOCKERS_REQUIRE_REVIEW", "INSUFFICIENT_FOR_FTO"}
+        )
+        text = _block_text(block).lower()
+        collapse_markers = ("not evidenced", "missing explicit", "eaeu registration", "commercial signal", "not finalized")
+        return (
+            has_entry_state
+            and has_clinical_anchor
+            and has_screening_sources
+            and has_ip_or_payer_context
+            and any(marker in text for marker in collapse_markers)
+        )
+
+    def _key_risks_not_evidenced_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "key_risks" or block.verdict != "NOT_EVIDENCED":
+            return False
+        linkage = _contract_linkage(packet)
+        summary = _contract_linkage_summary(packet)
+        fto = linkage.get("fto_screening_snapshot", {}) or {}
+        family_events = linkage.get("family_legal_events_snapshot", {}) or {}
+        has_ip_risk = (
+            str(fto.get("conclusion") or "").upper() == "POTENTIAL_BLOCKERS_REQUIRE_REVIEW"
+            or bool(fto.get("potential_blocker_regions"))
+            or str(summary.get("fto_screening_conclusion") or "").upper() == "POTENTIAL_BLOCKERS_REQUIRE_REVIEW"
+            or str(summary.get("ru_eaeu_ip_conclusion") or "").upper() == "BLOCKING_OR_PENDING_EVIDENCE_PRESENT"
+            or str(family_events.get("coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+            or str(summary.get("family_legal_events_coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
+        )
+        risk_text = _block_text(block).lower()
+        return has_ip_risk and _contains_any_marker(risk_text, ("risk", "blocker", "patent", "legal", "unresolved", "active", "pending"))
 
     def _regional_generic_collapse(
         self,
@@ -983,7 +1179,7 @@ class ExecVerifier:
             return False
         if block.verdict not in {"HOLD", "NO_GO", "INSUFFICIENT_EVIDENCE", "NOT_EVIDENCED"}:
             return False
-        text = _block_text(block)
+        text = _block_primary_decision_text(block)
         synthesis_markers = ("synthesis", "route", "manufacturing", "process", "cmc")
         if not _contains_any_marker(text, synthesis_markers):
             return False
@@ -1123,6 +1319,15 @@ class ExecVerifier:
                     issue_type="eaeu_holdable_position",
                     severity="WARN",
                     message="EAEU entry has a confirmed registration anchor and should degrade to HOLD rather than pure insufficiency.",
+                )
+            )
+
+        if self._eaeu_no_record_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="eaeu_no_record_understated",
+                    severity="WARN",
+                    message="EAEU entry is held despite an explicit source-native no-registration/no-public-record state; this should be a clean NO_GO for entry, not unresolved HOLD.",
                 )
             )
 
@@ -1276,6 +1481,24 @@ class ExecVerifier:
                     issue_type="portfolio_screening_underpromoted",
                     severity="WARN",
                     message="Portfolio opportunity is marked LOW despite registration and clinical/market screening anchors; legal-status caveats belong in risk/follow-up blocks.",
+                )
+            )
+
+        if self._portfolio_not_evidenced_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="portfolio_not_evidenced_understated",
+                    severity="WARN",
+                    message="Portfolio opportunity collapsed to NOT_EVIDENCED even though screening-level jurisdiction, clinical, and legal-status anchors exist.",
+                )
+            )
+
+        if self._key_risks_not_evidenced_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="key_risks_not_evidenced_understated",
+                    severity="WARN",
+                    message="Key risks are marked NOT_EVIDENCED despite source-native IP/legal-status risk evidence.",
                 )
             )
 
@@ -1450,6 +1673,42 @@ class ExecVerifier:
                 "However, because valid_to remains blank in the source snapshot and commercial pathway evidence is still RU-only, the defensible outcome is HOLD pending targeted EAEU follow-up."
             )
             applied_changes.append("promoted_eaeu_insufficiency_to_hold")
+
+        if any(issue.issue_type == "eaeu_no_record_understated" for issue in verification.issues) or self._eaeu_no_record_understated(repaired, packet):
+            refs = _explicit_no_registration_refs(packet, "EAEU")
+            repaired.verdict = "NO_GO"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "NO_GO — the packet carries an explicit EAEU no-public-registration state, so entry should be closed for this jurisdiction rather than left as unresolved HOLD."
+            )
+            repaired.full_answer = (
+                "For the EAEU entry block, the decisive fact is not an unresolved identity caveat but the absence of a confirmed EAEU-native registration anchor in a source-native no-record artifact. "
+                "That supports a clean regulatory-entry NO_GO for the current snapshot. IP/FTO and payer breadth still remain separate screening limitations, but they do not change the EAEU registration-entry result."
+            )
+            repaired.top_evidence_refs = list(dict.fromkeys(refs + list(repaired.top_evidence_refs)))[:8]
+            repaired.decision_blockers = [
+                ExecBlocker(
+                    blocker_id="eaeu_no_public_registration_record",
+                    title="No public EAEU registration record",
+                    severity="DECISION_BLOCKING",
+                    rationale="Source-native product-identity/no-record evidence does not confirm an active EAEU registration anchor for the target product context.",
+                    evidence_refs=refs[:4],
+                )
+            ]
+            repaired.next_actions = [
+                ExecNextAction(
+                    action_id="verify_eaeu_registry_before_entry",
+                    action="Re-check the EAEU/native registry source before any EAEU entry action.",
+                    priority="NOW",
+                    rationale="A future registry update could change the entry posture, but the current evidence supports no public EAEU registration record.",
+                    evidence_refs=refs[:4],
+                )
+            ]
+            caveat = "EAEU NO_GO is a registration-entry conclusion for the current public-source snapshot; it is not a full IP/FTO or payer-coverage conclusion."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("converted_eaeu_no_record_hold_to_no_go")
 
         if any(issue.issue_type == "rf_identity_underlink" for issue in verification.issues) or self._rf_underlinked_conditional_go(repaired, packet):
             linkage = _market_entry_linkage(packet, "RU")
@@ -1958,6 +2217,83 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("lifted_portfolio_low_to_screening_medium")
 
+        if (
+            any(issue.issue_type == "portfolio_not_evidenced_understated" for issue in verification.issues)
+            or self._portfolio_not_evidenced_understated(repaired, packet)
+        ):
+            linkage = _contract_linkage(packet)
+            source_manifest = linkage.get("source_evidence_manifest", {}) or {}
+            refs = list(
+                dict.fromkeys(
+                    list((linkage.get("family_legal_events_snapshot", {}) or {}).get("evidence_refs") or [])
+                    + list((linkage.get("fto_screening_snapshot", {}) or {}).get("evidence_refs") or [])
+                    + list(source_manifest.get("legal_event_evidence_refs") or [])
+                    + list(_explicit_no_registration_refs(packet, "EAEU"))
+                    + list(repaired.top_evidence_refs)
+                )
+            )
+            repaired.verdict = "LOW"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM" if _operations_screening_ready(packet) else "LOW"
+            repaired.short_answer = (
+                "LOW — the packet has screening-level US/EU, clinical, and IP/legal-status anchors, but RU/EAEU registration and commercial-access gaps keep the portfolio opportunity weak rather than absent."
+            )
+            repaired.full_answer = (
+                "Portfolio opportunity should not collapse to NOT_EVIDENCED once the packet contains source-native registration/status, clinical, and patent/legal-event screening evidence. "
+                "The current posture is still weak because RU/EAEU entry is not available, commercial signals are thin, and legal/FTO coverage is not operations-ready. "
+                "Those facts support LOW/PARTIAL rather than a claim that the opportunity is unevidenced."
+            )
+            if refs:
+                repaired.top_evidence_refs = refs[:8]
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Source-enriched jurisdiction, clinical, and IP/legal-status evidence supports a low screening-level portfolio opportunity rather than a pure no-evidence posture.",
+                        claim_type="hard_evidence_backed",
+                        evidence_refs=refs[:6],
+                    )
+                )
+            caveat = "Portfolio opportunity is screening-grade and low because RU/EAEU registration/commercial gaps and legal/FTO limitations remain material."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_portfolio_not_evidenced_to_low_screening")
+
+        if (
+            any(issue.issue_type == "key_risks_not_evidenced_understated" for issue in verification.issues)
+            or self._key_risks_not_evidenced_understated(repaired, packet)
+        ):
+            linkage = _contract_linkage(packet)
+            refs = list(
+                dict.fromkeys(
+                    list((linkage.get("fto_screening_snapshot", {}) or {}).get("evidence_refs") or [])
+                    + list((linkage.get("family_legal_events_snapshot", {}) or {}).get("evidence_refs") or [])
+                    + list((linkage.get("source_evidence_manifest", {}) or {}).get("legal_event_evidence_refs") or [])
+                    + list(repaired.top_evidence_refs)
+                )
+            )
+            repaired.verdict = "HIGH"
+            repaired.sufficiency = "PARTIAL"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "HIGH — source-native IP/legal-status screening evidence shows active or pending blocker exposure and unresolved national-status gaps; this is a risk-positive record, not NOT_EVIDENCED."
+            )
+            repaired.full_answer = (
+                "The packet contains enough patent/legal-status evidence to identify material execution risk, while still lacking attorney-grade family-by-family clearance. "
+                "Therefore the risk block should be HIGH/PARTIAL: risks are evidenced for screening, but final enforceability/FTO and country-level reconciliation remain follow-up work."
+            )
+            if refs:
+                repaired.top_evidence_refs = list(dict.fromkeys(refs + list(repaired.top_evidence_refs)))[:8]
+                repaired.why_this_verdict.append(
+                    ExecWhyClaim(
+                        claim="Patent/legal-status screening evidence supports a high risk posture while full legal/FTO reconciliation remains incomplete.",
+                        claim_type="hard_evidence_backed",
+                        evidence_refs=refs[:6],
+                    )
+                )
+            caveat = "Risk severity is screening-grade; it is not a formal legal enforceability or FTO opinion."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("lifted_key_risks_not_evidenced_to_high_screening")
+
         if any(issue.issue_type == "regional_generic_collapse" for issue in verification.issues) or self._regional_generic_collapse(repaired, packet):
             regional = _regional_opportunity(packet, "generic_opportunity")
             positive_regions = [region for region, payload in regional.items() if str((payload or {}).get("verdict") or "") == "POTENTIAL_GO"]
@@ -2076,6 +2412,7 @@ class ExecVerifier:
             "negative_missing_evidence_overreach",
             "rf_scope_overconstraint",
             "eaeu_holdable_position",
+            "eaeu_no_record_understated",
             "rf_identity_underlink",
             "eaeu_same_id_overconstraint",
             "eaeu_identity_underlink",
@@ -2093,6 +2430,8 @@ class ExecVerifier:
             "generic_screening_sufficiency_understated",
             "decision_blockers_screening_sufficiency_understated",
             "portfolio_screening_underpromoted",
+            "portfolio_not_evidenced_understated",
+            "key_risks_not_evidenced_understated",
             "regional_generic_collapse",
             "regional_licensing_collapse",
             "synthesis_secondary_scope",
@@ -2105,6 +2444,7 @@ class ExecVerifier:
                 self._asset_negative_missing_evidence_overreach(block, packet),
                 self._rf_scope_overconstraint(block, packet),
                 self._eaeu_holdable_regulatory_position(block, packet),
+                self._eaeu_no_record_understated(block, packet),
                 self._rf_underlinked_conditional_go(block, packet),
                 self._eaeu_same_id_overconstraint(block, packet),
                 self._eaeu_underlinked_conditional_go(block, packet),
@@ -2121,6 +2461,8 @@ class ExecVerifier:
                 self._generic_screening_sufficiency_understated(block, packet),
                 self._decision_blockers_screening_sufficiency_understated(block, packet),
                 self._portfolio_screening_underpromoted(block, packet),
+                self._portfolio_not_evidenced_understated(block, packet),
+                self._key_risks_not_evidenced_understated(block, packet),
                 self._regional_generic_collapse(block, packet),
                 self._regional_licensing_collapse(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),

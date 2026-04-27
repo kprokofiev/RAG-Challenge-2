@@ -296,12 +296,15 @@ def _block_specific_policy_notes(block_spec: BlockSpec) -> List[str]:
         notes.append("Do not require a separate RU policy act proving absence of restrictions when active GRLS identity and RU-linked access evidence are present and no source-backed RU registration/access block is surfaced; carry that as a caveat or follow-up, not as the reason to downgrade GO.")
     if block_spec.block_id == "eaeu_entry":
         notes.append("Different RU and EAEU registration identifiers may represent separate product contexts; GRLS same-id corroboration is optional when EAEU-native identity, status, and validity are already confirmed.")
+        notes.append("If a source-native product identity bridge or registry artifact explicitly says no public EAEU registration record is verified, treat entry as NO_GO for the current snapshot rather than unresolved HOLD.")
     if block_spec.block_id in {"generic_opportunity", "licensing_opportunity"}:
         notes.append("Reason region-by-region; do not collapse RU/EAEU opportunity with EU/US unresolved or blocked positions into one global unsupported verdict.")
     if block_spec.block_id == "market_reimbursement_window":
         notes.append("Do not require a single EAEU-union reimbursement list when source evidence establishes reimbursement/payer coverage is member-state scoped; decide RU on RU source-native evidence and carry non-RU EAEU member-state gaps as caveats/actions.")
     if block_spec.block_id == "evidence_sufficiency_note":
         notes.append("Distinguish screening-ready partial evidence from operations-ready sufficiency: IP/FTO and payer gaps can keep the package PARTIAL without collapsing it to pure INSUFFICIENT when source-enriched screening evidence is present.")
+    if block_spec.block_id == "portfolio_opportunity":
+        notes.append("Documented no-record states satisfy jurisdictional coverage for screening; they should lower the opportunity, not collapse US/EU/clinical/IP-supported portfolios to NOT_EVIDENCED.")
     if block_spec.block_id in {"asset_attractiveness", "rf_entry", "eaeu_entry", "generic_opportunity", "licensing_opportunity", "portfolio_opportunity"}:
         notes.append("Treat synthesis/manufacturing evidence as technical screening unless the question is explicitly CMC/manufacturing.")
     return notes

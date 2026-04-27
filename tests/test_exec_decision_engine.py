@@ -2435,6 +2435,218 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertIn("operations-ready", " ".join(repaired.caveats).lower())
         self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
 
+    def test_verifier_lifts_sufficiency_to_partial_when_operations_screening_ready_has_clean_no_record(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="evidence_sufficiency_note",
+            title="Evidence sufficiency note",
+            verdict="INSUFFICIENT",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="INSUFFICIENT because full FTO, file-wrapper, SPC, payer tier, and restrictions are not operations-ready.",
+            full_answer="Critical unknowns remain, including chemistry and EAEU identity bridge gaps.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-family", "ev-fto", "ev-payer", "ev-eaeu-no-record"],
+            "critical_unknowns": [
+                {"reason_code": "passport.chemical_formula", "impact": "Chemistry source not structured."},
+                {"reason_code": "registrations[EAEU].identity", "impact": "No active EAEU registration identity is present."},
+            ],
+            "registrations": [
+                {"region": "US", "status": {"value": "approved"}},
+                {"region": "EAEU", "status": {"value": "No public registration record verified as of 2026-04-27"}},
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-eaeu-no-record",
+                    "doc_kind": "product_identity_bridge",
+                    "source_label": "eaeu_product_identity_bridge",
+                    "snippet": "PRODUCT_IDENTITY_BRIDGE | jurisdiction=EAEU | status=No public registration record verified as of 2026-04-27",
+                }
+            ],
+            "contract_linkage": {
+                "operations_readiness_snapshot": {"screening_ready": True, "operations_evidence_ready": False},
+                "source_evidence_manifest": {
+                    "checked_source_count": 4,
+                    "limited_source_count": 1,
+                    "legal_event_evidence_refs": ["ev-family"],
+                    "rights_evidence_refs": ["ev-fto"],
+                },
+                "fto_screening_snapshot": {
+                    "screening_level": "FTO_SCREENING_ONLY",
+                    "conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "evidence_refs": ["ev-fto"],
+                },
+                "family_legal_events_snapshot": {
+                    "coverage_status": "PARTIAL",
+                    "evidence_refs": ["ev-family"],
+                },
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED",
+                    "check_count": 3,
+                    "evidence_refs": ["ev-payer"],
+                },
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "PARTIAL")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
+
+    def test_verifier_converts_eaeu_no_record_hold_to_no_go(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="eaeu_entry",
+            title="EAEU entry",
+            verdict="HOLD",
+            confidence="LOW",
+            sufficiency="PARTIAL",
+            short_answer="HOLD because there is no confirmed EAEU-native registration anchor.",
+            full_answer="The packet does not confirm an active EAEU registration and no commercial access signal is present.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-eaeu-no-record"],
+            "registrations": [
+                {"region": "EAEU", "status": {"value": "No public registration record verified as of 2026-04-27"}},
+            ],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-eaeu-no-record",
+                    "doc_kind": "product_identity_bridge",
+                    "source_label": "eaeu_product_identity_bridge",
+                    "snippet": "PRODUCT_IDENTITY_BRIDGE | jurisdiction=EAEU | inn=tofersen | status=No public registration record verified as of 2026-04-27 | match_level=weak",
+                }
+            ],
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "NO_GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertIn("converted_eaeu_no_record_hold_to_no_go", verification.repair_reason)
+
+    def test_verifier_lifts_portfolio_not_evidenced_to_low_when_screening_anchors_exist(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="portfolio_opportunity",
+            title="Portfolio opportunity",
+            verdict="NOT_EVIDENCED",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="NOT_EVIDENCED because EAEU registration is missing explicit confirmation and commercial signal set is empty.",
+            full_answer="US/EU and clinical anchors exist, but the opportunity is not finalized due to EAEU gaps.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-family", "ev-eaeu-no-record"],
+            "registrations": [{"region": "US", "status": {"value": "approved"}}],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-eaeu-no-record",
+                    "doc_kind": "product_identity_bridge",
+                    "source_label": "eaeu_product_identity_bridge",
+                    "snippet": "PRODUCT_IDENTITY_BRIDGE | jurisdiction=EAEU | status=No public registration record verified as of 2026-04-27",
+                }
+            ],
+            "contract_linkage": {
+                "operations_readiness_snapshot": {"screening_ready": True},
+                "source_evidence_manifest": {"checked_source_count": 4, "legal_event_evidence_refs": ["ev-family"]},
+                "phase3_results": {"phase3_with_ctgov_results_evidence": 1},
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "phase3_with_ctgov_results_evidence": 1,
+                    "market_reimbursement_verdict_hint": "LIMITED",
+                    "family_legal_events_coverage_status": "PARTIAL",
+                    "fto_screening_conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LOW")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("lifted_portfolio_not_evidenced_to_low_screening", verification.repair_reason)
+
+    def test_verifier_lifts_key_risks_not_evidenced_to_high_when_ip_risk_exists(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="key_risks",
+            title="Key risks",
+            verdict="NOT_EVIDENCED",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="Patent blocker risk is unresolved, active or pending rights may exist, and national legal status is incomplete.",
+            full_answer="The current record has risk language but keeps the risk verdict unevidenced.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-fto", "ev-family"],
+            "contract_linkage": {
+                "fto_screening_snapshot": {
+                    "conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "potential_blocker_regions": ["US", "EU"],
+                    "evidence_refs": ["ev-fto"],
+                },
+                "family_legal_events_snapshot": {
+                    "coverage_status": "PARTIAL",
+                    "evidence_refs": ["ev-family"],
+                },
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "HIGH")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("lifted_key_risks_not_evidenced_to_high_screening", verification.repair_reason)
+
+    def test_verifier_does_not_rewarn_when_synthesis_is_only_caveat(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="portfolio_opportunity",
+            title="Portfolio opportunity",
+            verdict="LOW",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="LOW because commercial anchors are thin.",
+            full_answer="Portfolio opportunity remains screening-grade.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=["Synthesis evidence remains screening-grade and should not be used for manufacturing / CMC conclusions."],
+        )
+        packet = {
+            "contract_linkage": {
+                "synthesis_screening": {"decision_use": "technical_screening_only"},
+            }
+        }
+
+        verification = verifier.verify_block(block, packet, block_spec=None)
+
+        self.assertEqual(verification.overall_status, "PASS")
+
     def test_market_entry_linkage_uses_product_context_form_and_strength_bridge(self):
         assembler = ExecEvidenceAssembler(retriever=None)
         base_packet = {
