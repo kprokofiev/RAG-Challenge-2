@@ -2582,6 +2582,11 @@ class ExecVerifier:
             if "promoted_rf_conditional_go_to_go_on_identity_linkage" not in applied_changes:
                 applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
 
+        if repaired.confidence == "HIGH" and repaired.sufficiency != "SUFFICIENT":
+            repaired.confidence = "MEDIUM" if repaired.sufficiency == "PARTIAL" else "LOW"
+            if "aligned_confidence_with_sufficiency" not in applied_changes:
+                applied_changes.append("aligned_confidence_with_sufficiency_after_policy_repair")
+
         repaired_verification = self.verify_block(repaired, packet, block_spec=None)
         repaired_verification.repair_applied = bool(applied_changes)
         repaired_verification.repair_reason = "; ".join(applied_changes) if applied_changes else None

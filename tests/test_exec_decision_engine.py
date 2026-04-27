@@ -727,6 +727,42 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(verification.overall_status, "PASS")
         self.assertEqual(repaired.confidence, "LOW")
 
+    def test_verifier_aligns_confidence_after_policy_repair_changes_sufficiency(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="key_risks",
+            title="Key risks",
+            verdict="HIGH",
+            confidence="HIGH",
+            sufficiency="SUFFICIENT",
+            short_answer="High risk with unresolved file-wrapper and payer evidence.",
+            full_answer="High risk with unresolved file-wrapper and payer evidence.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+        )
+        packet = {
+            "evidence_ids": [],
+            "critical_unknowns": [
+                {
+                    "reason_code": "file_wrapper_chain_missing",
+                    "impact": "Terminal disclaimer and enforceability chain remain unresolved.",
+                }
+            ],
+        }
+
+        repaired, verification = verifier.verify_and_repair(
+            block,
+            packet,
+            block_spec=None,
+            allow_repair=True,
+        )
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("aligned_confidence_with_sufficiency_after_policy_repair", verification.repair_reason)
+
     def test_verifier_softens_asset_no_go_when_only_missing_evidence_drives_block(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
