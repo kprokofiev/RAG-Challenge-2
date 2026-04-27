@@ -2555,6 +2555,35 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "SUFFICIENT")
         self.assertIn("converted_eaeu_no_record_hold_to_no_go", verification.repair_reason)
 
+    def test_verifier_converts_rf_no_record_insufficient_to_no_go(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="INSUFFICIENT_EVIDENCE",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="No verified RU registration record was retrieved, so RF entry cannot be approved.",
+            full_answer="The current packet has no RU registration record and no RU-linked access evidence.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "registrations": [
+                {"region": "RU", "status": {"value": "No public registration record verified as of 2026-04-27"}},
+            ],
+            "evidence_ids": [],
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "NO_GO")
+        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertIn("converted_rf_no_record_insufficient_to_no_go", verification.repair_reason)
+
     def test_verifier_lifts_portfolio_not_evidenced_to_low_when_screening_anchors_exist(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(

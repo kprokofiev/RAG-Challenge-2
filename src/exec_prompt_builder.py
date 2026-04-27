@@ -294,6 +294,7 @@ def _block_specific_policy_notes(block_spec: BlockSpec) -> List[str]:
     if block_spec.block_id == "rf_entry":
         notes.append("RF entry must stay anchored to RU registration identity plus RU-linked commercial/access evidence; unresolved EAEU details are adjacent, not automatic RF blockers.")
         notes.append("Do not require a separate RU policy act proving absence of restrictions when active GRLS identity and RU-linked access evidence are present and no source-backed RU registration/access block is surfaced; carry that as a caveat or follow-up, not as the reason to downgrade GO.")
+        notes.append("If the packet explicitly carries a RU no-public-registration/no-record state, treat RF entry as NO_GO for the current snapshot rather than INSUFFICIENT_EVIDENCE.")
     if block_spec.block_id == "eaeu_entry":
         notes.append("Different RU and EAEU registration identifiers may represent separate product contexts; GRLS same-id corroboration is optional when EAEU-native identity, status, and validity are already confirmed.")
         notes.append("If a source-native product identity bridge or registry artifact explicitly says no public EAEU registration record is verified, treat entry as NO_GO for the current snapshot rather than unresolved HOLD.")

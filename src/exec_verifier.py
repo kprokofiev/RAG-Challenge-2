@@ -543,6 +543,31 @@ class ExecVerifier:
         )
         return any(marker in text for marker in scope_markers) and not _has_explicit_negative_evidence(text)
 
+    def _rf_no_record_understated(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "rf_entry" or block.verdict not in {"HOLD", "CONDITIONAL_GO", "INSUFFICIENT_EVIDENCE"}:
+            return False
+        if _has_positive_registration(packet, "RU"):
+            return False
+        if not _has_explicit_no_registration_record(packet, "RU"):
+            return False
+        text = _block_text(block)
+        return _contains_any_marker(
+            text,
+            (
+                "no verified ru registration",
+                "no ru registration",
+                "no public registration",
+                "grls",
+                "registration record",
+                "cannot be approved",
+                "missing registry",
+            ),
+        )
+
     def _eaeu_holdable_regulatory_position(
         self,
         block: ExecDecisionBlock,
@@ -1313,6 +1338,15 @@ class ExecVerifier:
                 )
             )
 
+        if self._rf_no_record_understated(block, packet):
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="rf_no_record_understated",
+                    severity="WARN",
+                    message="RF entry is marked unresolved despite an explicit RU no-registration/no-public-record state; this should be a clean NO_GO for entry.",
+                )
+            )
+
         if self._eaeu_holdable_regulatory_position(block, packet):
             issues.append(
                 ExecVerificationIssue(
@@ -1660,6 +1694,43 @@ class ExecVerifier:
             if ru_validity_caveat not in repaired.caveats:
                 repaired.caveats.append(ru_validity_caveat)
             applied_changes.append("removed_eaeu_overconstraint_from_rf_entry")
+
+        if any(issue.issue_type == "rf_no_record_understated" for issue in verification.issues) or self._rf_no_record_understated(repaired, packet):
+            refs = _explicit_no_registration_refs(packet, "RU")
+            repaired.verdict = "NO_GO"
+            repaired.sufficiency = "SUFFICIENT"
+            repaired.confidence = "MEDIUM"
+            repaired.short_answer = (
+                "NO_GO — the packet carries an explicit RU no-public-registration state, so RF entry should be closed for this snapshot rather than left as insufficient evidence."
+            )
+            repaired.full_answer = (
+                "RF entry requires an active RU registration identity and RU-linked access/commercial evidence. "
+                "The current packet instead contains an explicit no-public-registration state for RU and no RU-linked access signal. "
+                "That is enough to decide the entry block as NO_GO for the current snapshot while leaving IP/FTO and payer breadth in their dedicated blocks."
+            )
+            repaired.top_evidence_refs = list(dict.fromkeys(refs + list(repaired.top_evidence_refs)))[:8]
+            repaired.decision_blockers = [
+                ExecBlocker(
+                    blocker_id="ru_no_public_registration_record",
+                    title="No public RU registration record",
+                    severity="DECISION_BLOCKING",
+                    rationale="The source packet does not confirm an active RU registration identity for the target product context and carries an explicit no-record state.",
+                    evidence_refs=refs[:4],
+                )
+            ]
+            repaired.next_actions = [
+                ExecNextAction(
+                    action_id="verify_grls_before_rf_entry",
+                    action="Re-check GRLS/RU registration export before any RF entry action.",
+                    priority="NOW",
+                    rationale="A future registry update could change the entry posture, but the current evidence supports no public RU registration record.",
+                    evidence_refs=refs[:4],
+                )
+            ]
+            caveat = "RF NO_GO is a registration-entry conclusion for the current public-source snapshot; it is not a legal FTO or payer-coverage conclusion."
+            if caveat not in repaired.caveats:
+                repaired.caveats.append(caveat)
+            applied_changes.append("converted_rf_no_record_insufficient_to_no_go")
 
         if any(issue.issue_type == "eaeu_holdable_position" for issue in verification.issues) or self._eaeu_holdable_regulatory_position(repaired, packet):
             repaired.verdict = "HOLD"
@@ -2422,6 +2493,7 @@ class ExecVerifier:
             "missing_partial_route_caveat",
             "negative_missing_evidence_overreach",
             "rf_scope_overconstraint",
+            "rf_no_record_understated",
             "eaeu_holdable_position",
             "eaeu_no_record_understated",
             "rf_identity_underlink",
@@ -2454,6 +2526,7 @@ class ExecVerifier:
             (
                 self._asset_negative_missing_evidence_overreach(block, packet),
                 self._rf_scope_overconstraint(block, packet),
+                self._rf_no_record_understated(block, packet),
                 self._eaeu_holdable_regulatory_position(block, packet),
                 self._eaeu_no_record_understated(block, packet),
                 self._rf_underlinked_conditional_go(block, packet),
