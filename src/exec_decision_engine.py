@@ -496,6 +496,16 @@ class ExecDecisionEngine:
             block_spec.allowed_doc_kinds,
             plan.retrieval_plan.doc_kinds or [],
         )
+        mandatory_doc_kinds = {
+            "eaeu_entry": ["product_identity_bridge"],
+            "portfolio_opportunity": ["product_identity_bridge", "us_fda", "eu_regulatory_summary", "ctgov_results"],
+            "evidence_sufficiency_note": ["product_identity_bridge", "us_fda", "eu_regulatory_summary", "ctgov_results"],
+        }.get(block_spec.block_id, [])
+        allowed_doc_kinds = set(reconcile_exec_doc_kinds(block_spec.allowed_doc_kinds, []))
+        for doc_kind in mandatory_doc_kinds:
+            normalized = normalize_exec_doc_kind(doc_kind)
+            if normalized in allowed_doc_kinds and normalized not in reconciled_doc_kinds:
+                reconciled_doc_kinds.append(normalized)
         plan.retrieval_plan.doc_kinds = reconciled_doc_kinds
         plan.retrieval_plan.doc_kind_limits = [
             item

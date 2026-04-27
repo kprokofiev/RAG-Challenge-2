@@ -577,6 +577,24 @@ class ExecDecisionEngineTests(unittest.TestCase):
             any(item["doc_kind"] in {"grls", "grls_card", "ru_instruction", "ru_registration_export"} for item in evidence_packet["selected_evidence"])
         )
 
+    def test_eaeu_entry_forces_product_identity_bridge_doc_kind(self):
+        engine = ExecDecisionEngine()
+        block_spec = engine.block_specs["eaeu_entry"]
+        plan = ExecQuestionPlan(
+            question_id="eaeu_entry",
+            answer_type="go_no_go",
+            needed_dossier_sections=["registrations"],
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=["eaeu_document"],
+                queries=["tofersen eaeu registration"],
+            ),
+        )
+
+        normalized = engine._normalize_plan(block_spec, plan)
+
+        self.assertIn("eaeu_document", normalized.retrieval_plan.doc_kinds)
+        self.assertIn("product_identity_bridge", normalized.retrieval_plan.doc_kinds)
+
 
 class ExecVerifierTests(unittest.TestCase):
     def test_verifier_catches_unsupported_claim_and_repairs(self):

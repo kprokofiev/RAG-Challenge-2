@@ -2162,6 +2162,17 @@ class ExecVerifier:
                     )
                 )
                 repaired.top_evidence_refs = list(dict.fromkeys(list(repaired.top_evidence_refs) + refs))[:8]
+            repaired.caveats = [
+                caveat for caveat in repaired.caveats
+                if not _contains_any_marker(
+                    caveat,
+                    (
+                        "partial verdict would only be appropriate",
+                        "that condition is not met",
+                        "not enough to elevate the package to partial",
+                    ),
+                )
+            ]
             caveat = "Evidence sufficiency is screening-ready only; it is not a legal FTO opinion, payer-tier clearance, or operations-ready launch package."
             if caveat not in repaired.caveats:
                 repaired.caveats.append(caveat)
