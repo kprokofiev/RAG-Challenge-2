@@ -3253,6 +3253,69 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
 
+    def test_verifier_lifts_sufficiency_when_reimbursement_is_limited_by_no_registration(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="evidence_sufficiency_note",
+            title="Evidence sufficiency note",
+            verdict="INSUFFICIENT",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="INSUFFICIENT because operations-ready legal and payer clearance is missing.",
+            full_answer=(
+                "The packet has source checks, but operations-ready coverage is not achieved because RU/EAEU registration "
+                "and payer access are limited by no registration, with full FTO and SPC checks still incomplete."
+            ),
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-family", "ev-fto", "ev-payer"],
+            "registrations": [
+                {"region": "US", "status": {"value": "approved"}},
+                {"region": "RU", "status": {"value": "No public registration record verified as of 2026-04-28"}},
+            ],
+            "contract_linkage": {
+                "operations_readiness_snapshot": {"screening_ready": True, "operations_evidence_ready": False},
+                "source_evidence_manifest": {
+                    "checked_source_count": 4,
+                    "legal_event_evidence_refs": ["ev-family"],
+                    "rights_evidence_refs": ["ev-fto"],
+                },
+                "fto_screening_snapshot": {
+                    "screening_level": "FTO_SCREENING_ONLY",
+                    "conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "evidence_refs": ["ev-fto"],
+                },
+                "family_legal_events_snapshot": {
+                    "coverage_status": "PARTIAL",
+                    "evidence_refs": ["ev-family"],
+                },
+                "market_reimbursement_snapshot": {
+                    "verdict_hint": "LIMITED_BY_NO_REGISTRATION",
+                    "evidence_refs": ["ev-payer"],
+                },
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "operations_screening_ready": True,
+                    "fto_screening_conclusion": "POTENTIAL_BLOCKERS_REQUIRE_REVIEW",
+                    "family_legal_events_coverage_status": "PARTIAL",
+                    "market_reimbursement_verdict_hint": "LIMITED_BY_NO_REGISTRATION",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "PARTIAL")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("lifted_sufficiency_to_screening_ready_partial", verification.repair_reason)
+
     def test_verifier_reframes_eaeu_no_record_no_go_to_original_registration_hold(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(

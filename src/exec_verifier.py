@@ -1118,10 +1118,10 @@ class ExecVerifier:
             or str(summary.get("family_legal_events_coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
         )
         has_payer_screening = (
-            str(reimbursement.get("verdict_hint") or "").upper() == "LIMITED"
-            and int(reimbursement.get("check_count") or 0) > 0
+            str(reimbursement.get("verdict_hint") or "").upper() in {"LIMITED", "LIMITED_BY_NO_REGISTRATION"}
+            and (int(reimbursement.get("check_count") or 0) > 0 or _operations_screening_ready(packet))
         ) or (
-            str(summary.get("market_reimbursement_verdict_hint") or "").upper() == "LIMITED"
+            str(summary.get("market_reimbursement_verdict_hint") or "").upper() in {"LIMITED", "LIMITED_BY_NO_REGISTRATION"}
             and _operations_screening_ready(packet)
         )
         has_entry_state = (
