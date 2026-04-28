@@ -1213,14 +1213,19 @@ class ExecVerifier:
             return False
         if any(blocker.severity in _BLOCKING_SEVERITIES for blocker in block.decision_blockers):
             return False
+        us_refs, eu_refs = _foreign_approval_source_refs(packet)
+        has_foreign_approval_anchor = bool(us_refs and eu_refs)
         if _has_explicit_no_registration_record(packet, "EAEU") and not _has_positive_registration(packet, "EAEU"):
-            us_refs, eu_refs = _foreign_approval_source_refs(packet)
-            if not (us_refs and eu_refs and _operations_screening_ready(packet)):
+            if not (has_foreign_approval_anchor and _operations_screening_ready(packet)):
                 return False
         linkage = _contract_linkage(packet)
         summary = (((packet.get("evidence_packet_summary") or {}).get("contract_linkage_summary") or {}) or {})
         phase3 = linkage.get("phase3_results", {}) or {}
-        has_entry_anchor = any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU")) or bool(linkage.get("registration_identity_map"))
+        has_entry_anchor = (
+            any(_has_positive_registration(packet, region) for region in ("RU", "EAEU", "US", "EU"))
+            or bool(linkage.get("registration_identity_map"))
+            or has_foreign_approval_anchor
+        )
         has_clinical_or_market_anchor = (
             int(phase3.get("phase3_study_count") or 0) > 0
             or int(phase3.get("phase3_with_ctgov_results_evidence") or 0) > 0

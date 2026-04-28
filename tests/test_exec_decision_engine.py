@@ -1619,6 +1619,72 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertIn("foreign approval and clinical anchors", repaired.short_answer)
         self.assertIn("lifted_portfolio_low_to_screening_medium", verification.repair_reason)
 
+    def test_verifier_lifts_portfolio_low_from_source_native_foreign_approval_refs(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="portfolio_opportunity",
+            title="Portfolio opportunity",
+            verdict="LOW",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="LOW because commercial signals are absent and only US registration is narrated.",
+            full_answer="Clinical maturity is present, but the answer missed FDA/EMA evidence already selected in the packet.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "commercial_gap",
+                    "title": "No positive commercial traction evidence",
+                    "severity": "IMPORTANT",
+                    "rationale": "Commercial traction is not evidenced.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "evidence_ids": ["ev-fda-label", "ev-ema-epar", "ev-ctgov"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-fda-label",
+                    "doc_kind": "us_fda",
+                    "snippet": "QALSODY tofersen NDA 215887 Initial U.S. Approval 2023 official FDA label.",
+                },
+                {
+                    "evidence_id": "ev-ema-epar",
+                    "doc_kind": "eu_regulatory_summary",
+                    "snippet": "EMA EPAR Qalsody active substance tofersen status Authorised marketing authorisation.",
+                },
+                {
+                    "evidence_id": "ev-ctgov",
+                    "doc_kind": "ctgov_api",
+                    "snippet": "Tofersen Phase 3 clinical development record.",
+                },
+            ],
+            "contract_linkage": {
+                "operations_readiness_snapshot": {"screening_ready": True},
+                "phase3_results": {
+                    "phase3_study_count": 2,
+                    "phase3_with_ctgov_results_evidence": 1,
+                },
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "operations_screening_ready": True,
+                    "phase3_with_ctgov_results_evidence": 1,
+                    "family_legal_events_coverage_status": "PARTIAL",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "MEDIUM")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("foreign approval and clinical anchors", repaired.short_answer)
+        self.assertIn("lifted_portfolio_low_to_screening_medium", verification.repair_reason)
+
     def test_verifier_promotes_sufficient_asset_conditional_go_without_blockers(self):
         verifier = ExecVerifier()
         block = ExecDecisionBlock(
