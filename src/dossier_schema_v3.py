@@ -814,6 +814,9 @@ class ExecAppendix(BaseModel):
     source_snapshot: Dict[str, Any] = Field(default_factory=dict)
     budget_snapshot: Dict[str, Any] = Field(default_factory=dict)
     question_traces: List[Dict[str, Any]] = Field(default_factory=list)
+    evidence_registry: List[Dict[str, Any]] = Field(default_factory=list)
+    client_open_checks: List[Dict[str, Any]] = Field(default_factory=list)
+    source_limitations: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ExecDecisionReportV1(BaseModel):

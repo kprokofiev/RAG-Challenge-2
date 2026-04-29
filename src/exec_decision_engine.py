@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -150,6 +151,217 @@ def _compact_unknowns(items: List[Dict[str, Any]], limit: int = 4) -> List[Dict[
             }
         )
     return compacted
+
+
+_PRODUCT_SCOPED_DOC_KINDS = {
+    "payer_policy",
+    "pricing",
+    "formulary",
+    "procurement",
+    "ru_procurement_snapshot",
+    "market_access",
+    "commercial_signal",
+}
+
+
+def _normalize_product_term(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("ё", "е")
+    text = re.sub(r"[^0-9a-zа-я]+", "", text)
+    return text
+
+
+def _latin_to_ru_loose(value: str) -> str:
+    mapping = {
+        "a": "а",
+        "b": "б",
+        "c": "к",
+        "d": "д",
+        "e": "е",
+        "f": "ф",
+        "g": "г",
+        "h": "х",
+        "i": "и",
+        "j": "дж",
+        "k": "к",
+        "l": "л",
+        "m": "м",
+        "n": "н",
+        "o": "о",
+        "p": "п",
+        "q": "к",
+        "r": "р",
+        "s": "с",
+        "t": "т",
+        "u": "у",
+        "v": "в",
+        "w": "в",
+        "x": "кс",
+        "y": "и",
+        "z": "з",
+    }
+    return "".join(mapping.get(ch, ch) for ch in str(value or "").strip().lower())
+
+
+def _current_inn_aliases(dossier: Dict[str, Any]) -> set[str]:
+    passport = dossier.get("passport", {}) or {}
+    raw_terms: List[Any] = [
+        passport.get("inn"),
+        passport.get("inn_ru"),
+        passport.get("active_substance"),
+    ]
+    for key in ("trade_names", "mah_holders"):
+        for item in passport.get(key, []) or []:
+            raw_terms.append(_scalar_text(item, limit=120))
+    aliases = {_normalize_product_term(term) for term in raw_terms if _normalize_product_term(term)}
+    inn = _normalize_product_term(passport.get("inn"))
+    if inn and re.fullmatch(r"[a-z0-9]+", inn):
+        aliases.add(_normalize_product_term(_latin_to_ru_loose(inn)))
+    return {alias for alias in aliases if len(alias) >= 4}
+
+
+def _explicit_product_terms(text: str) -> List[str]:
+    terms: List[str] = []
+    for match in re.finditer(r"(?:^|\|\s*)(?:term|inn|query|product)\s*=\s*([^|;\n]+)", text, flags=re.IGNORECASE):
+        term = _normalize_product_term(match.group(1))
+        if term and term not in {"unknown", "none", "na", "n/a"}:
+            terms.append(term)
+    return list(dict.fromkeys(terms))
+
+
+def _evidence_matches_current_product(item: Dict[str, Any], aliases: set[str]) -> bool:
+    if not aliases:
+        return True
+    doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
+    if doc_kind not in _PRODUCT_SCOPED_DOC_KINDS:
+        return True
+    text = " | ".join(
+        str(item.get(key) or "")
+        for key in ("title", "source_label", "snippet", "source_url")
+    )
+    normalized_text = _normalize_product_term(text)
+    explicit_terms = _explicit_product_terms(text)
+    if explicit_terms and not any(term in aliases or any(alias in term or term in alias for alias in aliases) for term in explicit_terms):
+        return False
+    known_other_terms = {"apixaban", "апиксабан"}
+    if aliases.isdisjoint({_normalize_product_term(term) for term in known_other_terms}) and any(
+        _normalize_product_term(term) in normalized_text for term in known_other_terms
+    ) and not any(alias and alias in normalized_text for alias in aliases):
+        return False
+    return True
+
+
+def _client_evidence_registry(dossier: Dict[str, Any], limit: int = 320) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    seen = set()
+    for item in dossier.get("evidence_registry", []) or []:
+        if not isinstance(item, dict):
+            continue
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        if not evidence_id or evidence_id in seen:
+            continue
+        seen.add(evidence_id)
+        rows.append(
+            {
+                "evidence_id": evidence_id,
+                "doc_id": item.get("doc_id"),
+                "doc_kind": item.get("doc_kind"),
+                "title": item.get("title"),
+                "source_url": item.get("source_url"),
+                "page": item.get("page"),
+                "snippet": _scalar_text(item.get("snippet"), limit=520),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _client_source_limitations(dossier: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
+    limitations = (((dossier.get("coverage_ledger") or {}).get("limitations") or []) or [])
+    rows: List[Dict[str, Any]] = []
+    for item in limitations:
+        if not isinstance(item, dict):
+            continue
+        severity = str(item.get("severity") or "").lower()
+        source_id = str(item.get("source_id") or item.get("section") or "").strip()
+        if severity != "high" and source_id not in {"grls", "eaeu_portal", "ctis", "epo_register", "pubchem"}:
+            continue
+        rows.append(
+            {
+                "source_id": source_id,
+                "severity": item.get("severity"),
+                "type": item.get("type"),
+                "message": item.get("message"),
+                "impact": item.get("impact"),
+                "section": item.get("section"),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _client_open_checks(dossier: Dict[str, Any]) -> List[Dict[str, Any]]:
+    quality = dossier.get("dossier_quality_v2", {}) or {}
+    readiness = quality.get("decision_readiness", {}) or {}
+    critical_unknowns = quality.get("critical_unknowns", []) or []
+    limitations = _client_source_limitations(dossier, limit=20)
+    commercial_count = len(dossier.get("commercial_signals", []) or [])
+    checks: List[Dict[str, Any]] = []
+
+    def has_reason(*markers: str) -> bool:
+        text = json.dumps(critical_unknowns, ensure_ascii=False).lower()
+        return any(marker.lower() in text for marker in markers)
+
+    if str(readiness.get("registrations") or "").upper() != "GREEN" or any(
+        str(item.get("source_id") or "") in {"grls", "eaeu_portal"} for item in limitations
+    ):
+        checks.append(
+            {
+                "check_id": "ru_eaeu_registration_identity",
+                "title": "RU/EAEU registration and identity check",
+                "status": "open",
+                "client_text": "US/EU approval precedent is confirmed; RU/EAEU registration and product identity remain unresolved in public source-native records.",
+            }
+        )
+    if commercial_count == 0:
+        checks.append(
+            {
+                "check_id": "ru_eaeu_access_commercial",
+                "title": "RU/EAEU commercial/access check",
+                "status": "open",
+                "client_text": "No RU/EAEU source-native commercial, price, procurement, or payer-access signal is attached for the current product context.",
+            }
+        )
+    if str(readiness.get("patents_legal") or "").upper() != "GREEN" or has_reason("LEGAL_STATUS"):
+        checks.append(
+            {
+                "check_id": "patent_fto_legal_status",
+                "title": "Patent/FTO legal-status check",
+                "status": "open",
+                "client_text": "Patent/FTO evidence is screening-grade; jurisdiction-level legal status and counsel-grade FTO remain separate checks.",
+            }
+        )
+    if has_reason("CHEMISTRY_IDENTITY") or str(readiness.get("context_integrity") or "").upper() != "GREEN":
+        checks.append(
+            {
+                "check_id": "chemistry_identity",
+                "title": "Chemistry/product identity completion",
+                "status": "open",
+                "client_text": "Structured chemistry identity and product-context bridge should be completed before operations-ready use.",
+            }
+        )
+    if limitations:
+        checks.append(
+            {
+                "check_id": "source_connector_limitations",
+                "title": "Source connector limitations",
+                "status": "open",
+                "client_text": "Some source connectors were unavailable, blocked, or partial; keep these as source limitations rather than as product blockers.",
+                "sources": [item.get("source_id") or item.get("section") for item in limitations[:6]],
+            }
+        )
+    return checks[:5]
 
 
 def _sample_registrations(items: List[Dict[str, Any]], limit: int = 3) -> Dict[str, Any]:
@@ -338,6 +550,7 @@ class ExecDecisionEngine:
         for section in block_spec.sections:
             selected_refs.update(_iter_evidence_refs(packet.get(section)))
         evidence_registry = dossier.get("evidence_registry", []) or []
+        current_product_aliases = _current_inn_aliases(dossier)
         section_linked_evidence = []
         priority_evidence = []
         allowed_kind_evidence = []
@@ -347,6 +560,8 @@ class ExecDecisionEngine:
             evidence_id = str(item.get("evidence_id") or "")
             doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
             if evidence_id in seen_evidence:
+                continue
+            if not _evidence_matches_current_product(item, current_product_aliases):
                 continue
             if evidence_id in selected_refs:
                 section_linked_evidence.append(item)
@@ -1085,6 +1300,9 @@ class ExecDecisionEngine:
             source_snapshot=source_snapshot,
             budget_snapshot=budget_snapshot,
             question_traces=list({json.dumps(item, sort_keys=True): item for item in appendix_question_traces}.values()),
+            evidence_registry=_client_evidence_registry(payload),
+            client_open_checks=_client_open_checks(payload),
+            source_limitations=_client_source_limitations(payload),
         )
         return ExecDecisionReportV1(
             report_version="v1",

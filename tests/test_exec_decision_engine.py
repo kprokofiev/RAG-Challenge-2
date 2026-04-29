@@ -190,6 +190,41 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertEqual(len(packet["clinical_studies"]), 1)
         self.assertTrue(packet["critical_unknowns"])
 
+    def test_packet_filters_product_scoped_payer_evidence_for_other_inn(self):
+        engine = ExecDecisionEngine()
+        dossier = {
+            "passport": {"inn": "tofersen"},
+            "registrations": [],
+            "commercial_signals": [],
+            "clinical_studies": [],
+            "patent_families": [],
+            "synthesis_steps": [],
+            "product_contexts": [],
+            "unknowns": [],
+            "dossier_quality_v2": {"critical_unknowns": [], "notes": []},
+            "coverage_ledger": {},
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-apixaban-payer",
+                    "doc_id": "doc-bad",
+                    "doc_kind": "payer_policy",
+                    "title": "RU Minzdrav clinical recommendation policy context: tofersen",
+                    "snippet": "REIMBURSEMENT_CHECK | source=ru_minzdrav_clinical_recommendations | term=апиксабан | context=апиксабан listed",
+                },
+                {
+                    "evidence_id": "ev-tofersen-payer",
+                    "doc_id": "doc-good",
+                    "doc_kind": "payer_policy",
+                    "title": "RU payer source check: tofersen",
+                    "snippet": "REIMBURSEMENT_CHECK | source=ru_policy | term=тоферсен | context=тоферсен checked",
+                },
+            ],
+        }
+        packet = engine._build_packet(dossier, "case-1", engine.block_specs["market_reimbursement_window"])
+        selected_ids = {item.get("evidence_id") for item in packet["evidence_registry"]}
+        self.assertNotIn("ev-apixaban-payer", selected_ids)
+        self.assertIn("ev-tofersen-payer", selected_ids)
+
     def test_packet_builder_retains_priority_contract_evidence_across_block_allowlists(self):
         dossier = _sample_dossier()
         dossier["registrations"] = [
@@ -3126,6 +3161,70 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertIn("ev-fda-label", repaired.top_evidence_refs)
         self.assertIn("ev-ema-epar", repaired.top_evidence_refs)
         self.assertIn("confirmed_foreign_approval_precedent_from_source_native_records", verification.repair_reason)
+
+    def test_verifier_normalizes_asset_us_eu_vs_ru_eaeu_wording(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="asset_attractiveness",
+            title="Asset attractiveness",
+            verdict="CONDITIONAL_GO",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer=(
+                "Conditional go: tofersen is approved in the US. The main limitation is that "
+                "EU/RU/EAEU registration status is not fully verified in source-native official records."
+            ),
+            full_answer="EU/RU/EAEU registration status remains unresolved despite foreign precedent.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = {
+            "critical_unknowns": [],
+            "evidence_registry": [
+                {
+                    "evidence_id": "ev-fda",
+                    "doc_kind": "approval_letter",
+                    "title": "FDA Approval Letter Qalsody tofersen NDA 215887",
+                    "snippet": "Qalsody tofersen approval",
+                },
+                {
+                    "evidence_id": "ev-ema",
+                    "doc_kind": "eu_regulatory_summary",
+                    "title": "EMA EPAR Qalsody tofersen",
+                    "snippet": "Qalsody tofersen authorised marketing authorisation",
+                },
+            ],
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertIn("US/EU approval precedent is confirmed", repaired.short_answer)
+        self.assertNotIn("EU/RU/EAEU registration status is not fully verified", repaired.short_answer)
+        self.assertIn("normalized_asset_us_eu_vs_ru_eaeu_wording", verification.repair_reason)
+
+    def test_verifier_rewrites_raw_critical_unknowns_for_client_language(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="evidence_sufficiency_note",
+            title="Evidence sufficiency note",
+            verdict="PARTIAL",
+            confidence="MEDIUM",
+            sufficiency="PARTIAL",
+            short_answer="PARTIAL because 21 critical_unknowns remain.",
+            full_answer="The dossier snapshot still lists 21 critical_unknowns and therefore is not operations-ready.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+
+        repaired, verification = verifier.verify_and_repair(block, {"critical_unknowns": []}, block_spec=None, allow_repair=True)
+
+        self.assertIn("grouped client open checks", repaired.short_answer)
+        self.assertNotIn("critical_unknowns", repaired.full_answer)
+        self.assertIn("normalized_raw_unknowns_to_client_open_checks", verification.repair_reason)
 
     def test_verifier_raises_partial_sufficiency_confidence_to_screening_medium(self):
         verifier = ExecVerifier()

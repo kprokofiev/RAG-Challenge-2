@@ -339,6 +339,38 @@ def _operations_screening_ready(packet: Dict[str, Any]) -> bool:
     return bool(operations.get("screening_ready")) or bool(summary.get("operations_screening_ready"))
 
 
+def _normalize_client_unknown_language(text: str) -> str:
+    if not text:
+        return text
+    normalized = re.sub(r"\b\d+\s+critical_unknowns\b", "grouped client open checks", text)
+    normalized = normalized.replace("critical_unknowns", "critical unknowns")
+    normalized = normalized.replace("Critical_unknowns", "Critical unknowns")
+    return normalized
+
+
+def _normalize_asset_foreign_approval_language(text: str) -> str:
+    if not text:
+        return text
+    replacements = {
+        "EU/RU/EAEU registration status is not fully verified in source-native official records": (
+            "US/EU approval precedent is confirmed; RU/EAEU registration remains unresolved in source-native official records"
+        ),
+        "EU, RU, and EAEU registration status is not fully verified in source-native official records": (
+            "US/EU approval precedent is confirmed; RU/EAEU registration remains unresolved in source-native official records"
+        ),
+        "EU/RU/EAEU registration status is still not fully verified": (
+            "US/EU approval precedent is confirmed; RU/EAEU registration remains unresolved"
+        ),
+        "EU/RU/EAEU registration status remains unresolved": (
+            "US/EU approval precedent is confirmed; RU/EAEU registration remains unresolved"
+        ),
+    }
+    normalized = text
+    for needle, replacement in replacements.items():
+        normalized = normalized.replace(needle, replacement)
+    return normalized
+
+
 def _source_manifest_count(packet: Dict[str, Any]) -> int:
     linkage = _contract_linkage(packet)
     source_manifest = linkage.get("source_evidence_manifest", {}) or {}
@@ -1394,6 +1426,29 @@ class ExecVerifier:
             "INSUFFICIENT_FOR_FTO",
         } or str(summary.get("family_legal_events_coverage_status") or "").upper() in {"PARTIAL", "LIMITED"}
         return has_regulatory_sources and has_ip_sources
+
+    def _asset_foreign_approval_wording_mixed(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "asset_attractiveness":
+            return False
+        us_refs, eu_refs = _foreign_approval_source_refs(packet)
+        if not (us_refs and eu_refs):
+            return False
+        text = _block_text(block)
+        return _normalize_asset_foreign_approval_language(text) != text
+
+    def _evidence_sufficiency_raw_unknown_language(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "evidence_sufficiency_note":
+            return False
+        text = _block_text(block)
+        return _normalize_client_unknown_language(text) != text
 
     def _business_block_synthesis_overconstraint(
         self,
@@ -2939,6 +2994,35 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             applied_changes.append("raised_partial_sufficiency_confidence_to_screening_medium")
 
+        if repaired.block_id == "asset_attractiveness":
+            us_refs, eu_refs = _foreign_approval_source_refs(packet)
+            if us_refs and eu_refs:
+                short_before = repaired.short_answer
+                full_before = repaired.full_answer
+                repaired.short_answer = _normalize_asset_foreign_approval_language(repaired.short_answer)
+                repaired.full_answer = _normalize_asset_foreign_approval_language(repaired.full_answer)
+                repaired.caveats = [
+                    _normalize_asset_foreign_approval_language(caveat)
+                    for caveat in repaired.caveats
+                ]
+                if repaired.short_answer != short_before or repaired.full_answer != full_before:
+                    caveat = "US/EU approval precedent is confirmed; RU/EAEU entry remains a separate regional registration and access question."
+                    if caveat not in repaired.caveats:
+                        repaired.caveats.append(caveat)
+                    applied_changes.append("normalized_asset_us_eu_vs_ru_eaeu_wording")
+
+        if repaired.block_id == "evidence_sufficiency_note":
+            short_before = repaired.short_answer
+            full_before = repaired.full_answer
+            repaired.short_answer = _normalize_client_unknown_language(repaired.short_answer)
+            repaired.full_answer = _normalize_client_unknown_language(repaired.full_answer)
+            repaired.caveats = [_normalize_client_unknown_language(caveat) for caveat in repaired.caveats]
+            if repaired.short_answer != short_before or repaired.full_answer != full_before:
+                caveat = "Raw ledger unknowns should be read as grouped client open checks, not as independent product failures."
+                if caveat not in repaired.caveats:
+                    repaired.caveats.append(caveat)
+                applied_changes.append("normalized_raw_unknowns_to_client_open_checks")
+
         if any(issue.issue_type == "synthesis_secondary_scope" for issue in verification.issues) or self._business_block_synthesis_overconstraint(repaired, packet):
             repaired.decision_blockers = [
                 blocker for blocker in repaired.decision_blockers
@@ -3085,6 +3169,8 @@ class ExecVerifier:
                 self._local_clinical_activity_underclassified(block, packet),
                 self._foreign_approval_precedent_underconfirmed(block, packet),
                 self._evidence_sufficiency_partial_low_confidence_understated(block, packet),
+                self._asset_foreign_approval_wording_mixed(block, packet),
+                self._evidence_sufficiency_raw_unknown_language(block, packet),
                 self._business_block_synthesis_overconstraint(block, packet),
             )
         )
