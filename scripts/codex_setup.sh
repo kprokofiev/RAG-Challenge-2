@@ -1,11 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if command -v python3.11 >/dev/null 2>&1; then
-  PYTHON_BIN=python3.11
-elif command -v python3.12 >/dev/null 2>&1; then
-  PYTHON_BIN=python3.12
-else
+PYTHON_BIN=""
+
+if command -v pyenv >/dev/null 2>&1; then
+  for minor in 3.11 3.12; do
+    PYENV_MATCH="$(pyenv versions --bare | grep -E "^${minor}\." | sort -V | tail -n 1 || true)"
+    if [ -n "${PYENV_MATCH}" ]; then
+      export PYENV_VERSION="${PYENV_MATCH}"
+      PYTHON_BIN=python
+      break
+    fi
+  done
+fi
+
+if [ -z "${PYTHON_BIN}" ]; then
+  for candidate in python3.11 python3.12 python; do
+    if command -v "${candidate}" >/dev/null 2>&1 && "${candidate}" -c 'import sys; raise SystemExit(not ((3, 11) <= sys.version_info[:2] < (3, 13)))' >/dev/null 2>&1; then
+      PYTHON_BIN="${candidate}"
+      break
+    fi
+  done
+fi
+
+if [ -z "${PYTHON_BIN}" ]; then
   PYTHON_BIN=python
 fi
 

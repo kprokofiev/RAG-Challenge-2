@@ -11,6 +11,8 @@
 
 The dependency set includes pinned binary packages such as
 `faiss-cpu==1.9.0.post1`, which are not available for Python 3.14.
+The setup script also selects an installed Python 3.11/3.12 via `pyenv` when
+Codex Universal exposes the version as an inactive pyenv install.
 
 ## Setup Script
 
