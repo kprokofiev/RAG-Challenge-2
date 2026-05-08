@@ -79,7 +79,7 @@ def _extract_response_text(response: Any) -> str:
     return "\n".join(parts)
 
 
-def _extract_response_parsed(response: Any, response_format: Type[BaseModel]) -> Optional[BaseModel]:
+def _extract_response_parsed(response: Any, response_format: Type[BaseModel]) -> Optional[Any]:
     parsed_output = getattr(response, "output_parsed", None)
     if parsed_output is not None:
         return parsed_output
@@ -91,6 +91,46 @@ def _extract_response_parsed(response: Any, response_format: Type[BaseModel]) ->
             if isinstance(content, dict) and content.get("parsed") is not None:
                 return response_format.model_validate(content.get("parsed"))
     return None
+
+
+def _coerce_structured_response(
+    response: Any,
+    response_format: Type[BaseModel],
+    parsed_output: Any = None,
+) -> BaseModel:
+    if isinstance(parsed_output, response_format):
+        return parsed_output
+    if isinstance(parsed_output, dict):
+        return response_format.model_validate(parsed_output)
+    if parsed_output not in (None, ""):
+        return response_format.model_validate(parsed_output)
+
+    response_text = _extract_response_text(response).strip()
+    if not response_text:
+        raise ValueError(f"empty structured response for {response_format.__name__}")
+    return response_format.model_validate_json(repair_json(response_text))
+
+
+def _json_schema_text_format(response_format: Type[BaseModel]) -> Dict[str, Any]:
+    strict_schema = type_to_response_format_param(response_format).get("json_schema", {})
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": strict_schema.get("name") or response_format.__name__,
+            "schema": strict_schema.get("schema") or response_format.model_json_schema(),
+            "strict": strict_schema.get("strict", True),
+        }
+    }
+
+
+def _create_structured_response(
+    client: OpenAI,
+    params: Dict[str, Any],
+    response_format: Type[BaseModel],
+) -> Any:
+    create_params = deepcopy(params)
+    create_params["text"] = _json_schema_text_format(response_format)
+    return client.responses.create(**create_params)
 
 
 def _response_incomplete_reason(response: Any) -> str:
@@ -156,6 +196,7 @@ def _is_truncated_structured_output_error(exc: Exception) -> bool:
             "eof while parsing",
             "json_invalid",
             "invalid json",
+            "empty structured response",
             "unterminated string",
             "truncated",
             "could not parse response",
@@ -248,7 +289,13 @@ def call_exec_reasoning_model(
                         )
                         minimum_tier_index = 0
                         continue
-                    parsed_output = response_format.model_validate_json(repair_json(_extract_response_text(response)))
+                    try:
+                        parsed_output = _coerce_structured_response(response, response_format, parsed_output)
+                    except ValueError as exc:
+                        if "empty structured response" not in str(exc).lower():
+                            raise
+                        response = _create_structured_response(client, params, response_format)
+                        parsed_output = _coerce_structured_response(response, response_format)
                     budget_trace = build_budget_trace(
                         routed,
                         usage_actual=usage,
@@ -262,19 +309,17 @@ def call_exec_reasoning_model(
                         budget_trace=budget_trace,
                         reasoning_summary=_extract_reasoning_summary(response),
                     )
+                else:
+                    try:
+                        parsed_output = _coerce_structured_response(response, response_format, parsed_output)
+                    except ValueError as exc:
+                        if "empty structured response" not in str(exc).lower():
+                            raise
+                        response = _create_structured_response(client, params, response_format)
+                        parsed_output = _coerce_structured_response(response, response_format)
             else:  # pragma: no cover
-                response = client.responses.create(
-                    text={
-                        "format": {
-                            "type": "json_schema",
-                            "name": response_format.__name__,
-                            "schema": response_format.model_json_schema(),
-                            "strict": True,
-                        }
-                    },
-                    **params,
-                )
-                parsed_output = response_format.model_validate_json(repair_json(_extract_response_text(response)))
+                response = _create_structured_response(client, params, response_format)
+                parsed_output = _coerce_structured_response(response, response_format)
             usage = extract_usage_metrics(response)
             budget_after = commit_routed_usage(routed, usage)
             budget_trace = build_budget_trace(
