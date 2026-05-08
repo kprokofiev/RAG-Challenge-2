@@ -185,6 +185,8 @@ class PubMedIngestor:
             chunk_path = documents_dir / f"{doc_id}.json"
             vector_path = vector_dir / f"{doc_id}.faiss"
             if chunk_path.exists() and vector_path.exists():
+                if self.db.is_configured():
+                    self.db.update_document_indexed(doc_id)
                 result.skipped_existing += 1
                 attached_meta.append(
                     {
@@ -221,6 +223,12 @@ class PubMedIngestor:
                         "region": "global",
                         "published_at": published_at,
                     }
+                )
+            elif self.db.is_configured():
+                self.db.update_document_status(
+                    doc_id,
+                    "skipped",
+                    "PubMed metadata article could not be converted into indexed chunks/vectors; excluded from evidence",
                 )
 
         return result, attached_meta

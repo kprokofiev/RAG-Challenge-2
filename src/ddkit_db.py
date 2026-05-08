@@ -46,6 +46,12 @@ class DDKitDB:
             (doc_id,)
         )
 
+    def update_document_status(self, doc_id: str, status: str, error_message: Optional[str] = None) -> None:
+        self._exec(
+            "UPDATE documents SET status=%s, error_message=%s, updated_at=NOW() WHERE id=%s",
+            (status, error_message, doc_id),
+        )
+
     def upsert_document_by_source_url(
         self,
         tenant_id: str,
