@@ -4464,6 +4464,47 @@ class DossierReportGenerator:
                 validity_evidence_refs=[ev_id],
                 evidence_refs=[ev_id],
             )
+        for doc in self._parsed_doc_texts({"eaeu_document", "eaeu_registration"}):
+            text = str(doc.get("text") or "")
+            lowered = text.lower()
+            if "eaeu official unified register" not in lowered:
+                continue
+            if "returned no matching product rows" not in lowered and "matches found: 0" not in lowered:
+                continue
+            rows_match = re.search(r"Rows scanned:\s*(\d+)", text, re.IGNORECASE)
+            rows_scanned = rows_match.group(1) if rows_match else ""
+            message = f"Official EAEU unified register search for {self.inn} returned no matching product rows"
+            if rows_scanned:
+                message += f" after scanning {rows_scanned} rows"
+            message += ". This is source-native negative evidence, not a positive EAEU registration."
+            ev_id = self._register_derived_evidence(
+                doc_id=str(doc.get("doc_id") or ""),
+                doc_title=str(doc.get("doc_title") or doc.get("doc_id") or ""),
+                source_url=str(doc.get("source_url") or ""),
+                doc_kind=str(doc.get("doc_kind") or "eaeu_registration"),
+                content_hash=doc.get("content_hash"),
+                locator="$.content.chunks[*].text",
+                snippet=message,
+            )
+            self._add_unknown(
+                unknowns,
+                "registrations[EAEU].*",
+                "EAEU_OFFICIAL_NO_HIT",
+                message,
+                "Keep the official EAEU no-hit as a scoped limitation; re-run EAEU register acquisition if the query scope or product identity changes.",
+            )
+            return DossierRegistration(
+                region="EAEU",
+                verdict="unknown",
+                status=EvidencedValue(
+                    value=message,
+                    evidence_refs=[ev_id],
+                    confidence=0.99,
+                ),
+                validity_type="not_applicable",
+                validity_evidence_refs=[ev_id],
+                evidence_refs=[ev_id],
+            )
         return None
 
     def _extract_eu_registrations_from_original_json(self) -> List[DossierRegistration]:
