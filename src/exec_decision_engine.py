@@ -37,8 +37,11 @@ try:
     )
     from src.exec_llm_env import require_exec_openai_api_key
     from src.exec_prompt_builder import (
+        ExecAnswerContract,
+        ExecPolicyGates,
         ExecQuestionPlan,
         ExecReasonerOutput,
+        ExecRetrievalPlan,
         build_answer_prompt,
         build_appendix_question_traces,
         build_planner_prompt,
@@ -68,8 +71,11 @@ except ImportError:  # pragma: no cover
     from exec_evidence_assembler import _is_priority_contract_evidence, normalize_exec_doc_kind, reconcile_exec_doc_kinds  # type: ignore
     from exec_llm_env import require_exec_openai_api_key  # type: ignore
     from exec_prompt_builder import (  # type: ignore
+        ExecAnswerContract,
+        ExecPolicyGates,
         ExecQuestionPlan,
         ExecReasonerOutput,
+        ExecRetrievalPlan,
         build_answer_prompt,
         build_appendix_question_traces,
         build_planner_prompt,
@@ -85,6 +91,10 @@ def _env_bool(name: str, default: bool) -> bool:
     if not raw:
         return default
     return raw not in {"0", "false", "no", "off"}
+
+
+def _heuristic_fallback_enabled() -> bool:
+    return _env_bool("DDKIT_EXEC_HEURISTIC_ON_LLM_ERROR", False)
 
 
 def _hash_payload(value: Any) -> str:
@@ -962,6 +972,50 @@ class ExecDecisionEngine:
             key_risks=[item["title"] for item in blockers],
         )
 
+    def _heuristic_plan(self, block_spec: Any, packet: Dict[str, Any], reason: str) -> ExecQuestionPlan:
+        doc_kinds = reconcile_exec_doc_kinds(block_spec.allowed_doc_kinds, [])
+        inn = str(packet.get("inn") or packet.get("asset") or "target asset")
+        query_region = ", ".join(block_spec.regions or ["global"])
+        return ExecQuestionPlan(
+            question_id=f"{block_spec.block_id}_heuristic_fallback",
+            answer_type=block_spec.verdict_family or "screening_decision",
+            business_lens="pharma_bd",
+            needed_facts=[
+                f"Source-backed facts needed for {block_spec.title}",
+                f"Asset: {inn}; regions: {query_region}",
+            ],
+            needed_dossier_sections=list(block_spec.sections or []),
+            retrieval_plan=ExecRetrievalPlan(
+                doc_kinds=doc_kinds,
+                queries=[f"{inn} {block_spec.title} {query_region}"],
+                max_docs=int(os.getenv("DDKIT_EXEC_PLAN_MAX_DOCS", "12")),
+                max_chunks=int(os.getenv("DDKIT_EXEC_PLAN_MAX_CHUNKS", "30")),
+                chunk_policy="heuristic fallback over already assembled source-native dossier evidence",
+            ),
+            answer_schema=ExecAnswerContract(
+                verdict=list(block_spec.verdicts or []),
+                must_include=["Cite only evidence_refs present in the assembled packet."],
+            ),
+            gates=ExecPolicyGates(
+                positive_verdict_requires=["source-native evidence in packet"],
+                hold_requires=["missing critical source-native evidence"],
+                no_go_triggers=["source-backed negative evidence"],
+            ),
+            policy_notes=[
+                "Heuristic fallback was used because the LLM structured-output path failed.",
+                reason[:500],
+            ],
+        )
+
+    def _fallback_budget_trace(self, block_spec: Any, phase: str, reason: str) -> Dict[str, Any]:
+        return {
+            "model_requested": "heuristic_fallback",
+            "model_selected": "heuristic_fallback",
+            "fallback_reason": f"{phase}_llm_error: {reason[:240]}",
+            "thinking_mode_requested": "none",
+            "usage_actual": {},
+        }
+
     def _call_reasoning_prompt(
         self,
         prompt: Any,
@@ -1192,11 +1246,21 @@ class ExecDecisionEngine:
             packet = self._build_packet(payload, case_id, block_spec)
             dossier_snapshot = self._build_dossier_snapshot(payload, block_spec, packet)
             corpus_inventory = self._build_corpus_inventory(payload, block_spec, packet)
-            plan, planner_budget_trace, planner_reasoning_summary = self._invoke_planner(
-                block_spec,
-                dossier_snapshot,
-                corpus_inventory,
-            )
+            planner_used_fallback = False
+            try:
+                plan, planner_budget_trace, planner_reasoning_summary = self._invoke_planner(
+                    block_spec,
+                    dossier_snapshot,
+                    corpus_inventory,
+                )
+            except Exception as exc:
+                if not _heuristic_fallback_enabled():
+                    raise
+                planner_used_fallback = True
+                reason = f"{type(exc).__name__}: {exc}"
+                plan = self._heuristic_plan(block_spec, packet, reason)
+                planner_budget_trace = self._fallback_budget_trace(block_spec, "planner", reason)
+                planner_reasoning_summary = f"Heuristic planner fallback after LLM error: {reason[:500]}"
             plan = self._normalize_plan(block_spec, plan)
 
             evidence_packet = self.assembler.assemble(
@@ -1205,13 +1269,27 @@ class ExecDecisionEngine:
                 case_id=case_id,
                 allow_retrieval=False,
             )
-            answer_output, answer_budget_trace, answer_reasoning_summary = self._invoke_answerer(
-                block_spec,
-                plan,
-                dossier_snapshot,
-                evidence_packet,
-                phase="answerer",
-            )
+            if planner_used_fallback:
+                reason = str(planner_budget_trace.get("fallback_reason") or "planner fallback")
+                answer_output = self._heuristic_reasoner(block_spec, evidence_packet, phase="answerer")
+                answer_budget_trace = self._fallback_budget_trace(block_spec, "answerer", reason)
+                answer_reasoning_summary = f"Heuristic answer fallback because planner used fallback: {reason[:500]}"
+            else:
+                try:
+                    answer_output, answer_budget_trace, answer_reasoning_summary = self._invoke_answerer(
+                        block_spec,
+                        plan,
+                        dossier_snapshot,
+                        evidence_packet,
+                        phase="answerer",
+                    )
+                except Exception as exc:
+                    if not _heuristic_fallback_enabled():
+                        raise
+                    reason = f"{type(exc).__name__}: {exc}"
+                    answer_output = self._heuristic_reasoner(block_spec, evidence_packet, phase="answerer")
+                    answer_budget_trace = self._fallback_budget_trace(block_spec, "answerer", reason)
+                    answer_reasoning_summary = f"Heuristic answer fallback after LLM error: {reason[:500]}"
             answer_output = self._hydrate_answer_output(answer_output, evidence_packet)
             gate_packet = dict(packet)
             gate_packet["critical_unknowns"] = list(evidence_packet.get("critical_unknowns", packet.get("critical_unknowns", [])))
@@ -1254,13 +1332,21 @@ class ExecDecisionEngine:
                             if item.get("doc_id")
                         ]
                     )
-                    final_output, final_answer_budget_trace, final_answer_reasoning_summary = self._invoke_answerer(
-                        block_spec,
-                        plan,
-                        dossier_snapshot,
-                        final_evidence_packet,
-                        phase="final_answerer",
-                    )
+                    try:
+                        final_output, final_answer_budget_trace, final_answer_reasoning_summary = self._invoke_answerer(
+                            block_spec,
+                            plan,
+                            dossier_snapshot,
+                            final_evidence_packet,
+                            phase="final_answerer",
+                        )
+                    except Exception as exc:
+                        if not _heuristic_fallback_enabled():
+                            raise
+                        reason = f"{type(exc).__name__}: {exc}"
+                        final_output = self._heuristic_reasoner(block_spec, final_evidence_packet, phase="final_answerer")
+                        final_answer_budget_trace = self._fallback_budget_trace(block_spec, "final_answerer", reason)
+                        final_answer_reasoning_summary = f"Heuristic final-answer fallback after LLM error: {reason[:500]}"
                     final_output = self._hydrate_answer_output(final_output, final_evidence_packet)
 
             planner_trace = ExecModelStageTrace(
