@@ -799,6 +799,14 @@ class ExecVerifier:
             return False
         if _identity_match_rank(str(linkage.get("identity_match") or "")) < 2:
             return False
+        operations = (_contract_linkage(packet).get("operations_readiness_snapshot", {}) or {})
+        summary = _contract_linkage_summary(packet)
+        if not (
+            bool(operations.get("operations_evidence_ready"))
+            or bool(operations.get("payer_tier_clearance"))
+            or bool(summary.get("payer_tier_clearance"))
+        ):
+            return False
         text = _block_text(block)
         linkage_markers = (
             "identifier",
@@ -812,6 +820,24 @@ class ExecVerifier:
         return (
             (_contains_any_marker(text, linkage_markers) or block.verdict == "CONDITIONAL_GO")
             and not _has_explicit_negative_evidence(text)
+        )
+
+    def _rf_go_overstates_operations_readiness(
+        self,
+        block: ExecDecisionBlock,
+        packet: Dict[str, Any],
+    ) -> bool:
+        if block.block_id != "rf_entry" or block.verdict != "GO":
+            return False
+        linkage = _contract_linkage(packet)
+        operations = linkage.get("operations_readiness_snapshot", {}) or {}
+        summary = _contract_linkage_summary(packet)
+        if not operations and not summary:
+            return False
+        return not (
+            bool(operations.get("operations_evidence_ready"))
+            or bool(operations.get("payer_tier_clearance"))
+            or bool(summary.get("payer_tier_clearance"))
         )
 
     def _eaeu_same_id_overconstraint(
@@ -2971,6 +2997,7 @@ class ExecVerifier:
             eaeu_payload = local.get("EAEU", {}) or {}
             ru_signal = str(ru_payload.get("signal") or _contract_linkage_summary(packet).get("ru_local_development_signal") or "").upper()
             eaeu_signal = str(eaeu_payload.get("signal") or _contract_linkage_summary(packet).get("eaeu_local_development_signal") or "").upper()
+            active_count = int(ru_payload.get("active_local_trial_count") or 0) + int(eaeu_payload.get("active_local_trial_count") or 0)
             refs = list(
                 dict.fromkeys(
                     list(ru_payload.get("all_clinical_evidence_refs") or [])
@@ -2978,14 +3005,14 @@ class ExecVerifier:
                     + list(repaired.top_evidence_refs)
                 )
             )
-            if "ACTIVE_LOCAL_TRIALS" in {ru_signal, eaeu_signal}:
+            if "ACTIVE_LOCAL_TRIALS" in {ru_signal, eaeu_signal} and active_count > 0:
                 repaired.verdict = "ACTIVE_LOCAL_TRIALS"
                 repaired.confidence = "MEDIUM"
                 local_phrase = "source-linked RU/EAEU trial activity is present"
-            elif "LOCAL_TRIALS_PRESENT" in {ru_signal, eaeu_signal}:
-                repaired.verdict = "ACTIVE_LOCAL_TRIALS"
-                repaired.confidence = "LOW"
-                local_phrase = "RU/EAEU local trial records are present but activity status is not fully resolved"
+            elif "LOCAL_TRIALS_PRESENT" in {ru_signal, eaeu_signal} or "ACTIVE_LOCAL_TRIALS" in {ru_signal, eaeu_signal}:
+                repaired.verdict = "LOCAL_TRIALS_PRESENT"
+                repaired.confidence = "MEDIUM" if refs else "LOW"
+                local_phrase = "RU/EAEU local trial records are present, but active/recruiting status is not source-closed"
             elif "FOREIGN_ONLY_DEVELOPMENT" in {ru_signal, eaeu_signal}:
                 repaired.verdict = "FOREIGN_ONLY_DEVELOPMENT"
                 repaired.confidence = "MEDIUM"
@@ -3008,7 +3035,15 @@ class ExecVerifier:
                 blocker for blocker in repaired.decision_blockers
                 if not _contains_any_marker(
                     f"{blocker.title} {blocker.rationale}",
-                    ("cannot conclusively confirm or exclude", "identity bridge not fully resolved", "no extractable eaeu"),
+                    (
+                        "cannot conclusively confirm or exclude",
+                        "identity bridge not fully resolved",
+                        "no extractable eaeu",
+                        "missing ru/eaeu local trial linkage",
+                        "local trial linkage fields",
+                        "no ru/eaeu country",
+                        "site/location",
+                    ),
                 )
             ]
             if refs:
@@ -3016,7 +3051,7 @@ class ExecVerifier:
                 repaired.why_this_verdict.append(
                     ExecWhyClaim(
                         claim="Clinical evidence supports a bounded local-development screening signal for RU/EAEU.",
-                        claim_type="inference",
+                        claim_type="hard_evidence_backed" if repaired.verdict == "ACTIVE_LOCAL_TRIALS" else "inference",
                         evidence_refs=refs[:6],
                     )
                 )
@@ -3139,16 +3174,23 @@ class ExecVerifier:
                 if match_level == "same_identifier"
                 else "the same RU MAH / product context"
             )
-            repaired.verdict = "GO"
-            repaired.sufficiency = "SUFFICIENT"
+            operations = (_contract_linkage(packet).get("operations_readiness_snapshot", {}) or {})
+            summary = _contract_linkage_summary(packet)
+            operations_ready = (
+                bool(operations.get("operations_evidence_ready"))
+                or bool(operations.get("payer_tier_clearance"))
+                or bool(summary.get("payer_tier_clearance"))
+            )
+            repaired.verdict = "GO" if operations_ready else "CONDITIONAL_GO"
+            repaired.sufficiency = "SUFFICIENT" if operations_ready else "PARTIAL"
             repaired.confidence = "MEDIUM"
             repaired.short_answer = (
-                f"GO — active RU registration is confirmed and RU commercial/access signals already map to {linkage_phrase}, so RF entry should not stay at CONDITIONAL_GO."
+                f"{repaired.verdict} — active RU registration is confirmed and RU commercial/access signals map to {linkage_phrase}."
             )
             repaired.full_answer = (
                 "RF entry remains anchored to the active RU registration context. "
                 f"The packet carries explicit market-entry linkage showing that RU commercial/formulary/procurement evidence maps to {linkage_phrase}. "
-                "Residual IP/FTO and payer-breadth gaps remain in their dedicated blocks rather than blocking RU registration entry."
+                "Clean GO requires source-native operations/payer-tier readiness; residual IP/FTO and payer-breadth gaps remain in their dedicated blocks."
             )
             repaired.top_evidence_refs = list(dict.fromkeys(list(linkage.get("evidence_refs") or []) + list(repaired.top_evidence_refs)))[:8]
             caveat = "RU access evidence is treated as product-context-linked rather than a pure INN-level proxy."
@@ -3156,8 +3198,45 @@ class ExecVerifier:
                 repaired.caveats.append(caveat)
             repaired.decision_blockers = []
             repaired.next_actions = []
-            if "promoted_rf_conditional_go_to_go_on_identity_linkage" not in applied_changes:
-                applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
+            if operations_ready:
+                if "promoted_rf_conditional_go_to_go_on_identity_linkage" not in applied_changes:
+                    applied_changes.append("promoted_rf_conditional_go_to_go_on_identity_linkage")
+            elif "kept_rf_conditional_go_until_operations_readiness" not in applied_changes:
+                applied_changes.append("kept_rf_conditional_go_until_operations_readiness")
+
+        if repaired.block_id == "rf_entry" and repaired.verdict == "GO":
+            operations = (_contract_linkage(packet).get("operations_readiness_snapshot", {}) or {})
+            summary = _contract_linkage_summary(packet)
+            operations_ready = bool(operations.get("operations_evidence_ready"))
+            payer_ready = bool(operations.get("payer_tier_clearance")) or bool(summary.get("payer_tier_clearance"))
+            if not (operations_ready or payer_ready):
+                missing = list(operations.get("missing_operations_checks") or [])[:6]
+                repaired.verdict = "CONDITIONAL_GO"
+                repaired.sufficiency = "PARTIAL"
+                repaired.confidence = "MEDIUM"
+                repaired.short_answer = (
+                    "CONDITIONAL_GO — active RU registration supports RF entry screening, but source-native operations/payer-tier readiness is not closed."
+                )
+                repaired.full_answer = (
+                    "The RU registration anchor supports a positive RF screening path. "
+                    "However, customer-facing GO requires source-native closure of payer-tier/restriction and operations-readiness checks. "
+                    f"Open checks: {', '.join(missing) if missing else 'operations/payer-tier readiness not source-closed'}."
+                )
+                caveat = "RF entry is screening-positive but must remain conditional until payer-tier/restriction and operations-readiness checks are source-closed."
+                if caveat not in repaired.caveats:
+                    repaired.caveats.append(caveat)
+                if not any(blocker.blocker_id == "rf_operations_readiness_not_closed" for blocker in repaired.decision_blockers):
+                    repaired.decision_blockers.append(
+                        ExecBlocker(
+                            blocker_id="rf_operations_readiness_not_closed",
+                            title="RF operations and payer-tier readiness not source-closed",
+                            severity="IMPORTANT",
+                            rationale="Do not present RF entry as clean GO until payer/restriction and operations-readiness evidence is source-native and complete.",
+                            evidence_refs=list(_market_entry_linkage(packet, "RU").get("evidence_refs") or [])[:6],
+                        )
+                    )
+                if "downgraded_rf_go_until_operations_readiness" not in applied_changes:
+                    applied_changes.append("downgraded_rf_go_until_operations_readiness")
 
         if repaired.confidence == "HIGH" and repaired.sufficiency != "SUFFICIENT":
             repaired.confidence = "MEDIUM" if repaired.sufficiency == "PARTIAL" else "LOW"
@@ -3227,6 +3306,7 @@ class ExecVerifier:
                 self._eaeu_holdable_regulatory_position(block, packet),
                 self._eaeu_no_record_understated(block, packet),
                 self._rf_underlinked_conditional_go(block, packet),
+                self._rf_go_overstates_operations_readiness(block, packet),
                 self._eaeu_same_id_overconstraint(block, packet),
                 self._eaeu_underlinked_conditional_go(block, packet),
                 self._eaeu_validity_understated_hold(block, packet),

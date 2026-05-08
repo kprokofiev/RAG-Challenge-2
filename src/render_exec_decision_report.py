@@ -28,8 +28,8 @@ def _esc(value: Any) -> str:
     return str(value or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _styles():
-    font = register_cyrillic_fonts()
+def _styles(require_cyrillic: bool = False):
+    font = register_cyrillic_fonts(require_cyrillic=require_cyrillic)
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle("MemoTitle", parent=styles["Heading1"], fontName=font, fontSize=20, textColor=colors.HexColor("#17324d"), spaceAfter=10))
     styles.add(ParagraphStyle("MemoHead", parent=styles["Heading2"], fontName=font, fontSize=13, textColor=colors.HexColor("#264b73"), spaceBefore=8, spaceAfter=5))
@@ -57,8 +57,10 @@ def render_exec_decision_report(report: Any, output_path: str, mode: str = "cust
     if not HAS_REPORTLAB:
         raise ImportError("reportlab is required for PDF rendering")
 
+    mode = (mode or "customer").strip().lower()
+    is_internal = mode == "internal"
     payload = _ensure_dict(report)
-    styles = _styles()
+    styles = _styles(require_cyrillic=not is_internal)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc = SimpleDocTemplate(output_path, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm)
     story: List[Any] = []
@@ -77,8 +79,12 @@ def render_exec_decision_report(report: Any, output_path: str, mode: str = "cust
     sufficiency = payload.get("evidence_sufficiency", {})
 
     story.append(Paragraph(f"Executive Decision Memo: {_esc(payload.get('inn') or 'Unknown asset')}", styles["MemoTitle"]))
-    story.append(Paragraph(f"Case ID: {_esc(payload.get('case_id') or '')} | Generated: {_esc(payload.get('generated_at') or '')}", styles["MemoMeta"]))
-    story.append(Paragraph(f"Mode: {_esc(mode)} | Overall sufficiency: {_esc(sufficiency.get('overall_verdict', 'PARTIAL'))} | Confidence: {_esc(sufficiency.get('topline_confidence', 'LOW'))}", styles["MemoMeta"]))
+    if is_internal:
+        story.append(Paragraph(f"Case ID: {_esc(payload.get('case_id') or '')} | Generated: {_esc(payload.get('generated_at') or '')}", styles["MemoMeta"]))
+        story.append(Paragraph(f"Mode: {_esc(mode)} | Overall sufficiency: {_esc(sufficiency.get('overall_verdict', 'PARTIAL'))} | Confidence: {_esc(sufficiency.get('topline_confidence', 'LOW'))}", styles["MemoMeta"]))
+    else:
+        story.append(Paragraph(f"Generated: {_esc(payload.get('generated_at') or '')}", styles["MemoMeta"]))
+        story.append(Paragraph(f"Evidence sufficiency: {_esc(sufficiency.get('overall_verdict', 'PARTIAL'))} | Confidence: {_esc(sufficiency.get('topline_confidence', 'LOW'))}", styles["MemoMeta"]))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#d8dee8")))
     story.append(Spacer(1, 10))
 
@@ -119,7 +125,7 @@ def render_exec_decision_report(report: Any, output_path: str, mode: str = "cust
         _render_lines(story, "Evidence refs", block.get("top_evidence_refs", []), styles, "MemoMeta")
         _render_lines(story, "Unknowns", block.get("unknowns", []), styles, "MemoWarn")
 
-        if mode == "internal":
+        if is_internal:
             verification = block.get("verification", {})
             story.append(Paragraph(f"Verifier: {_esc(verification.get('overall_status', 'PASS'))}", styles["MemoMeta"]))
             for issue in verification.get("issues", [])[:6]:
@@ -158,7 +164,7 @@ def render_exec_decision_report(report: Any, output_path: str, mode: str = "cust
         story.append(Spacer(1, 8))
 
     appendix = payload.get("appendix", {})
-    if appendix:
+    if appendix and is_internal:
         story.append(PageBreak())
         story.append(Paragraph("Appendix", styles["MemoHead"]))
         source_snapshot = appendix.get("source_snapshot", {})
@@ -170,9 +176,8 @@ def render_exec_decision_report(report: Any, output_path: str, mode: str = "cust
         ):
             story.append(Paragraph(_esc(label), styles["MemoHead"]))
             story.append(Paragraph(_esc(value), styles["MemoMeta"]))
-        if mode == "internal":
-            story.append(Paragraph("Budget snapshot", styles["MemoHead"]))
-            story.append(Paragraph(_esc(budget_snapshot), styles["MemoMeta"]))
+        story.append(Paragraph("Budget snapshot", styles["MemoHead"]))
+        story.append(Paragraph(_esc(budget_snapshot), styles["MemoMeta"]))
 
     doc.build(story)
     return output_path

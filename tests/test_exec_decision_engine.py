@@ -610,6 +610,7 @@ class ExecDecisionEngineTests(unittest.TestCase):
             self.assertTrue(internal.exists())
             self.assertGreater(customer.stat().st_size, 0)
             self.assertGreater(internal.stat().st_size, 0)
+            self.assertGreater(internal.stat().st_size, customer.stat().st_size)
 
     def test_invoke_reasoner_requires_exec_llm_key(self):
         engine = ExecDecisionEngine()
@@ -897,8 +898,8 @@ class ExecVerifierTests(unittest.TestCase):
         packet["commercial_signals"][0]["verdict"] = "confirmed"
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertTrue(any("EAEU" in caveat for caveat in repaired.caveats))
 
     def test_verifier_repairs_rf_entry_when_only_legal_status_unknown_blocks_ru_go(self):
@@ -925,8 +926,8 @@ class ExecVerifierTests(unittest.TestCase):
         packet["commercial_signals"][0]["verdict"] = "confirmed"
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
 
     def test_verifier_repairs_rf_entry_when_procurement_or_route_corroboration_overconstrains(self):
         verifier = ExecVerifier()
@@ -951,8 +952,8 @@ class ExecVerifierTests(unittest.TestCase):
         packet["commercial_signals"][0]["verdict"] = "confirmed"
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
 
     def test_verifier_repairs_rf_hold_when_inn_level_commercial_linkage_is_only_caveat(self):
         verifier = ExecVerifier()
@@ -1000,9 +1001,9 @@ class ExecVerifierTests(unittest.TestCase):
         }
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
-        self.assertFalse(repaired.decision_blockers)
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("rf_operations_readiness_not_closed", [blocker.blocker_id for blocker in repaired.decision_blockers])
         self.assertTrue(any("GRLS" in caveat for caveat in repaired.caveats))
 
     def test_verifier_repairs_rf_hold_when_product_context_wording_is_only_caveat(self):
@@ -1043,9 +1044,9 @@ class ExecVerifierTests(unittest.TestCase):
         }
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
         self.assertEqual(verification.overall_status, "PASS")
-        self.assertEqual(repaired.verdict, "GO")
-        self.assertEqual(repaired.sufficiency, "SUFFICIENT")
-        self.assertFalse(repaired.decision_blockers)
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("rf_operations_readiness_not_closed", [blocker.blocker_id for blocker in repaired.decision_blockers])
 
     def test_verifier_promotes_eaeu_insufficiency_to_hold_when_reg_anchor_exists(self):
         verifier = ExecVerifier()
@@ -1099,7 +1100,11 @@ class ExecVerifierTests(unittest.TestCase):
                     "identity_match": "same_identifier",
                     "evidence_refs": ["ev-com-1"],
                 }
-            }
+            },
+            "operations_readiness_snapshot": {
+                "operations_evidence_ready": True,
+                "payer_tier_clearance": True,
+            },
         }
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
         self.assertEqual(verification.overall_status, "PASS")
@@ -1144,7 +1149,11 @@ class ExecVerifierTests(unittest.TestCase):
                     "source_native_reimbursement_signal_count": 32,
                     "evidence_refs": ["ev-com-1"],
                 }
-            }
+            },
+            "operations_readiness_snapshot": {
+                "operations_evidence_ready": True,
+                "payer_tier_clearance": True,
+            },
         }
 
         repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
@@ -1153,6 +1162,46 @@ class ExecVerifierTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "GO")
         self.assertEqual(repaired.sufficiency, "SUFFICIENT")
         self.assertIn("promoted_rf_conditional_go_to_go_on_identity_linkage", verification.repair_reason)
+
+    def test_verifier_downgrades_rf_go_until_operations_readiness_is_closed(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="rf_entry",
+            title="RF entry",
+            verdict="GO",
+            confidence="HIGH",
+            sufficiency="SUFFICIENT",
+            short_answer="GO because RU registration and access linkage are confirmed.",
+            full_answer="The packet confirms RU registration and linked access evidence.",
+            why_this_verdict=[],
+            decision_blockers=[],
+            next_actions=[],
+            caveats=[],
+        )
+        packet = _sample_dossier()
+        packet["contract_linkage"] = {
+            "market_entry_linkage": {
+                "RU": {
+                    "registration_anchor_present": True,
+                    "commercial_signal_count": 39,
+                    "identity_match": "same_identifier",
+                    "evidence_refs": ["ev-com-1"],
+                }
+            },
+            "operations_readiness_snapshot": {
+                "operations_evidence_ready": False,
+                "payer_tier_clearance": False,
+                "missing_operations_checks": ["ru_payer_tier_restrictions"],
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "CONDITIONAL_GO")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertIn("rf_operations_readiness_not_closed", [blocker.blocker_id for blocker in repaired.decision_blockers])
+        self.assertIn("downgraded_rf_go_until_operations_readiness", verification.repair_reason)
 
     def test_verifier_removes_eaeu_same_id_overconstraint_when_native_identity_is_strong(self):
         verifier = ExecVerifier()
@@ -3150,6 +3199,71 @@ class ExecRetrievalEscalationTests(unittest.TestCase):
         self.assertEqual(repaired.verdict, "FOREIGN_ONLY_DEVELOPMENT")
         self.assertEqual(repaired.sufficiency, "PARTIAL")
         self.assertEqual(repaired.confidence, "MEDIUM")
+        self.assertIn("classified_local_clinical_activity_from_deterministic_signal", verification.repair_reason)
+
+    def test_verifier_keeps_local_trials_present_distinct_from_active_trials(self):
+        verifier = ExecVerifier()
+        block = ExecDecisionBlock(
+            block_id="local_clinical_activity",
+            title="Local clinical activity",
+            verdict="UNKNOWN",
+            confidence="LOW",
+            sufficiency="INSUFFICIENT",
+            short_answer="UNKNOWN because local RU/EAEU trial activity cannot be determined.",
+            full_answer="Missing RU/EAEU local trial linkage fields prevent a conclusion.",
+            why_this_verdict=[],
+            decision_blockers=[
+                {
+                    "blocker_id": "local_trial_gap",
+                    "title": "Missing RU/EAEU local trial linkage fields",
+                    "severity": "IMPORTANT",
+                    "rationale": "No RU/EAEU country/site/location fields were mapped.",
+                    "evidence_refs": [],
+                }
+            ],
+            next_actions=[],
+            caveats=[],
+            top_evidence_refs=["ev-ctgov"],
+        )
+        packet = {
+            "evidence_ids": ["ev-ctgov"],
+            "selected_evidence": [
+                {
+                    "evidence_id": "ev-ctgov",
+                    "doc_kind": "ctgov_api",
+                    "snippet": "NCT00000000 dapagliflozin completed study with countries=Russia.",
+                }
+            ],
+            "contract_linkage": {
+                "local_development_signal_by_region": {
+                    "RU": {
+                        "signal": "LOCAL_TRIALS_PRESENT",
+                        "local_trial_count": 1,
+                        "active_local_trial_count": 0,
+                        "all_clinical_evidence_refs": ["ev-ctgov"],
+                    },
+                    "EAEU": {
+                        "signal": "LOCAL_TRIALS_PRESENT",
+                        "local_trial_count": 1,
+                        "active_local_trial_count": 0,
+                        "all_clinical_evidence_refs": ["ev-ctgov"],
+                    },
+                }
+            },
+            "evidence_packet_summary": {
+                "contract_linkage_summary": {
+                    "ru_local_development_signal": "LOCAL_TRIALS_PRESENT",
+                    "eaeu_local_development_signal": "LOCAL_TRIALS_PRESENT",
+                }
+            },
+        }
+
+        repaired, verification = verifier.verify_and_repair(block, packet, block_spec=None, allow_repair=True)
+
+        self.assertEqual(verification.overall_status, "PASS")
+        self.assertEqual(repaired.verdict, "LOCAL_TRIALS_PRESENT")
+        self.assertEqual(repaired.sufficiency, "PARTIAL")
+        self.assertNotIn("local_trial_gap", [blocker.blocker_id for blocker in repaired.decision_blockers])
         self.assertIn("classified_local_clinical_activity_from_deterministic_signal", verification.repair_reason)
 
     def test_verifier_confirms_foreign_approval_precedent_from_fda_and_ema_records(self):

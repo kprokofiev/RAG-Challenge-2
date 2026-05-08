@@ -44,7 +44,7 @@ def _find_font(name_fragment: str) -> Optional[str]:
     return None
 
 
-def register_cyrillic_fonts() -> str:
+def register_cyrillic_fonts(require_cyrillic: bool = False) -> str:
     """
     Register Cyrillic-capable fonts with reportlab.
 
@@ -59,6 +59,8 @@ def register_cyrillic_fonts() -> str:
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
     except ImportError:
+        if require_cyrillic:
+            raise RuntimeError("reportlab is required for customer PDF rendering with Cyrillic-safe fonts")
         return "Helvetica"
 
     normal_path = _find_font("DejaVuSans.ttf")
@@ -84,9 +86,15 @@ def register_cyrillic_fonts() -> str:
             logger.info("Registered DejaVuSans for Cyrillic PDF rendering")
             return FONT_NORMAL
         except Exception as e:
-            logger.warning("Failed to register DejaVuSans: %s — falling back to Helvetica", e)
+            if require_cyrillic:
+                raise RuntimeError(f"Failed to register DejaVuSans for customer PDF rendering: {e}") from e
+            logger.warning("Failed to register DejaVuSans: %s - falling back to Helvetica", e)
 
     # Fallback: Helvetica (no Cyrillic but won't crash)
+    if require_cyrillic:
+        raise RuntimeError(
+            "Customer PDF rendering requires DejaVuSans.ttf/DejaVuSans-Bold.ttf or another configured Cyrillic TTF font"
+        )
     FONT_NORMAL = "Helvetica"
     FONT_BOLD = "Helvetica-Bold"
     _REGISTERED = True
