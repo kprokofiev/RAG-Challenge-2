@@ -207,6 +207,28 @@ Row: Апиксабан | ЛП-№(007734)-(РГ-RU) | 21.20.10.131-000020-1-000
         self.assertEqual(signal.verdict, "confirmed")
         self.assertIn("match level", signal.summary.value)
 
+    def test_commercial_support_parser_does_not_mix_collapsed_records(self):
+        gen = self._build_generator()
+        _write_doc(
+            gen.documents_dir / "doc-collapsed-payer.json",
+            doc_id="doc-collapsed-payer",
+            doc_kind="payer_policy",
+            title="Collapsed payer support doc",
+            case_id="case-1",
+            text=(
+                "REIMBURSEMENT_CHECK | source=eec_market_access_scope | jurisdiction=EAEU | "
+                "check_class=member_state_reimbursement_scope | status=checked | source_url=https://example.test "
+                "OPERATIONS_READINESS | layer=rights | jurisdiction=US | status=complete | blocking=false"
+            ),
+        )
+        gen._doc_metainfo_index_cache = None
+
+        signals = gen._generate_commercial_signals([])
+        by_key = {(item.region, item.category): item for item in signals}
+
+        self.assertIn(("EAEU", "member_state_reimbursement_scope"), by_key)
+        self.assertNotIn(("US", "member_state_reimbursement_scope"), by_key)
+
 
 if __name__ == "__main__":
     unittest.main()

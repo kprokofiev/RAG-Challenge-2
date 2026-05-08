@@ -533,6 +533,22 @@ _COMMERCIAL_SIGNAL_PREFIX = "COMMERCIAL_SIGNAL"
 _COMMERCIAL_METRIC_PREFIX = "COMMERCIAL_METRIC"
 _REIMBURSEMENT_CHECK_PREFIX = "REIMBURSEMENT_CHECK"
 _COMMERCIAL_SIGNAL_LINKAGE_PREFIX = "COMMERCIAL_SIGNAL_LINKAGE"
+_PIPE_RECORD_PREFIXES = (
+    "COMMERCIAL_SIGNAL",
+    "COMMERCIAL_METRIC",
+    "REIMBURSEMENT_CHECK",
+    "COMMERCIAL_SIGNAL_LINKAGE",
+    "OPERATIONS_READINESS",
+    "CLEARANCE_CHECK",
+    "RIGHTS_CLEARANCE_CHECK",
+    "LEGAL_EVENT",
+    "PRODUCT_IDENTITY_BRIDGE",
+)
+_PIPE_RECORD_SPLIT_RE = re.compile(
+    r"\s+(?=(?:"
+    + "|".join(re.escape(prefix) for prefix in _PIPE_RECORD_PREFIXES)
+    + r")\s*\|)"
+)
 _COMMERCIAL_PRIMARY_DOC_KINDS = {
     "ru_registration_export",
     "ru_esklp_snapshot",
@@ -1569,6 +1585,14 @@ class DossierReportGenerator:
             parts.append(f"Linked signal: {linked_signal}.")
         return " ".join(parts)
 
+    @staticmethod
+    def _iter_logical_pipe_records(text: str):
+        for raw_line in str(text or "").splitlines():
+            for part in _PIPE_RECORD_SPLIT_RE.split(raw_line):
+                line = part.strip()
+                if line:
+                    yield line
+
     def _merge_commercial_signal_metadata(
         self,
         signal: DossierCommercialSignal,
@@ -1637,7 +1661,12 @@ class DossierReportGenerator:
         signal.evidence_refs = list(dict.fromkeys(signal.evidence_refs + [evidence_id]))
         if summary:
             current_priority = signal.source_priority if signal.source_priority is not None else -1
-            if not signal.summary.value or source_priority >= current_priority:
+            incoming_rank = self._commercial_verdict_rank(verdict)
+            current_rank = self._commercial_verdict_rank(signal.verdict)
+            if (
+                not signal.summary.value
+                or (incoming_rank >= current_rank and source_priority >= current_priority)
+            ):
                 signal.summary = EvidencedValue(
                     value=summary,
                     evidence_refs=[evidence_id],
@@ -2132,11 +2161,7 @@ class DossierReportGenerator:
             source_name = str(chunk.get("doc_title") or doc_kind).strip() or doc_kind
             source_tier = self._commercial_source_tier(doc_kind)
             source_priority = self._commercial_source_priority(doc_kind)
-            for raw_line in text.splitlines():
-                line = raw_line.strip()
-                if not line:
-                    continue
-
+            for line in self._iter_logical_pipe_records(text):
                 signal_record = self._parse_pipe_kv_record(line, _COMMERCIAL_SIGNAL_PREFIX)
                 if signal_record:
                     region = str(signal_record.get("region") or "GLOBAL").strip().upper()
