@@ -4398,6 +4398,74 @@ class DossierReportGenerator:
             )
         return registrations
 
+    def _extract_eaeu_official_no_hit_registration(
+        self,
+        unknowns: List[DossierUnknown],
+    ) -> Optional[DossierRegistration]:
+        for item in self._iter_original_json_docs({"eaeu_document", "eaeu_registration"}) or []:
+            data = item["data"] or {}
+            payload = data.get("payload") if isinstance(data, dict) else None
+            if not isinstance(payload, dict):
+                payload = data if isinstance(data, dict) else {}
+            records = data.get("records") if isinstance(data, dict) else None
+            if records is None and isinstance(payload, dict):
+                records = payload.get("records") or payload.get("items")
+            records = records or []
+
+            matches_found = payload.get("matches_found")
+            rows_scanned = payload.get("rows_scanned")
+            no_hit_record = any(bool(record.get("no_hits")) for record in records if isinstance(record, dict))
+            explicit_zero = matches_found in (0, "0") and rows_scanned not in (None, "", 0, "0")
+            if not (no_hit_record or explicit_zero):
+                continue
+
+            doc_id = item["doc_id"]
+            meta = item["meta"] or {}
+            doc_kind = item["doc_kind"]
+            doc_title = meta.get("title") or data.get("source") or doc_id
+            source_url = meta.get("source_url") or data.get("source_url") or ""
+            content_hash = item["content_hash"]
+            query = payload.get("query") or self.inn
+            access_date = data.get("access_date") or meta.get("access_date") or ""
+            message = (
+                f"Official EAEU unified register search for {query} returned no matching product rows"
+            )
+            if rows_scanned not in (None, ""):
+                message += f" after scanning {rows_scanned} rows"
+            if access_date:
+                message += f" as of {access_date}"
+            message += ". This is source-native negative evidence, not a positive EAEU registration."
+
+            ev_id = self._register_derived_evidence(
+                doc_id=str(doc_id),
+                doc_title=str(doc_title),
+                source_url=str(source_url),
+                doc_kind=str(doc_kind or "eaeu_registration"),
+                content_hash=content_hash,
+                locator="$.payload.records[?(@.no_hits==true)]",
+                snippet=message,
+            )
+            self._add_unknown(
+                unknowns,
+                "registrations[EAEU].*",
+                "EAEU_OFFICIAL_NO_HIT",
+                message,
+                "Keep the official EAEU no-hit as a scoped limitation; re-run EAEU register acquisition if the query scope or product identity changes.",
+            )
+            return DossierRegistration(
+                region="EAEU",
+                verdict="unknown",
+                status=EvidencedValue(
+                    value=message,
+                    evidence_refs=[ev_id],
+                    confidence=0.99,
+                ),
+                validity_type="not_applicable",
+                validity_evidence_refs=[ev_id],
+                evidence_refs=[ev_id],
+            )
+        return None
+
     def _extract_eu_registrations_from_original_json(self) -> List[DossierRegistration]:
         registrations: List[DossierRegistration] = []
 
@@ -5620,6 +5688,10 @@ class DossierReportGenerator:
                 structured_eaeu_regs = self._extract_eaeu_registrations_from_original_json()
                 if structured_eaeu_regs:
                     registrations.extend(structured_eaeu_regs)
+                    continue
+                official_no_hit = self._extract_eaeu_official_no_hit_registration(unknowns)
+                if official_no_hit:
+                    registrations.append(official_no_hit)
                     continue
 
             retrieved = self._retrieve(question, doc_kinds, top_k=20)
