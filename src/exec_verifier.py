@@ -1568,9 +1568,9 @@ class ExecVerifier:
         packet: Dict[str, Any],
         block_spec: Any,
     ) -> ExecVerificationReport:
-        evidence_ids = set(packet.get("evidence_ids", [])) or set(packet.get("selected_evidence_ids", [])) or {
-            candidate["ref"] for candidate in _candidate_evidence(packet)
-        }
+        evidence_ids = set(packet.get("evidence_ids", []) or [])
+        evidence_ids.update(packet.get("selected_evidence_ids", []) or [])
+        evidence_ids.update(candidate["ref"] for candidate in _candidate_evidence(packet))
         critical_unknowns = self._relevant_critical_unknowns(block, packet)
         issues: List[ExecVerificationIssue] = []
 
