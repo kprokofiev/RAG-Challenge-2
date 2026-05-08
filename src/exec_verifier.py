@@ -128,19 +128,22 @@ def _candidate_evidence(packet: Dict[str, Any]) -> List[Dict[str, str]]:
 def _foreign_approval_source_refs(packet: Dict[str, Any]) -> Tuple[List[str], List[str]]:
     us_refs: List[str] = []
     eu_refs: List[str] = []
+    aliases = _product_aliases_from_packet(packet)
     for candidate in _candidate_evidence(packet):
         searchable = str(candidate.get("searchable") or "").lower()
         ref = str(candidate.get("ref") or "").strip()
         if not ref:
             continue
+        if not _text_matches_product_alias(searchable, aliases):
+            continue
         if any(marker in searchable for marker in ("us_fda", "fda ", "approval_letter", "label")) and any(
             marker in searchable
-            for marker in ("qalsody", "tofersen", "nda 215887", "initial u.s. approval", "approval")
+            for marker in ("initial u.s. approval", "approved", "approval", "label")
         ):
             us_refs.append(ref)
         if any(marker in searchable for marker in ("eu_regulatory_summary", "smpc", "epar", "assessment_report", "ema ")) and any(
             marker in searchable
-            for marker in ("qalsody", "tofersen", "authorised", "authorized", "marketing authorisation", "epar", "chmp")
+            for marker in ("authorised", "authorized", "approved", "marketing authorisation", "epar", "chmp")
         ):
             eu_refs.append(ref)
     return list(dict.fromkeys(us_refs)), list(dict.fromkeys(eu_refs))
@@ -154,6 +157,64 @@ def _scalar_text(value: Any) -> str:
     if isinstance(value, list):
         return " ".join(_scalar_text(item) for item in value if _scalar_text(item))
     return str(value or "")
+
+
+def _normalize_product_term(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("ё", "е")
+    return re.sub(r"[^0-9a-zа-я]+", "", text)
+
+
+def _product_aliases_from_packet(packet: Dict[str, Any]) -> set[str]:
+    aliases: set[str] = set()
+
+    def add(value: Any) -> None:
+        text = _normalize_product_term(_scalar_text(value))
+        if len(text) >= 4:
+            aliases.add(text)
+
+    add(packet.get("inn"))
+    passport = packet.get("passport") or {}
+    if isinstance(passport, dict):
+        add(passport.get("inn"))
+        for key in ("trade_names", "mah_holders", "dosage_forms", "key_dosages"):
+            for item in passport.get(key) or []:
+                add(item)
+    for section in ("registrations", "product_contexts"):
+        for item in packet.get(section) or []:
+            if not isinstance(item, dict):
+                continue
+            for key in ("inn", "trade_name", "brand_name", "product_name", "label"):
+                add(item.get(key))
+            for key in ("identifiers", "forms_strengths"):
+                for nested in item.get(key) or []:
+                    add(nested)
+    return aliases
+
+
+def _text_matches_product_alias(text: str, aliases: set[str]) -> bool:
+    if not aliases:
+        return True
+    normalized = _normalize_product_term(text)
+    return any(alias in normalized or normalized in alias for alias in aliases if alias)
+
+
+def _off_target_product_markers(text: str, aliases: set[str]) -> List[str]:
+    if not aliases:
+        return []
+    markers = {
+        "apixaban": "apixaban",
+        "апиксабан": "апиксабан",
+        "qalsody": "qalsody",
+        "tofersen": "tofersen",
+        "nda 215887": "NDA 215887",
+    }
+    lowered = str(text or "").lower()
+    found: List[str] = []
+    for marker, label in markers.items():
+        normalized_marker = _normalize_product_term(marker)
+        if marker in lowered and normalized_marker not in aliases:
+            found.append(label)
+    return list(dict.fromkeys(found))
 
 
 def _region_text(item: Dict[str, Any]) -> str:
@@ -1581,6 +1642,19 @@ class ExecVerifier:
                 )
             )
 
+        off_target_terms = _off_target_product_markers(_block_text(block), _product_aliases_from_packet(packet))
+        if off_target_terms:
+            issues.append(
+                ExecVerificationIssue(
+                    issue_type="wrong_asset_contamination",
+                    severity="FAIL",
+                    message=(
+                        "Block text contains off-target product/approval markers for the current asset: "
+                        + ", ".join(off_target_terms[:6])
+                    ),
+                )
+            )
+
         if packet.get("partial_route_corroboration") and not block.caveats:
             issues.append(
                 ExecVerificationIssue(
@@ -1887,7 +1961,15 @@ class ExecVerifier:
                 )
             )
 
-        factual_status = "FAIL" if any(issue.issue_type in {"unsupported_claim", "unknown_evidence_ref", "empty_blocker"} and issue.severity == "FAIL" for issue in issues) else "PASS"
+        factual_status = "FAIL" if any(
+            issue.issue_type in {
+                "unsupported_claim",
+                "unknown_evidence_ref",
+                "empty_blocker",
+                "wrong_asset_contamination",
+            } and issue.severity == "FAIL"
+            for issue in issues
+        ) else "PASS"
         decision_status = "FAIL" if any(issue.issue_type in {"verdict_blocker_conflict", "critical_unknown_ignored"} and issue.severity == "FAIL" for issue in issues) else "PASS"
         reviewer_status = "WARN" if any(issue.severity == "WARN" for issue in issues) else "PASS"
         overall_status = "FAIL" if "FAIL" in {factual_status, decision_status} else reviewer_status
@@ -2079,7 +2161,7 @@ class ExecVerifier:
                 "HOLD — an EAEU registration anchor is confirmed, but the in-force validity window and EAEU-scoped commercial pathway remain unresolved."
             )
             repaired.full_answer = (
-                "The packet confirms an EAEU registration identity for apixaban, so the block should not collapse to pure insufficiency. "
+                "The packet confirms an EAEU registration identity for the target asset, so the block should not collapse to pure insufficiency. "
                 "However, because valid_to remains blank in the source snapshot and commercial pathway evidence is still RU-only, the defensible outcome is HOLD pending targeted EAEU follow-up."
             )
             applied_changes.append("promoted_eaeu_insufficiency_to_hold")
@@ -2952,18 +3034,19 @@ class ExecVerifier:
             repaired.verdict = "CONFIRMED_US_EU_APPROVAL"
             repaired.sufficiency = "SUFFICIENT"
             repaired.confidence = "MEDIUM"
+            asset_name = str(packet.get("inn") or "the target asset")
             repaired.short_answer = (
-                "CONFIRMED_US_EU_APPROVAL — source-native FDA and EMA/EU records in the packet support Qalsody/tofersen approval or authorization precedent."
+                f"CONFIRMED_US_EU_APPROVAL — source-native FDA and EMA/EU records in the packet support {asset_name} approval or authorization precedent."
             )
             repaired.full_answer = (
-                "The packet includes source-native US FDA evidence for Qalsody/tofersen (NDA 215887 / label or review material) and EMA/EU evidence for Qalsody/tofersen "
+                f"The packet includes source-native US FDA evidence and EMA/EU evidence for {asset_name} "
                 "(EPAR/SmPC/assessment or regulatory summary). That is enough for a confirmed foreign-approval-precedent screening verdict. "
                 "This does not substitute for RU/EAEU registration, but it closes the client-facing question of whether foreign regulator precedent exists."
             )
             repaired.top_evidence_refs = refs
             repaired.why_this_verdict = [
                 ExecWhyClaim(
-                    claim="Source-native FDA and EMA/EU evidence supports confirmed US/EU foreign approval precedent for Qalsody/tofersen.",
+                    claim=f"Source-native FDA and EMA/EU evidence supports confirmed US/EU foreign approval precedent for {asset_name}.",
                     claim_type="hard_evidence_backed",
                     evidence_refs=refs[:6],
                 )

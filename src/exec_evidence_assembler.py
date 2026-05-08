@@ -289,22 +289,31 @@ def _is_priority_contract_evidence(item: Dict[str, Any], doc_kind: str) -> bool:
     return bool(_RU_FIPS_DOC_ID_RE.search(snippet) and _RU_FIPS_EXPIRY_DATE_RE.search(snippet))
 
 
-def _is_block_preferred_evidence(item: Dict[str, Any], doc_kind: str, question_id: str) -> bool:
+def _is_block_preferred_evidence(
+    item: Dict[str, Any],
+    doc_kind: str,
+    question_id: str,
+    product_aliases: Optional[set[str]] = None,
+) -> bool:
     text = " ".join(
         str(item.get(key) or "")
         for key in ("doc_kind", "source_label", "title", "snippet", "source_url")
     ).lower()
     question_id = str(question_id or "").strip()
     if question_id in {"foreign_approval_precedent", "portfolio_opportunity"}:
+        if not _text_matches_product_alias(text, product_aliases or set()):
+            return False
         if doc_kind in {"us_fda", "label", "approval_letter"}:
-            return any(marker in text for marker in ("qalsody", "tofersen", "nda 215887", "initial u.s. approval", "approval"))
+            return any(marker in text for marker in ("initial u.s. approval", "approved", "approval", "label"))
         if doc_kind in {"eu_regulatory_summary", "smpc", "epar", "assessment_report"}:
-            return any(marker in text for marker in ("qalsody", "tofersen", "authorised", "authorized", "marketing authorisation", "epar", "chmp"))
+            return any(marker in text for marker in ("authorised", "authorized", "marketing authorisation", "approved", "epar", "chmp"))
     if question_id in {"local_clinical_activity", "portfolio_opportunity"}:
         return doc_kind in {"ctgov", "ctgov_api", "ctgov_protocol", "ctgov_results", "ctgov_documents"}
     if question_id == "evidence_sufficiency_note":
         if doc_kind in {"us_fda", "label", "approval_letter", "eu_regulatory_summary", "smpc", "epar", "assessment_report"}:
-            return any(marker in text for marker in ("qalsody", "tofersen", "approval", "authorised", "authorized", "marketing authorisation", "nda 215887"))
+            if not _text_matches_product_alias(text, product_aliases or set()):
+                return False
+            return any(marker in text for marker in ("approval", "approved", "authorised", "authorized", "marketing authorisation", "initial u.s. approval"))
         return doc_kind in {"ctgov", "ctgov_api", "ctgov_protocol", "ctgov_results", "ctgov_documents"}
     return False
 
@@ -404,6 +413,46 @@ def _value_text(value: Any) -> str:
 
 def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", _value_text(value or "")).strip()
+
+
+def _normalize_product_term(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("ё", "е")
+    return re.sub(r"[^0-9a-zа-я]+", "", text)
+
+
+def _product_aliases_from_packet(packet: Optional[Dict[str, Any]]) -> set[str]:
+    packet = packet or {}
+    aliases: set[str] = set()
+
+    def add(value: Any) -> None:
+        text = _normalize_product_term(_value_text(value))
+        if len(text) >= 4:
+            aliases.add(text)
+
+    add(packet.get("inn"))
+    passport = packet.get("passport") or {}
+    if isinstance(passport, dict):
+        add(passport.get("inn"))
+        for key in ("trade_names", "mah_holders", "dosage_forms", "key_dosages"):
+            for item in passport.get(key) or []:
+                add(item)
+    for section in ("registrations", "product_contexts"):
+        for item in packet.get(section) or []:
+            if not isinstance(item, dict):
+                continue
+            for key in ("inn", "trade_name", "brand_name", "product_name", "label"):
+                add(item.get(key))
+            for key in ("identifiers", "forms_strengths"):
+                for nested in item.get(key) or []:
+                    add(nested)
+    return aliases
+
+
+def _text_matches_product_alias(text: str, aliases: set[str]) -> bool:
+    if not aliases:
+        return True
+    normalized = _normalize_product_term(text)
+    return any(alias in normalized or normalized in alias for alias in aliases if alias)
 
 
 def _contains_any_text(values: Iterable[Any], markers: Iterable[str]) -> bool:
@@ -2237,11 +2286,12 @@ class ExecEvidenceAssembler:
 
         registry = list(base_packet.get("evidence_registry", []) or [])
         question_id = str(plan.question_id or base_packet.get("block_id") or "").strip()
+        product_aliases = _product_aliases_from_packet(base_packet)
         for item in registry:
             doc_kind = normalize_exec_doc_kind(item.get("doc_kind"))
             if allowed_doc_kinds and doc_kind not in allowed_doc_kinds:
                 continue
-            if not _is_block_preferred_evidence(item, doc_kind, question_id):
+            if not _is_block_preferred_evidence(item, doc_kind, question_id, product_aliases):
                 continue
             _append(item, doc_kind)
             if len(selected) >= limits["max_chunks"]:

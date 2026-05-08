@@ -5942,8 +5942,10 @@ class DossierReportGenerator:
                 candidate_ev_id,
             )
 
-        if not any(r.region.upper() == "EAEU" for r in registrations):
-            registrations.extend(self._derive_eaeu_registrations_from_ru_route_markers(registrations))
+        # A RU GRLS number carrying the РГ-RU/ГП-* route marker is useful as
+        # route-context metadata, but it is not a standalone EAEU union-register
+        # authorization. Keep it as an unknown/limitation below instead of
+        # manufacturing a positive EAEU registration row from RU evidence.
 
         # WSx.3+4: EAEU truth contract.
         # If EAEU region was populated by the LLM from eaeu_registration docs, skip unknowns.
