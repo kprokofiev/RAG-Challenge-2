@@ -550,6 +550,11 @@ class ExecDecisionEngine:
         for section in block_spec.sections:
             selected_refs.update(_iter_evidence_refs(packet.get(section)))
         evidence_registry = dossier.get("evidence_registry", []) or []
+        all_evidence_ids = [
+            str(item.get("evidence_id") or "").strip()
+            for item in evidence_registry
+            if isinstance(item, dict) and str(item.get("evidence_id") or "").strip()
+        ]
         current_product_aliases = _current_inn_aliases(dossier)
         section_linked_evidence = []
         priority_evidence = []
@@ -580,6 +585,7 @@ class ExecDecisionEngine:
             if evidence_id:
                 selected_refs.add(evidence_id)
         packet["evidence_registry"] = filtered_evidence[:80]
+        packet["_all_evidence_ids"] = list(dict.fromkeys(all_evidence_ids))
         packet["evidence_ids"] = list(selected_refs)[:120]
         packet["critical_unknowns"] = (
             packet.get("dossier_quality_v2", {}) or {}
@@ -1008,12 +1014,17 @@ class ExecDecisionEngine:
     ) -> Dict[str, Any]:
         verification_packet = dict(packet)
         packet_ids = [str(ref) for ref in packet.get("evidence_ids", []) or [] if str(ref or "").strip()]
+        all_packet_ids = [
+            str(ref)
+            for ref in packet.get("_all_evidence_ids", []) or []
+            if str(ref or "").strip()
+        ]
         selected_ids = [
             str(ref)
             for ref in evidence_packet.get("selected_evidence_ids", []) or []
             if str(ref or "").strip()
         ]
-        verification_packet["evidence_ids"] = list(dict.fromkeys(packet_ids + selected_ids))
+        verification_packet["evidence_ids"] = list(dict.fromkeys(packet_ids + selected_ids + all_packet_ids))
         verification_packet["selected_evidence"] = list(evidence_packet.get("selected_evidence", []) or [])
         verification_packet["critical_unknowns"] = list(
             evidence_packet.get("critical_unknowns", packet.get("critical_unknowns", [])) or []

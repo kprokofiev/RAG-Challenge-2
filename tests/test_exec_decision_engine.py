@@ -190,6 +190,19 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertEqual(len(packet["clinical_studies"]), 1)
         self.assertTrue(packet["critical_unknowns"])
 
+    def test_verification_packet_accepts_full_dossier_evidence_ids(self):
+        engine = ExecDecisionEngine()
+        packet = {
+            "evidence_ids": ["ev-visible"],
+            "_all_evidence_ids": ["ev-visible", "ev-hidden-section-ref"],
+        }
+        verification_packet = engine._build_verification_packet(
+            packet,
+            {"selected_evidence_ids": []},
+        )
+
+        self.assertIn("ev-hidden-section-ref", verification_packet["evidence_ids"])
+
     def test_packet_filters_product_scoped_payer_evidence_for_other_inn(self):
         engine = ExecDecisionEngine()
         dossier = {
