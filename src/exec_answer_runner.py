@@ -241,6 +241,13 @@ def main():
             vector_db_dir=args.vector_db_dir or None,
             documents_dir=args.documents_dir or None,
         )
+        if args.output_dir:
+            output_path = Path(args.output_dir) / "exec_result.json"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
         print(json.dumps(result, ensure_ascii=False, default=str), file=sys.stdout)
     except KeyError as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stdout)
