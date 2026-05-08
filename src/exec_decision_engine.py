@@ -117,6 +117,64 @@ def _normalize_region(value: Any) -> str:
     return text
 
 
+def _truthy_evidenced_value(value: Any) -> Optional[bool]:
+    if isinstance(value, dict):
+        if "value" in value:
+            return _truthy_evidenced_value(value.get("value"))
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    if text in {"true", "yes", "y", "1", "да"}:
+        return True
+    if text in {"false", "no", "n", "0", "нет"}:
+        return False
+    return None
+
+
+def _clinical_item_has_ru_eaeu_presence(item: Dict[str, Any]) -> bool:
+    explicit_ru_presence = _truthy_evidenced_value(item.get("has_ru_presence"))
+    if explicit_ru_presence is not None:
+        return explicit_ru_presence
+
+    countries = item.get("countries") or []
+    if isinstance(countries, dict):
+        countries = [countries]
+    country_values: List[str] = []
+    if isinstance(countries, list):
+        for country in countries:
+            if isinstance(country, dict):
+                country_values.append(_scalar_text(country.get("value") or country.get("country") or country.get("label"), limit=120))
+            else:
+                country_values.append(_scalar_text(country, limit=120))
+
+    local_regions = {"RU", "EAEU", "BY", "KZ", "AM", "KG"}
+    for country in country_values:
+        normalized = _normalize_region(country)
+        if normalized in local_regions:
+            return True
+        text = str(country or "").strip().lower()
+        if text in {
+            "russia",
+            "russian federation",
+            "россия",
+            "российская федерация",
+            "eurasian economic union",
+            "eaeu",
+            "belarus",
+            "kazakhstan",
+            "armenia",
+            "kyrgyzstan",
+            "беларусь",
+            "казахстан",
+            "армения",
+            "киргизия",
+            "кыргызстан",
+        }:
+            return True
+    return False
+
+
 def _scalar_text(value: Any, limit: int = 80) -> str:
     if value is None:
         return ""
@@ -765,11 +823,7 @@ class ExecDecisionEngine:
         local_clinical_count = sum(
             1
             for item in clinical
-            if isinstance(item, dict)
-            and any(
-                marker in json.dumps(item, ensure_ascii=False).lower()
-                for marker in ("russia", "russian federation", "ru ", " belarus", "kazakhstan", "armenia", "kyrgyzstan", "eaeu")
-            )
+            if isinstance(item, dict) and _clinical_item_has_ru_eaeu_presence(item)
         )
         missing_classes = self._missing_evidence_classes(packet, block_spec)
         blockers: List[Dict[str, Any]] = []

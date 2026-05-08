@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from src.dossier_schema_v3 import ExecDecisionBlock, ExecWhyClaim
 from src.exec_answer_runner import _build_exec_retriever
-from src.exec_decision_engine import ExecDecisionEngine
+from src.exec_decision_engine import ExecDecisionEngine, _clinical_item_has_ru_eaeu_presence
 from src.exec_evidence_assembler import ExecEvidenceAssembler
 from src.exec_llm_env import require_exec_openai_api_key
 from src.exec_prompt_builder import (
@@ -460,6 +460,26 @@ class ExecDecisionEngineTests(unittest.TestCase):
         self.assertEqual(local_signal["studies"][0]["sponsor"], "Example Sponsor")
         self.assertEqual(summary["ru_local_development_signal"], "ACTIVE_LOCAL_TRIALS")
         self.assertEqual(summary["ru_local_trial_count"], 1)
+
+    def test_local_clinical_presence_does_not_trigger_from_negative_free_text(self):
+        self.assertFalse(
+            _clinical_item_has_ru_eaeu_presence(
+                {
+                    "title": {"value": "Foreign-only study with no Russia or EAEU sites in checked record"},
+                    "countries": ["United States", "Germany"],
+                    "evidence_refs": ["ev-ctgov"],
+                }
+            )
+        )
+        self.assertTrue(
+            _clinical_item_has_ru_eaeu_presence(
+                {
+                    "title": {"value": "Local study"},
+                    "countries": [{"value": "Russian Federation", "evidence_refs": ["ev-ctgov"]}],
+                    "evidence_refs": ["ev-ctgov"],
+                }
+            )
+        )
 
     def test_packet_builder_preserves_section_linked_evidence_before_truncation(self):
         engine = ExecDecisionEngine()
