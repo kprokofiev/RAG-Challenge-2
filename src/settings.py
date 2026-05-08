@@ -159,7 +159,7 @@ class WorkerSettings(BaseSettings):
         (
             "ru_registration_export,ru_esklp_snapshot,ru_procurement_snapshot,ru_official_act,"
             "ru_commercial_summary,ru_formulary_summary,ru_procurement_summary,ru_policy_act,"
-            "formulary,pricing,payer_policy"
+            "formulary,pricing,payer_policy,product_identity_bridge"
         ),
         env="DDKIT_COMMERCIAL_SIGNAL_DOC_KINDS",
     )

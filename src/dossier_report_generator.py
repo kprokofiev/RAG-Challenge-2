@@ -531,6 +531,8 @@ _JSON_DOC_KINDS = {
 
 _COMMERCIAL_SIGNAL_PREFIX = "COMMERCIAL_SIGNAL"
 _COMMERCIAL_METRIC_PREFIX = "COMMERCIAL_METRIC"
+_REIMBURSEMENT_CHECK_PREFIX = "REIMBURSEMENT_CHECK"
+_COMMERCIAL_SIGNAL_LINKAGE_PREFIX = "COMMERCIAL_SIGNAL_LINKAGE"
 _COMMERCIAL_PRIMARY_DOC_KINDS = {
     "ru_registration_export",
     "ru_esklp_snapshot",
@@ -549,6 +551,7 @@ _COMMERCIAL_SOURCE_PRIORITY = {
     "formulary": 40,
     "pricing": 40,
     "payer_policy": 38,
+    "product_identity_bridge": 36,
 }
 
 _EAEU_RECORD_SPLIT_RE = re.compile(r"(?m)^##\s*Record\s+\d+\s*$")
@@ -1488,7 +1491,83 @@ class DossierReportGenerator:
             return "primary"
         if normalized_kind in {"formulary", "pricing", "payer_policy"}:
             return "secondary"
+        if normalized_kind == "product_identity_bridge":
+            return "support_summary"
         return "support_summary"
+
+    @staticmethod
+    def _reimbursement_check_category(record: Dict[str, str]) -> str:
+        check_class = str(record.get("check_class") or "").strip().lower()
+        source = str(record.get("source") or "").strip().lower()
+        combined = f"{check_class} {source}"
+        if "price" in combined or "jnvlp" in combined or "жнвлп" in combined:
+            return "jnvlp_price_limit"
+        if "procurement" in combined or "zakupki" in combined:
+            return "procurement"
+        if "eaeu" in combined or "member_state" in combined:
+            return "member_state_reimbursement_scope"
+        if "clinical" in combined or "federal_program" in combined or "policy" in combined or "payer" in combined:
+            return "coverage_access"
+        return "reimbursement_access"
+
+    @staticmethod
+    def _reimbursement_check_verdict(record: Dict[str, str]) -> str:
+        status = str(record.get("status") or "").strip().lower()
+        confirmed_tokens = {
+            "listed_active",
+            "source_native_rows_found",
+            "source_native_evidence_present",
+            "payer_procurement_signal",
+            "confirmed",
+            "found",
+        }
+        partial_tokens = {
+            "member_state_scope",
+            "payer_pathway_source_checked",
+            "source_checked",
+            "checked",
+            "checked_no_product_access_row",
+            "no_product_specific_rows",
+        }
+        if status in confirmed_tokens or status.endswith("_found"):
+            return "confirmed"
+        if status in partial_tokens or status.startswith("checked"):
+            return "partial"
+        return "unknown"
+
+    @staticmethod
+    def _reimbursement_check_summary(record: Dict[str, str], region: str) -> str:
+        source = str(record.get("source") or "official reimbursement/access source").strip()
+        check_class = str(record.get("check_class") or "reimbursement/access check").strip()
+        status = str(record.get("status") or "unknown").strip()
+        parts = [
+            f"{region} {check_class} from {source} returned status `{status}`."
+        ]
+        rows_found = str(record.get("rows_found") or record.get("row_count") or "").strip()
+        if rows_found:
+            parts.append(f"Rows found: {rows_found}.")
+        registration_id = str(record.get("registration_id") or "").strip()
+        if registration_id:
+            parts.append(f"Registration linkage: {registration_id}.")
+        context = str(record.get("context") or record.get("summary") or "").strip()
+        if context:
+            parts.append(context)
+        return " ".join(parts)
+
+    @staticmethod
+    def _commercial_linkage_summary(record: Dict[str, str], region: str) -> str:
+        source = str(record.get("source") or "product identity bridge").strip()
+        registration_id = str(record.get("registration_id") or "").strip()
+        linked_signal = str(record.get("linked_signal") or "").strip()
+        match_level = str(record.get("match_level") or "unknown").strip()
+        parts = [
+            f"{region} product-identity linkage from {source} has match level `{match_level}`."
+        ]
+        if registration_id:
+            parts.append(f"Registration: {registration_id}.")
+        if linked_signal:
+            parts.append(f"Linked signal: {linked_signal}.")
+        return " ".join(parts)
 
     def _merge_commercial_signal_metadata(
         self,
@@ -2132,6 +2211,84 @@ class DossierReportGenerator:
                     )
                     signal.evidence_refs = list(
                         dict.fromkeys(signal.evidence_refs + [evidence.evidence_id])
+                    )
+
+                reimbursement_record = self._parse_pipe_kv_record(line, _REIMBURSEMENT_CHECK_PREFIX)
+                if reimbursement_record:
+                    region = str(
+                        reimbursement_record.get("jurisdiction")
+                        or reimbursement_record.get("region")
+                        or "GLOBAL"
+                    ).strip().upper()
+                    category = self._reimbursement_check_category(reimbursement_record)
+                    verdict = self._reimbursement_check_verdict(reimbursement_record)
+                    evidence = _build_evidence(
+                        str(chunk.get("doc_id") or ""),
+                        chunk.get("page"),
+                        line,
+                        chunk.get("doc_title"),
+                        chunk.get("source_url"),
+                        doc_kind=chunk.get("doc_kind"),
+                        content_hash=chunk.get("content_hash"),
+                        locator=chunk.get("locator"),
+                    )
+                    self._evidence_registry[evidence.evidence_id] = evidence
+                    signal = self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category=category,
+                        verdict=verdict,
+                        summary=self._reimbursement_check_summary(reimbursement_record, region),
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
+                    )
+                    status_value = str(reimbursement_record.get("status") or "unknown").strip()
+                    if status_value:
+                        signal.metrics.append(
+                            DossierCommercialMetric(
+                                name="source_status",
+                                value=EvidencedValue(
+                                    value=status_value,
+                                    evidence_refs=[evidence.evidence_id],
+                                ),
+                            )
+                        )
+
+                linkage_record = self._parse_pipe_kv_record(line, _COMMERCIAL_SIGNAL_LINKAGE_PREFIX)
+                if linkage_record:
+                    region = str(
+                        linkage_record.get("jurisdiction")
+                        or linkage_record.get("region")
+                        or "GLOBAL"
+                    ).strip().upper()
+                    match_level = str(linkage_record.get("match_level") or "").strip().lower()
+                    registration_id = str(linkage_record.get("registration_id") or "").strip()
+                    verdict = "confirmed" if match_level == "exact" and registration_id else "partial"
+                    evidence = _build_evidence(
+                        str(chunk.get("doc_id") or ""),
+                        chunk.get("page"),
+                        line,
+                        chunk.get("doc_title"),
+                        chunk.get("source_url"),
+                        doc_kind=chunk.get("doc_kind"),
+                        content_hash=chunk.get("content_hash"),
+                        locator=chunk.get("locator"),
+                    )
+                    self._evidence_registry[evidence.evidence_id] = evidence
+                    self._upsert_commercial_signal(
+                        signals,
+                        signal_order,
+                        region=region,
+                        category="product_identity_linkage",
+                        verdict=verdict,
+                        summary=self._commercial_linkage_summary(linkage_record, region),
+                        evidence_id=evidence.evidence_id,
+                        source_name=source_name,
+                        source_tier=source_tier,
+                        source_priority=source_priority,
                     )
 
         ordered_signals = [signals[key] for key in signal_order][: settings.ddkit_commercial_signal_max]

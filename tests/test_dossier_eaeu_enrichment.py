@@ -159,6 +159,54 @@ Row: Апиксабан | ЛП-№(007734)-(РГ-RU) | 21.20.10.131-000020-1-000
         self.assertEqual(by_key[("EAEU", "formulary_presence")].verdict, "partial")
         self.assertIn("EAEU-style registration", by_key[("EAEU", "formulary_presence")].summary.value)
 
+    def test_commercial_signals_include_reimbursement_support_docs(self):
+        gen = self._build_generator()
+        _write_doc(
+            gen.documents_dir / "doc-pricing.json",
+            doc_id="doc-pricing",
+            doc_kind="pricing",
+            title="RU Minzdrav public price limits",
+            case_id="case-1",
+            text=(
+                "REIMBURSEMENT_CHECK | source=ru_minzdrav_public_price_limits | jurisdiction=RU | "
+                "check_class=jnvlp_price_limit_row | status=listed_active | rows_found=3 | "
+                "registration_id=ЛП-777"
+            ),
+        )
+        gen._doc_metainfo_index_cache = None
+
+        signals = gen._generate_commercial_signals([])
+        by_key = {(item.region, item.category): item for item in signals}
+
+        self.assertIn(("RU", "jnvlp_price_limit"), by_key)
+        signal = by_key[("RU", "jnvlp_price_limit")]
+        self.assertEqual(signal.verdict, "confirmed")
+        self.assertIn("listed_active", signal.summary.value)
+        self.assertTrue(signal.evidence_refs)
+
+    def test_commercial_signals_include_product_identity_linkage_docs(self):
+        gen = self._build_generator()
+        _write_doc(
+            gen.documents_dir / "doc-product-bridge.json",
+            doc_id="doc-product-bridge",
+            doc_kind="product_identity_bridge",
+            title="EAEU product identity bridge",
+            case_id="case-1",
+            text=(
+                "COMMERCIAL_SIGNAL_LINKAGE | source=eaeu_product_identity_bridge | jurisdiction=EAEU | "
+                "registration_id=ЛП-777 | linked_signal=ru_minzdrav_public_price_limits | match_level=exact"
+            ),
+        )
+        gen._doc_metainfo_index_cache = None
+
+        signals = gen._generate_commercial_signals([])
+        by_key = {(item.region, item.category): item for item in signals}
+
+        self.assertIn(("EAEU", "product_identity_linkage"), by_key)
+        signal = by_key[("EAEU", "product_identity_linkage")]
+        self.assertEqual(signal.verdict, "confirmed")
+        self.assertIn("match level", signal.summary.value)
+
 
 if __name__ == "__main__":
     unittest.main()
